@@ -9,6 +9,7 @@ import { openPhone, blockNextClick } from "./fold.js";
 import { signal, guard, failScene } from "./lifetime.js";
 import { reducedMotion } from "./quality.js";
 import { requestApp, requestHome } from "./navigation.js";
+import { read, write } from "../lib/storage.js";
 
 // the apps' background, ios's dark appearance. flat.css's #page column colors go with it
 export const APP_BACKGROUND = "#000000";
@@ -16,9 +17,9 @@ export const APP_BACKGROUND = "#000000";
 // the page's own <main id="page">, which the scene pins onto the app window and never moves or copies
 export let pageEl = null;
 
-// the page's home bar goes home on a swipe up (or a click, or enter, for a mouse or a keyboard). it's a link to / for
-// the flat site, so in 3d its click is taken over, going Back when that leads home. the page's content is swapped
-// under it, so this listens on #page
+// the page's home bar goes home on a swipe up (or a click, or enter, for a mouse or a keyboard), and so do the header's
+// home buttons on a click. they're links to / for the flat site, so in 3d their click is taken over, going Back when
+// that leads home. the page's content is swapped under them, so this listens on #page
 export const initAppWindow = (page) => {
     pageEl = page;
     pageEl.addEventListener("pointerdown", guard((event) => {
@@ -27,8 +28,8 @@ export const initAppWindow = (page) => {
         }
     }), { signal });
     pageEl.addEventListener("click", guard((event) => {
-        const bar = event.target.closest && event.target.closest(".home-bar");
-        if (!bar || !document.documentElement.classList.contains("has-3d")) {
+        const home = event.target.closest && event.target.closest(".home-bar, .home-link");
+        if (!home || !document.documentElement.classList.contains("has-3d")) {
             return;
         }
         event.preventDefault();
@@ -83,6 +84,19 @@ export const syncAppFocus = (covered) => {
     }
     wasFlat = state.pageFlat;
     wasCovered = covered;
+};
+
+// visitors took a while to find their way home from an app, so the first app one opens in 3d nudges the home bar up
+// with a line saying what it does, once per browser (see .home-hint in flat.css). a page swap ends it early
+const HOME_HINT_KEY = "homeHintSeen";
+const HOME_HINT_MS = 3600;
+const showHomeHint = () => {
+    if (!pageEl || read("local", HOME_HINT_KEY) === "1") {
+        return;
+    }
+    write("local", HOME_HINT_KEY, "1");
+    pageEl.classList.add("hint-home");
+    setTimeout(() => pageEl.classList.remove("hint-home"), HOME_HINT_MS);
 };
 
 // a tap on an icon or a widget goes to the app's page, and the open follows. the spike ignored taps while the phone
@@ -321,6 +335,7 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
     if (settings.flatAtFullZoom) {
         showFlat();
     }
+    showHomeHint();
 };
 
 // another page on the window that's already open, in the new app's color, with #page's new content fading in. #page

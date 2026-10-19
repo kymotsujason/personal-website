@@ -280,15 +280,58 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
                 {back.label}
               </a>
             ) : (
-              <span />
+              <a
+                class="pill glass home-link home-icon header-home"
+                href="/"
+                tabindex="-1"
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 3.2 2.6 11.4l1.3 1.5L5 12v8.5h5.5v-6h3v6H19V12l1.1.9 1.3-1.5z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </a>
             )}
             <span class="inline-title">{title}</span>
-            <span />
+            {back ? (
+              <a
+                class="pill glass home-link home-icon"
+                href="/"
+                aria-label="Home"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 3.2 2.6 11.4l1.3 1.5L5 12v8.5h5.5v-6h3v6H19V12l1.1.9 1.3-1.5z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </a>
+            ) : (
+              <span />
+            )}
           </header>
         )}
         <div class="body">
           <div class="column">
-            {isApp && !ownTitle && <h1 class="large-title">{title}</h1>}
+            {isApp && !ownTitle && (
+              <div class="title-row">
+                <a
+                  class="pill glass home-link home-icon"
+                  href="/"
+                  aria-label="Home"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M12 3.2 2.6 11.4l1.3 1.5L5 12v8.5h5.5v-6h3v6H19V12l1.1.9 1.3-1.5z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </a>
+                <h1 class="large-title">{title}</h1>
+              </div>
+            )}
             <slot />
             <footer class="flat-footer">
               <a
@@ -309,7 +352,17 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         )}
         {toolbar && <div class="toolbar glass" set:html={toolbar} />}
         {isApp && (
-          <a class="home-bar" href="/" draggable="false" aria-label="Go home" />
+          <>
+            <span class="home-hint" aria-hidden="true">
+              Swipe up to go home
+            </span>
+            <a
+              class="home-bar"
+              href="/"
+              draggable="false"
+              aria-label="Go home"
+            />
+          </>
         )}
       </main>
       <canvas id="gl-layer"></canvas>

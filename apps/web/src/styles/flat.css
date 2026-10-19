@@ -291,6 +291,37 @@ html {
   justify-self: start;
 }
 
+/* a round glass button home: before the large title on an app's own page, and opposite the back pill on a detail
+   page, where the back pill goes to its list */
+#page .pill.home-icon {
+  flex: none;
+  width: 40px;
+  padding: 0;
+}
+
+#page .home-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+#page > header .home-icon {
+  justify-self: end;
+}
+
+/* once the large title and its button scroll up under the bar, the button shows in the bar with the small title. it's
+   a copy for a pointer, so a key or a screen reader only meets the one beside the title */
+#page > header .header-home {
+  justify-self: start;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#page > header.scrolled .header-home {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 #page > header .inline-title {
   max-width: 50vw;
   overflow: hidden;
@@ -427,8 +458,15 @@ html {
   }
 }
 
-#page .large-title {
+#page .title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   margin: 8px 0 22px;
+}
+
+#page .large-title {
+  margin: 0;
   font-size: 40px;
   font-weight: 750;
   line-height: 1.1;
@@ -463,6 +501,60 @@ html {
   content: "";
   position: absolute;
   inset: -16px -40px -8px;
+}
+
+/* the first app a visitor opens in 3d shows once how to leave it: the bar nudges up and a line says so (see
+   appWindow.js showHomeHint) */
+#page .home-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  z-index: 3;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#page.hint-home .home-hint {
+  animation: home-hint 3.4s ease forwards;
+}
+
+#page.hint-home .home-bar {
+  animation: home-nudge 0.9s ease-in-out 0.4s 2;
+}
+
+@keyframes home-hint {
+  0% {
+    opacity: 0;
+  }
+  12%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes home-nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page.hint-home .home-bar {
+    animation: none;
+  }
 }
 
 /* the picture at the top of a post or a project, under the bars. it fades out at its foot and the sheet rides up over

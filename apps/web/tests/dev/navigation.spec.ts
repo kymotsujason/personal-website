@@ -475,6 +475,75 @@ test.describe("with the clock installed", () => {
     expect(await historyIndex(page)).toBe(home);
   });
 
+  test("the home button beside the title goes Back to the home screen, like the home bar", async ({
+    page,
+  }) => {
+    await openHome(page);
+    const home = await historyIndex(page);
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    await page.locator("#page .title-row .home-link").click();
+    await settledOn(page, "/", null);
+    expect(await historyIndex(page)).toBe(home);
+  });
+
+  // the button beside the title scrolls away with it, so the bar shows one once the small title does
+  test("the bar's home button shows once the title scrolls away, and goes home", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    const inBar = page.locator("#page > header .header-home");
+    await expect(inBar).toHaveCSS("opacity", "0");
+    await expect(inBar).toHaveCSS("pointer-events", "none");
+    await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>("#page > .body")!;
+      body.scrollTop = body.scrollHeight;
+    });
+    await expect(page.locator("#page > header")).toHaveClass(/scrolled/);
+    await expect(inBar).toHaveCSS("opacity", "1");
+    await inBar.click();
+    await settledOn(page, "/", null);
+  });
+
+  test("a detail page's round home button goes home, past its list", async ({
+    page,
+  }) => {
+    await page.goto("/projects/device-intro?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/device-intro", "Projects");
+    // the dev panel covers the top right corner, so the click comes from the element itself
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>("#page > header .home-icon")!.click(),
+    );
+    await settledOn(page, "/", null);
+  });
+
+  // visitors took a while to find their way home, so the first app shows how, once per browser
+  test("the first app opened nudges the home bar with a hint, and the next doesn't", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("homeHintSeen");
+    });
+    await openHome(page);
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    await expect(page.locator("#page")).toHaveClass(/hint-home/);
+    await expect(page.locator("#page .home-hint")).toHaveText(
+      "Swipe up to go home",
+    );
+    await expect(page.locator("#page")).not.toHaveClass(/hint-home/, {
+      timeout: 6000,
+    });
+    await swipeHome(page);
+    await settledOn(page, "/", null);
+    await tapIcon(page, "Blog");
+    await settledOn(page, "/blog", "Blog");
+    await expect(page.locator("#page")).not.toHaveClass(/hint-home/);
+  });
+
   // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
   test("the swipe's card is cut to the page, not the whole screen", async ({
     page,

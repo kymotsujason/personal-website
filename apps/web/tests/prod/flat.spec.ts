@@ -32,6 +32,26 @@ test.describe("with javascript off", () => {
     });
   }
 
+  // visitors took a while to find their way home, so every app page has a home button: before the large title on an
+  // app's own page, and opposite a detail page's back pill
+  test("an app page links home beside its title or its back pill", async ({
+    page,
+  }) => {
+    await page.goto("/about");
+    const beside = page.locator("#page .title-row a.home-link");
+    await expect(beside).toHaveAccessibleName("Home");
+    await expect(beside).toHaveAttribute("href", "/");
+    await expect(beside).toBeVisible();
+    await expect(page.locator("#page .title-row h1")).toHaveText("About");
+    await page.goto("/projects/device-intro");
+    await expect(page.locator("#page > header a.back")).toHaveText("Projects");
+    const round = page.locator("#page > header a.home-icon");
+    await expect(round).toHaveAttribute("href", "/");
+    await expect(round).toHaveAccessibleName("Home");
+    await round.click();
+    await expect(page.locator("#page h1")).toHaveText("Jason Yue");
+  });
+
   test("an unknown address shows the not found page", async ({ page }) => {
     const response = await page.goto("/nothing-here");
     expect(response?.status()).toBe(404);
