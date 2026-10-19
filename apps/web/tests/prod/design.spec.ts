@@ -102,6 +102,33 @@ test.describe("the flat site", () => {
     }
   });
 
+  // the control for the test below: without reduced motion these pointer moves do write the depth inputs
+  test("the same pointer moves write depth inputs without reduced motion", async ({
+    page,
+  }) => {
+    await flatSite(page);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/about");
+    await page.mouse.move(40, 40);
+    await page.mouse.move(1000, 600);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ["--px", "--py"].map((name) =>
+            document.documentElement.style.getPropertyValue(name),
+          ),
+        ),
+      )
+      .not.toEqual(["", ""]);
+    const lit = await page.evaluate(
+      () =>
+        [...document.querySelectorAll<HTMLElement>("#page .glass")].filter(
+          (el) => el.style.getPropertyValue("--hl-x"),
+        ).length,
+    );
+    expect(lit).toBeGreaterThan(0);
+  });
+
   // the script's own guard: the same pointer moves that drift the sky write no depth input under reduced motion
   test("reduced motion's script writes no depth inputs", async ({ page }) => {
     await flatSite(page);

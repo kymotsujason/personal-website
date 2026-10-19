@@ -71,6 +71,17 @@ test("the scene's fetches all end together, the three loaders' included, and sta
 test("an interval stops when the scene ends, and none starts after", () => {
     const id = every(() => {}, 1000);
     assert.notEqual(id, null);
-    endScene();
+    const realClear = globalThis.clearInterval;
+    const cleared = [];
+    globalThis.clearInterval = (clearedId) => {
+        cleared.push(clearedId);
+        realClear(clearedId);
+    };
+    try {
+        endScene();
+    } finally {
+        globalThis.clearInterval = realClear;
+    }
+    assert.deepEqual(cleared, [id]);
     assert.equal(every(() => {}, 1000), null);
 });
