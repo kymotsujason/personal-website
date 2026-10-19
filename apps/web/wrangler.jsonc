@@ -13,6 +13,9 @@
   },
   "workers_dev": false,
   "preview_urls": true,
+  // the site's one address. a custom domain makes its own dns record and certificate, and keeping it here means every
+  // deploy keeps it
+  "routes": [{ "pattern": "jasonyue.ca", "custom_domain": true }],
   // no id, since wrangler 4.45 and later creates the namespace on the first deploy
   "kv_namespaces": [{ "binding": "HOME" }],
   // the daily github fetch
