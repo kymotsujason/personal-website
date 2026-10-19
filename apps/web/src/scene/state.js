@@ -67,6 +67,8 @@ export const state = {
     // the data-app of the page a navigation in flight is going to, once it's known, or null (see navigation.js)
     pendingPage: null,
     openIcon: null,
+    // the open app grew out of a widget instead of its icon, so it fades in over it and back into it
+    openFromWidget: false,
     appEl: null,
     appSplash: null,
     // #page shown as a plain flat page at full zoom, with no transform, in place of pinned onto the app window

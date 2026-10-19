@@ -521,6 +521,48 @@ test.describe("with the clock installed", () => {
       .toBe(true);
   });
 
+  // a window let go mid swipe can fly in from below its icon, so the icon is left out of the home screen while the
+  // window shows, or it poked out past the window's top
+  test("the open app's icon is left out until its window lands on it", async ({
+    page,
+  }) => {
+    await openHome(page);
+    const hidden = () =>
+      page.evaluate(() =>
+        (window as any).spike.state.screen.composite.hidden(),
+      );
+    expect(await hidden()).toBeNull();
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    expect(await hidden()).not.toBeNull();
+    await swipeHome(page);
+    await settledOn(page, "/", null);
+    expect(await hidden()).toBeNull();
+  });
+
+  // ios grows an app out of the widget that opened it, so the widget stays and the window fades in over it
+  test("a widget opens its app out of the widget, not the icon", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLElement>('#css-layer [data-action="project"]')!
+        .click(),
+    );
+    await expect
+      .poll(() => phone(page))
+      .toMatchObject({ busy: false, zoomed: true, app: "Projects" });
+    const opened = await page.evaluate(() => {
+      const { state } = (window as any).spike;
+      return {
+        fromWidget: state.openFromWidget,
+        hidden: state.screen.composite.hidden(),
+      };
+    });
+    expect(opened).toEqual({ fromWidget: true, hidden: null });
+  });
+
   test("the home bar swipe pushes the home screen when the page was opened directly", async ({
     page,
   }) => {

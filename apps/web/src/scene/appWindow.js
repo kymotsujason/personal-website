@@ -77,12 +77,20 @@ export const setAppVisible = (visible) => {
     state.appVisible = visible;
 };
 
+// the open app's own icon is left out of the home screen while its window shows, since a window let go mid swipe can
+// fly in from below it and the icon would show past the window's top. the window lands right on it, and the reset puts
+// it back in the same frame. a widget the window grew out of stays, since the window fades into it
+const hideOpenIcon = () => {
+    state.screen.composite.setHidden(state.openFromWidget ? null : state.openIcon);
+};
+
 export const resetAppWindow = () => {
     state.pageFade = null;
     if (!state.screen) {
         return;
     }
     state.screen.appHole.visible = false;
+    state.screen.composite.setHidden(null);
     state.screen.texture.repeat.set(1, 1);
     state.screen.texture.offset.set(0, 0);
     state.screen.material.color.setScalar(1);
@@ -165,11 +173,14 @@ const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     appHole.visible = true;
     appHole.material.uniforms.rect.value.set(hole.x0, hole.y0, hole.x1, hole.y1);
     appHole.material.uniforms.radius.value = radius;
+    // grown out of a widget, the window fades in over it as it grows, the way ios opens one, and back into it on the
+    // way home. out of an icon it covers the icon from the start
+    appHole.material.uniforms.opacity.value = state.openFromWidget ? THREE.MathUtils.smoothstep(k, 0.2, 0.6) : 1;
     // while small the window still looks like the icon, so its letter rides along and fades as the app appears
     const splash = state.appSplash;
     splash.textContent = app.glyph;
     splash.style.fontSize = `${26 * elementPxPerScreenPx}px`;
-    splash.style.opacity = String(1 - THREE.MathUtils.smoothstep(k, 0.08, 0.35));
+    splash.style.opacity = state.openFromWidget ? "0" : String(1 - THREE.MathUtils.smoothstep(k, 0.08, 0.35));
 
     const zoom = 1 + 0.08 * home;
     const cx = (icon.x0 + icon.x1) / 2 / fullW;
@@ -223,8 +234,10 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
         music.loadPlayer();
     }
     state.openIcon = from || glyphRect(state.screen.homeEl, app.name);
+    state.openFromWidget = Boolean(from);
     const fading = !instant && reducedMotion.matches;
     if (!fading) {
+        hideOpenIcon();
         setAppWindow(instant ? 1 : 0, state.openIcon, app);
         setAppVisible(true);
     }
@@ -241,6 +254,7 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
             return;
         }
         state.pageFade = null;
+        hideOpenIcon();
         setAppWindow(1, state.openIcon, app);
         setAppVisible(true);
         Object.assign(pose, state.poses.zoom, { idle: 0, fold: 0 });
@@ -274,6 +288,8 @@ export const fadeTo = async (app) => {
     }
     state.openApp = app;
     state.openIcon = glyphRect(state.screen.homeEl, app.name);
+    state.openFromWidget = false;
+    hideOpenIcon();
     setAppWindow(1, state.openIcon, app);
     if (pageEl.animate) {
         pageEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN_MS, easing: "ease-out" });

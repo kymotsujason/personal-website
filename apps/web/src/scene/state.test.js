@@ -4,7 +4,7 @@ import { state, pose, settings, DUO, TAP_FOLD, FOV, HOME_FILL } from "./state.js
 
 const FIELDS = [
     "flap", "body", "hands", "screen", "cover", "wallpaper", "frost", "glass", "volume", "charger", "phone", "openApp",
-    "pendingPage", "openIcon", "appEl", "pageFlat", "appSplash", "appLive", "surfaces", "homeLaidOut", "screensChanged",
+    "pendingPage", "openIcon", "openFromWidget", "appEl", "pageFlat", "appSplash", "appLive", "surfaces", "homeLaidOut", "screensChanged",
     "statusChanged", "chargeFit", "warmedUp", "busy", "zoomed", "appVisible", "portrait", "posing", "lead", "foldPath",
     "lastFold", "root", "handModel", "poses", "pageFade"
 ];

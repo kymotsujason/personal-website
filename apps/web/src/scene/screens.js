@@ -594,7 +594,8 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
         u: { value: new THREE.Vector2(1, 0) },
         v: { value: new THREE.Vector2(0, 1) },
         rect: { value: new THREE.Vector4(0, 0, 0, 0) },
-        radius: { value: 0 }
+        radius: { value: 0 },
+        opacity: { value: 1 }
     },
     vertexShader: `
         varying vec2 vLocal;
@@ -609,6 +610,7 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
         uniform vec2 v;
         uniform vec4 rect;
         uniform float radius;
+        uniform float opacity;
         varying vec2 vLocal;
         void main() {
             vec2 d = vLocal - tl;
@@ -624,7 +626,8 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
             // the cutout's edge is softened over a pixel and sits a pixel inside the window's, so the window's own
             // softened edge, which lets the black stage behind it through, stays under the canvas
             float aa = fwidth(dist);
-            float open = 1.0 - smoothstep(-2.0 * aa, -aa, dist);
+            // opacity lets the window fade in over a widget it grows out of, instead of covering it at once
+            float open = (1.0 - smoothstep(-2.0 * aa, -aa, dist)) * opacity;
             if (open <= 0.0) {
                 discard;
             }

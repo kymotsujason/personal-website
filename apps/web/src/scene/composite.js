@@ -36,6 +36,8 @@ const fragmentShader = `
     uniform vec4 cards[${MAX_CARDS}];
     uniform int cardCount;
     uniform float radius;
+    uniform vec4 hidden;
+    uniform float hiddenRadius;
     uniform vec2 sunAt;
     uniform float sunUp;
     uniform vec2 moonAt;
@@ -66,11 +68,15 @@ const fragmentShader = `
         return vec2(uv.x * skyRect.x + skyRect.z, 1.0 - (1.0 - uv.y) * skyRect.y + skyRect.w);
     }
 
-    // distance to a card's rounded rect in screen px (y down), negative inside
-    float card(vec2 p, vec4 r) {
+    // distance to a rounded rect in screen px (y down), negative inside
+    float boxDistance(vec2 p, vec4 r, float rr) {
         vec2 c = (r.xy + r.zw) * 0.5;
-        vec2 q = abs(p - c) - (r.zw - r.xy) * 0.5 + radius;
-        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+        vec2 q = abs(p - c) - (r.zw - r.xy) * 0.5 + rr;
+        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+    }
+
+    float card(vec2 p, vec4 r) {
+        return boxDistance(p, r, radius);
     }
 
     // which way a light in the sky is from here, in screen px with y down, turned by the phone's tilt
@@ -130,9 +136,17 @@ const fragmentShader = `
         }
 
         vec4 front = texture2D(icons, vUv);
+        vec4 inkPx = texture2D(ink, vUv);
+        // the open app's icon is left out while its window flies, so it can't show past the window, which lands right
+        // on it. the icon layer goes with its shadow, and the ink only inside the icon, so its letter goes and its
+        // label stays
+        if (hidden.z > hidden.x) {
+            vec4 shadowed = hidden + vec4(-10.0, -10.0, 10.0, 14.0);
+            front *= smoothstep(-1.0, 1.0, boxDistance(p, shadowed, hiddenRadius + 10.0));
+            inkPx *= smoothstep(-1.0, 1.0, boxDistance(p, hidden, hiddenRadius));
+        }
         vec3 color = front.rgb + back * (1.0 - front.a);
 
-        vec4 inkPx = texture2D(ink, vUv);
         if (inkPx.a > 0.0) {
             vec3 c = inkPx.rgb / inkPx.a;
             float dark = smoothstep(INK_FROM, INK_TO, luma(behind));
@@ -176,6 +190,8 @@ export const createComposite = (renderer, { width, height, sky, frost, icons, in
             cards: { value: Array.from({ length: MAX_CARDS }, () => new THREE.Vector4()) },
             cardCount: { value: 0 },
             radius: { value: 22 },
+            hidden: { value: new THREE.Vector4() },
+            hiddenRadius: { value: 0 },
             sunAt: light.sunAt,
             sunUp: light.sunUp,
             moonAt: light.moonAt,
@@ -209,6 +225,21 @@ export const createComposite = (renderer, { width, height, sky, frost, icons, in
             boxes.slice(0, MAX_CARDS).forEach((b, i) => uniforms.cards.value[i].set(b.x0, b.y0, b.x1, b.y1));
             uniforms.cardCount.value = Math.min(boxes.length, MAX_CARDS);
             uniforms.radius.value = radius;
+            dirty = true;
+        },
+        hidden: () => {
+            const h = uniforms.hidden.value;
+            return h.z > h.x ? { x0: h.x, y0: h.y, x1: h.z, y1: h.w, radius: uniforms.hiddenRadius.value } : null;
+        },
+        // an icon to leave out, as { x0, y0, x1, y1, radius } in the screen's px, or null for none
+        setHidden: (box) => {
+            const next = box ? [box.x0, box.y0, box.x1, box.y1, box.radius] : [0, 0, 0, 0, 0];
+            const now = [...uniforms.hidden.value.toArray(), uniforms.hiddenRadius.value];
+            if (next.every((v, i) => v === now[i])) {
+                return;
+            }
+            uniforms.hidden.value.set(next[0], next[1], next[2], next[3]);
+            uniforms.hiddenRadius.value = next[4];
             dirty = true;
         },
         // the phone's tilt, which turns where the rims catch the light. it redraws only on a visible change
