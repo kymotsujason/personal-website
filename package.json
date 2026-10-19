@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "if git rev-parse --git-dir >/dev/null 2>&1; then git config core.hooksPath .githooks; fi",
     "typecheck": "pnpm -C apps/web typecheck",
-    "check": "pnpm -C apps/web check",
+    "check": "pnpm test:privacy && pnpm test:tools && pnpm -C apps/web check",
     "verify": "pnpm test:privacy && pnpm test:tools && pnpm -C apps/web verify",
     "test:privacy": "node --test \"tools/privacy/*.test.mjs\"",
     "test:tools": "node --test \"tools/*.test.mjs\""

@@ -19,7 +19,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:privacy
+      # the privacy and tools suites, then the web app's format, lint, types, and unit tests
+      - run: pnpm check
       - run: node tools/privacy/check.mjs --range "$BEFORE" "$AFTER"
         env:
           BEFORE: ${{ github.event.before }}
