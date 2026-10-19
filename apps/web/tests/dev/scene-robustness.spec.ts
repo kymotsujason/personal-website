@@ -436,3 +436,121 @@ test("a change of the desk's lighting frees the lighting map it replaces", async
   }
   expect(await textures()).toBe(first);
 });
+
+// the phone closed in a portrait window, where the thumbs go ahead of an open (see leadOpen), and a spot on the
+// border an open swipe starts from, outside the cover screen so the release taps nothing
+const closedPortrait = async (page: Page) => {
+  await page.setViewportSize({ width: 600, height: 900 });
+  await openAt(page, "/", false);
+  await page.evaluate(() => (window as any).spike.closePhone());
+  await expect
+    .poll(() => phone(page))
+    .toEqual({ phone: "closed", busy: false, zoomed: false });
+  const { outer, inner } = await page.evaluate(() =>
+    (window as any).spike.phoneEdges(),
+  );
+  return {
+    x: (outer.left + outer.right) / 2,
+    y: (inner.bottom + outer.bottom) / 2,
+  };
+};
+
+// the hands' lead and the fold in every frame until stopLeads
+const recordLeads = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as any;
+    w.__leads = [];
+    w.__leadsStop = false;
+    const take = () => {
+      const { state, pose } = w.spike;
+      w.__leads.push({ lead: state.lead, fold: pose.fold });
+      if (!w.__leadsStop) {
+        requestAnimationFrame(take);
+      }
+    };
+    requestAnimationFrame(take);
+  });
+
+const stopLeads = (page: Page): Promise<{ lead: number; fold: number }[]> =>
+  page.evaluate(() => {
+    const w = window as any;
+    w.__leadsStop = true;
+    return w.__leads;
+  });
+
+const unfolding = (frames: { lead: number; fold: number }[]) =>
+  frames.filter((f) => f.fold > 0.001 && f.fold < 0.999);
+
+test("a press on the open border let go just before an Enter open keeps the thumbs ahead through the unfold", async ({
+  page,
+}) => {
+  const { x, y } = await closedPortrait(page);
+  await recordLeads(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(200);
+  expect(
+    await page.evaluate(() => (window as any).spike.state.lead),
+    "the press sent the thumbs ahead",
+  ).toBeGreaterThan(0);
+  await page.mouse.up();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => phone(page), { timeout: 15000 })
+    .toEqual({ phone: "open", busy: false, zoomed: false });
+  const frames = unfolding(await stopLeads(page));
+  expect(frames.length, "the unfold was seen").toBeGreaterThan(3);
+  expect(
+    frames.filter((f) => f.lead < 0.999),
+    "no frame of the unfold had the thumbs pulled back",
+  ).toEqual([]);
+});
+
+test("an Enter open while a press is held on the open border isn't undone by the release", async ({
+  page,
+}) => {
+  const { x, y } = await closedPortrait(page);
+  await recordLeads(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => (window as any).spike.state.busy, null, {
+    polling: "raf",
+  });
+  // late enough in the open's lead that a lead back from the release would outlast it
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await expect
+    .poll(() => phone(page), { timeout: 15000 })
+    .toEqual({ phone: "open", busy: false, zoomed: false });
+  const frames = unfolding(await stopLeads(page));
+  expect(frames.length, "the unfold was seen").toBeGreaterThan(3);
+  expect(
+    frames.filter((f) => f.lead < 0.999),
+    "no frame of the unfold had the thumbs pulled back",
+  ).toEqual([]);
+});
+
+test("a press on the open border that moves sideways sends the thumbs back", async ({
+  page,
+}) => {
+  const { x, y } = await closedPortrait(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(400);
+  expect(
+    await page.evaluate(() => (window as any).spike.state.lead),
+    "the press sent the thumbs ahead",
+  ).toBeGreaterThan(0.99);
+  await page.mouse.move(x + 20, y);
+  await page.mouse.move(x + 40, y);
+  await page.waitForTimeout(600);
+  const held = await page.evaluate(() => (window as any).spike.state.lead);
+  await page.mouse.up();
+  expect(held).toBe(0);
+  expect(await phone(page)).toEqual({
+    phone: "closed",
+    busy: false,
+    zoomed: false,
+  });
+});

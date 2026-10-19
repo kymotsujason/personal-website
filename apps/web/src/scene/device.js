@@ -8,7 +8,7 @@ import { createWallpaper } from "./wallpaper.js";
 import { LEVEL_STEPS } from "./musicInfo.js";
 import { createHands, handMatrix, LIMITS } from "./hands.js";
 import { state, pose, settings, DUO, FOV, HOME_FILL } from "./state.js";
-import { tween, ease } from "./tween.js";
+import { tween, ease, cancelGroup } from "./tween.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
 import { applyWallpaperMotion, reducedMotion } from "./quality.js";
 import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus } from "./home.js";
@@ -133,9 +133,11 @@ export const placeKeys = (keys) => {
 // with the phone still closed, and then hold there (handFold takes the lesser of the two) until the fold catches up
 export const LEAD = { fold: 0.01, time: 300 };
 export const handFold = () => (state.portrait && (state.posing || state.foldPath === "open") ? Math.min(pose.fold, 1 - LEAD.fold * state.lead) : pose.fold);
+// one lead at a time, so a lead back left over from a press can't outlast an open's lead and pull the thumbs back
 export const leadTo = (to, delay = 0, time = LEAD.time) => {
+    cancelGroup("lead");
     const from = state.lead;
-    return tween({ to: {}, duration: time * Math.abs(to - from), delay, easing: (t) => t, onUpdate: (t) => {
+    return tween({ to: {}, duration: time * Math.abs(to - from), delay, easing: (t) => t, group: "lead", onUpdate: (t) => {
         state.lead = from + (to - from) * ease.inOutSine(t);
     } });
 };

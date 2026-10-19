@@ -251,6 +251,14 @@ export const gestureFor = (x, y) => {
 
 export let gesture = null;
 
+// a press on the open border sends the thumbs ahead, so a press that never becomes a swipe sends them back. an open a
+// key or a tap started since then has the lead now, and keeps it
+const leadBack = (g) => {
+    if (g.action === "open" && !state.busy && state.phone === "closed") {
+        leadTo(0);
+    }
+};
+
 // a rebuild drops a swipe in progress, since its poses and its fold table were measured on the phone it replaced. the
 // release still eats its click
 export const dropGesture = () => {
@@ -324,6 +332,7 @@ export const installGestures = () => {
         if (!gesture.armed) {
             // it only becomes a fold once the finger clearly moves the right way, so taps still work
             if (across > 14 && across > along) {
+                leadBack(gesture);
                 gesture = null;
                 return;
             }
@@ -332,6 +341,7 @@ export const installGestures = () => {
             }
             // a key or a navigation moved the phone since the press, and the swipe would fight that move
             if (state.busy || state.zoomed || state.phone !== gesture.phone) {
+                leadBack(gesture);
                 gesture = null;
                 return;
             }
@@ -388,9 +398,7 @@ export const endGesture = guard(async (event) => {
         return;
     }
     if (!g.armed) {
-        if (g.action === "open") {
-            leadTo(0);
-        }
+        leadBack(g);
         return;
     }
     blockNextClick();
