@@ -658,6 +658,157 @@ test.describe("with the clock installed", () => {
     expect(await switches(page)).toEqual([]);
   });
 
+  // a page inside the same app used to fade all of #page in from nothing, which flashed the black window behind it.
+  // it slides in over the page before it now, the way an ios navigation stack does, and Back slides it off again
+  const watchAnimations = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      w.__names = new Set();
+      w.__pageFades = 0;
+      const look = () => {
+        for (const a of document.getAnimations() as any[]) {
+          if (a.animationName) {
+            w.__names.add(a.animationName);
+          } else if (a.effect?.target === document.getElementById("page")) {
+            w.__pageFades += 1;
+          }
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+  const seenAnimations = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      const seen = { names: [...w.__names].sort(), pageFades: w.__pageFades };
+      w.__names.clear();
+      w.__pageFades = 0;
+      return seen;
+    });
+
+  test("an inner page slides in from the right with no fade, and Back slides it off", async ({
+    page,
+  }) => {
+    await page.goto("/projects?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects", "Projects");
+    await watchAnimations(page);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLElement>('#page a[href^="/projects/"]')!
+        .click(),
+    );
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toMatch(/^\/projects\/.+/);
+    await expect
+      .poll(() => phone(page))
+      .toMatchObject({ busy: false, zoomed: true, app: "Projects" });
+    const names = () =>
+      page.evaluate(() => [...(window as any).__names] as string[]);
+    await expect
+      .poll(names)
+      .toEqual(expect.arrayContaining(["page-in-right", "page-under-left"]));
+    await expect(page.locator("html")).not.toHaveClass(/page-slide/);
+    expect((await seenAnimations(page)).pageFades).toBe(0);
+    // the address and the phone are both on Projects at once, so the slide is what to wait for
+    await page.goBack();
+    await expect
+      .poll(names)
+      .toEqual(expect.arrayContaining(["page-back-in", "page-out-right"]));
+    await settledOn(page, "/projects", "Projects");
+    await expect(page.locator("html")).not.toHaveClass(/page-slide/);
+    expect((await seenAnimations(page)).pageFades).toBe(0);
+  });
+
+  // a drag from an inner page's left edge goes back to its list, the way ios does
+  const edgeDrag = async (page: Page, to: number) => {
+    const y = 400;
+    await page.mouse.move(6, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(6 + ((to - 6) * i) / 10, y);
+    }
+    await page.mouse.up();
+  };
+  const contentOffset = (page: Page) =>
+    page.evaluate(() =>
+      [
+        document.querySelector<HTMLElement>("#page > header")!,
+        document.querySelector<HTMLElement>("#page > .body")!,
+      ].map((el) => el.style.transform),
+    );
+
+  test("an edge swipe from a page opened by its list goes Back to the list", async ({
+    page,
+  }) => {
+    await page.goto("/projects?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects", "Projects");
+    const list = await historyIndex(page);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLElement>('#page a[href^="/projects/"]')!
+        .click(),
+    );
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toMatch(/^\/projects\/.+/);
+    await expect(page.locator("html")).not.toHaveClass(/page-slide/);
+    await watchAnimations(page);
+    await edgeDrag(page, 900);
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+    expect(await historyIndex(page)).toBe(list);
+    await expect
+      .poll(() => page.evaluate(() => [...(window as any).__names]))
+      .toEqual(expect.arrayContaining(["page-back-in", "page-out-right"]));
+  });
+
+  test("an edge swipe from a page opened directly goes to its list, sliding the way Back does", async ({
+    page,
+  }) => {
+    await page.goto("/projects/device-intro?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/device-intro", "Projects");
+    const before = await historyIndex(page);
+    await watchAnimations(page);
+    await edgeDrag(page, 900);
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+    expect(await historyIndex(page)).toBe(before + 1);
+    await expect
+      .poll(() => page.evaluate(() => [...(window as any).__names]))
+      .toEqual(expect.arrayContaining(["page-back-in", "page-out-right"]));
+    await expect(page.locator("html")).not.toHaveClass(/slide-back/);
+  });
+
+  test("a short edge swipe springs back and stays on the page", async ({
+    page,
+  }) => {
+    await page.goto("/projects/device-intro?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/device-intro", "Projects");
+    await page.mouse.move(6, 400);
+    await page.mouse.down();
+    await page.mouse.move(60, 400, { steps: 6 });
+    expect(await contentOffset(page)).toEqual([
+      "translateX(54px)",
+      "translateX(54px)",
+    ]);
+    await page.waitForTimeout(150);
+    await page.mouse.move(80, 400, { steps: 4 });
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await expect.poll(() => contentOffset(page)).toEqual(["", ""]);
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => location.pathname)).toBe(
+      "/projects/device-intro",
+    );
+  });
+
   // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
   test("the swipe's card is cut to the page, not the whole screen", async ({
     page,

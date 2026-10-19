@@ -509,6 +509,17 @@ html {
   inset: -16px -40px -8px;
 }
 
+/* the strip an inner page's edge swipe starts on (see layout/edgeSwipe.js), over the page's left edge */
+#page .edge-swipe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  width: 20px;
+  touch-action: none;
+}
+
 /* the first app a visitor opens in 3d shows once how to leave it: the bar nudges up and a line says so (see
    appWindow.js showHomeHint) */
 #page .home-hint {
@@ -1834,5 +1845,106 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 
   #page[data-page="post"] .post-body {
     font-size: 18px;
+  }
+}
+
+/* an inner page of the same app slides in from the right over the one before it, the way an ios navigation stack
+   pushes, and Back slides it off to the right again. #page is one picture with its sky, so neither page shows through
+   the other, while the bar and the home bar are pictures of their own that stay put and crossfade. layout/navigation.js
+   turns it on for a page of the app already showing, and Astro marks the direction on the root */
+html.page-slide #page {
+  view-transition-name: page;
+}
+
+html.page-slide #page > header {
+  view-transition-name: page-bar;
+}
+
+html.page-slide #page .home-bar {
+  view-transition-name: page-home-bar;
+}
+
+::view-transition-group(page) {
+  animation: none;
+}
+
+::view-transition-old(page),
+::view-transition-new(page) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+html[data-astro-transition="forward"]::view-transition-old(page) {
+  animation-name: page-under-left;
+}
+
+html[data-astro-transition="forward"]::view-transition-new(page) {
+  animation-name: page-in-right;
+}
+
+html[data-astro-transition="back"]::view-transition-old(page),
+html.slide-back::view-transition-old(page) {
+  z-index: 1;
+  animation-name: page-out-right;
+}
+
+html[data-astro-transition="back"]::view-transition-new(page),
+html.slide-back::view-transition-new(page) {
+  animation-name: page-back-in;
+}
+
+@keyframes page-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes page-under-left {
+  to {
+    transform: translateX(-30%);
+    filter: brightness(0.6);
+  }
+}
+
+@keyframes page-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes page-back-in {
+  from {
+    transform: translateX(-30%);
+    filter: brightness(0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-astro-transition]::view-transition-old(page),
+  html[data-astro-transition]::view-transition-new(page) {
+    animation-duration: 0.2s;
+    animation-timing-function: ease;
+  }
+
+  html[data-astro-transition]::view-transition-old(page) {
+    animation-name: page-fade-out;
+  }
+
+  html[data-astro-transition]::view-transition-new(page) {
+    animation-name: page-fade-in;
+  }
+
+  @keyframes page-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes page-fade-in {
+    from {
+      opacity: 0;
+    }
   }
 }

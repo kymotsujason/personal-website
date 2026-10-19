@@ -169,6 +169,21 @@ document.addEventListener("astro:before-preparation", (event) => {
       },
       () => null,
     );
+    // another page of the app already showing slides in (see .page-slide in flat.css). the class goes on before Astro
+    // starts the view transition, which takes its picture of the old page then, and the browser's own back animation
+    // already played one
+    page.then((app) => {
+      const now = pageAppOf(document);
+      if (
+        app &&
+        app === now &&
+        app !== "home" &&
+        app !== "not-found" &&
+        !uaTransition
+      ) {
+        root.classList.add("page-slide");
+      }
+    });
     // called at once, so a newer navigation's handler runs before the one it dropped hears that it was dropped
     const handled = handler
       ? withCap(
@@ -250,6 +265,11 @@ document.addEventListener("astro:before-swap", (event) => {
     customSwap(event.newDocument, rootState(), swapFunctions);
     settleSwap?.({ viewTransition: event.viewTransition ?? null });
   };
+  // the slide's pictures are taken by now once the transition is over, and with no transition there's nothing to slide
+  const slid = event.viewTransition?.finished ?? Promise.resolve();
+  slid
+    .catch(() => {})
+    .finally(() => root.classList.remove("page-slide", "slide-back"));
 });
 
 document.addEventListener("astro:after-swap", () => {
@@ -281,6 +301,18 @@ export const goHome = () => {
     return;
   }
   navigate("/");
+};
+
+// an inner page's way back to its list (the edge swipe): Back when the list is the entry before, so history stays as
+// the visitor made it, and otherwise the list as a new entry that still slides in the way Back does
+export const goBackTo = (href) => {
+  const path = new URL(href, location.href).pathname;
+  if (history.state?.prev === path) {
+    history.back();
+    return;
+  }
+  root.classList.add("slide-back");
+  navigate(href);
 };
 
 export { navigate };

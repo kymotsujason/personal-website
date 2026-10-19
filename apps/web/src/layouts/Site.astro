@@ -110,6 +110,7 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         syncPagePinned,
       } from "../layout/navigation.js";
       import "../layout/depth.js";
+      import "../layout/edgeSwipe.js";
       import "../layout/facts.js";
       import { music } from "../layout/player.js";
       import { remove, write } from "../lib/storage.js";
@@ -351,6 +352,7 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
           </>
         )}
         {toolbar && <div class="toolbar glass" set:html={toolbar} />}
+        {back && <div class="edge-swipe" aria-hidden="true" />}
         {isApp && (
           <>
             <span class="home-hint" aria-hidden="true">

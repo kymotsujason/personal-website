@@ -199,8 +199,9 @@ export const sceneNavigation = (scene, given) => {
                 return;
             }
             const s = scene.status();
-            // a switch running now shows the new page itself as its card arrives
-            stale = s.shown && s.switchingTo === null;
+            // a switch running now shows the new page itself as its card arrives, and a page of the same app slides in
+            // with the view transition (see .page-slide in flat.css), so neither needs the fade
+            stale = s.shown && s.switchingTo === null && !document.documentElement.classList.contains("page-slide");
             if (jumps() && s.phone !== null) {
                 scene.showUrl();
                 stale = false;
