@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatDay, newestFirst, readingMinutes } from "./format";
+import { formatDay, isRealDay, newestFirst, readingMinutes } from "./format";
 
 test("formatDay reads the day from the date's own text", () => {
   expect(formatDay("2020-01-01T17:56:51.000-08:00")).toBe("January 1, 2020");
@@ -27,4 +27,13 @@ test("newestFirst orders dates by their own text, newest first", () => {
     "2019-06-01T09:00:00.000-07:00",
     "2019-06-01",
   ]);
+});
+
+test("isRealDay checks the day against the calendar", () => {
+  expect(isRealDay("2024-02-29")).toBe(true);
+  expect(isRealDay("2019-11-01T18:25:00.000-07:00")).toBe(true);
+  expect(isRealDay("2019-02-31")).toBe(false);
+  expect(isRealDay("2019-02-29")).toBe(false);
+  expect(isRealDay("2026-13-01")).toBe(false);
+  expect(isRealDay("0000-01-01")).toBe(true);
 });
