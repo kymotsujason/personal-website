@@ -7,7 +7,7 @@ root=${CLAUDE_PROJECT_DIR:-$PWD}
 file=$(jq -r '.tool_input.file_path // empty')
 [ -z "$file" ] && exit 0
 case "$file" in
-    *.ts|*.tsx|*.astro|*.css|*.json|*.md) ;;
+    *.ts|*.tsx|*.js|*.mjs|*.astro|*.css|*.json|*.jsonc|*.md) ;;
     *) exit 0 ;;
 esac
 [[ "$file" == "$root/"* ]] || exit 0
