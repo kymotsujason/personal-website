@@ -350,6 +350,12 @@ test("a music bar scrub held through a rebuild is dropped, and the new bar follo
   expect(held.dragging, "the bar took the drag").toBe("true");
   expect(held.at).toBeGreaterThan(0.5);
   await rebuildAt(page, { width: 1100, height: 700 }, false);
+  // before the release, so a release landing on the new bar can't end the scrub in place of the drop
+  await expect
+    .poll(async () => (await bar()).dragging, {
+      message: "the rebuild dropped the scrub",
+    })
+    .toBe("false");
   await page.mouse.up();
   // the bar reads the music each half second
   await page.waitForTimeout(1200);

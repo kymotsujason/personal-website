@@ -4,7 +4,7 @@ import { stubHome } from "../stubHome";
 // youtube's iframe api, standing in: one player per page load, which makes an iframe where youtube's would and
 // counts what it's asked to do
 const FAKE_YOUTUBE = `
-window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0, seeks: [] };
+window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0, seeks: [], time: 0 };
 window.YT = {
   Player: class {
     constructor(host, options) {
@@ -36,7 +36,7 @@ window.YT = {
     }
     playVideoAt(i) { this.index = i; this.playVideo(); }
     nextVideo() { window.__yt.nexts += 1; this.index = (this.index + 1) % 3; }
-    getCurrentTime() { return 0; }
+    getCurrentTime() { return window.__yt.time; }
     getDuration() { return 200; }
     seekTo(t) { window.__yt.seeks.push(t); }
   },
@@ -265,21 +265,27 @@ test.describe("keyboard use of the 3D screens", () => {
       .not.toBe(focused);
   });
 
-  test("Enter on a cover icon opens the app, not just the phone", async ({
-    page,
-  }) => {
-    await openHome(page);
-    await closeToCover(page);
-    await tabTo(page, "#css-layer .cover-screen .app-icon");
-    const name = await page.evaluate(() =>
-      document.activeElement!.textContent!.trim().slice(-5),
-    );
-    expect(name.length).toBeGreaterThan(0);
-    await page.keyboard.press("Enter");
-    await expect
-      .poll(() => phone(page), { timeout: 15000 })
-      .toMatchObject({ busy: false, phone: "open", zoomed: true });
-  });
+  for (const place of [0, 1]) {
+    test(`Enter on the cover's icon number ${place + 1} opens that app, not just the phone`, async ({
+      page,
+    }) => {
+      await openHome(page);
+      await closeToCover(page);
+      await tabTo(page, "#css-layer .cover-screen .app-icon");
+      for (let i = 0; i < place; i++) {
+        await page.keyboard.press("Tab");
+      }
+      const name = await page.evaluate(() => {
+        const el = document.activeElement!;
+        return el.matches("#css-layer .cover-screen .app-icon")
+          ? el.lastElementChild!.textContent!.trim()
+          : "";
+      });
+      expect(name.length, "focus is on a cover icon").toBeGreaterThan(0);
+      await page.keyboard.press("Enter");
+      await settledOn(page, "/" + name.toLowerCase(), name);
+    });
+  }
 
   test("Enter on the cover with nothing focused still opens the phone", async ({
     page,
@@ -744,11 +750,22 @@ test.describe("keyboard use of the 3D screens", () => {
         bar,
       ),
     ).toBe("0:00 of 3:20");
-    for (const key of ["ArrowRight", "PageUp", "PageDown", "End", "Home"]) {
+    // from the middle of the track, so PageDown and ArrowLeft land somewhere Home doesn't
+    await page.evaluate(() => {
+      (window as any).__yt.time = 100;
+      (window as any).__yt.seeks.length = 0;
+    });
+    for (const key of [
+      "ArrowRight",
+      "ArrowLeft",
+      "PageUp",
+      "PageDown",
+      "End",
+      "Home",
+    ]) {
       await page.keyboard.press(key);
     }
-    expect(await page.evaluate(() => (window as any).__yt.seeks)).toEqual([
-      5, 20, 0, 200, 0,
-    ]);
+    const seeks = await page.evaluate(() => (window as any).__yt.seeks);
+    expect(seeks.map(Math.round)).toEqual([105, 95, 120, 80, 200, 0]);
   });
 });
