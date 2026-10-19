@@ -10,6 +10,7 @@ import { reducedMotion, skyMotion, setSkyMotion, applyWallpaperMotion } from "..
 import { centerComp, setFold, keyOptions, handKeys } from "../scene/device.js";
 import { music, statusBar, siteData, refreshStatus } from "../scene/home.js";
 import { openApp, closeApp } from "../scene/appWindow.js";
+import { cardBox } from "../scene/switcher.js";
 import { moveAt, foldStartTime, moveTotal, MOVE } from "../scene/intro.js";
 import { closePhone, openPhone, phoneEdges, gestureFor } from "../scene/fold.js";
 import { idleDrift } from "../scene/loop.js";
@@ -76,6 +77,23 @@ const blockedByDevice = (point) => {
 
 const spike = {
     state,
+    // the middle of the app switcher's card i in the window's px, through the phone's perspective, for the tests to
+    // tap and drag. null while the switcher isn't showing
+    switcherCard: (i) => {
+        const sw = state.switcher;
+        if (!sw) {
+            return null;
+        }
+        const b = cardBox(sw.layout, i, sw.scroll);
+        const home = state.surfaces.home;
+        const [tl, tr, bl] = home.corners;
+        const x = (b.x0 + b.x1) / 2;
+        const y = (b.y0 + b.y1) / 2;
+        const p = new THREE.Vector3(tl.x + ((tr.x - tl.x) * x) / home.w + ((bl.x - tl.x) * y) / home.h, tl.y + ((tr.y - tl.y) * x) / home.w + ((bl.y - tl.y) * y) / home.h, tl.z)
+            .applyMatrix4(home.owner.matrixWorld)
+            .project(camera);
+        return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight };
+    },
     pose,
     POSES,
     BEHIND,

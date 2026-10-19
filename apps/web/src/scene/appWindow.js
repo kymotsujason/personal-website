@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { unpin } from "./pin.js";
-import { glyphRect } from "./screens.js";
+import { glyphRect, CARD_SLOTS } from "./screens.js";
 import { state, pose, settings } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
 import { camera } from "./renderer.js";
@@ -10,6 +10,7 @@ import { signal, guard, failScene } from "./lifetime.js";
 import { reducedMotion } from "./quality.js";
 import { requestApp, requestHome } from "./navigation.js";
 import { read, write } from "../lib/storage.js";
+import { enterSwitcher, switcherDrag, switcherDragEnd } from "./switcher.js";
 
 // the apps' background, ios's dark appearance. flat.css's #page column colors go with it
 export const APP_BACKGROUND = "#000000";
@@ -126,7 +127,7 @@ export const setAppVisible = (visible) => {
 // the open app's own icon is left out of the home screen while its window shows, since a window let go mid swipe can
 // fly in from below it and the icon would show past the window's top. the window lands right on it, and the reset puts
 // it back in the same frame. a widget the window grew out of stays, since the window fades into it
-const hideOpenIcon = () => {
+export const hideOpenIcon = () => {
     state.screen.composite.setHidden(state.openFromWidget ? null : state.openIcon);
 };
 
@@ -137,6 +138,7 @@ export const resetAppWindow = () => {
     }
     state.screen.appHole.visible = false;
     state.screen.appCard.visible = false;
+    state.switcher = null;
     state.screen.composite.setHidden(null);
     state.screen.texture.repeat.set(1, 1);
     state.screen.texture.offset.set(0, 0);
@@ -180,7 +182,7 @@ export const windowLook = (k, app, fromWidget, glass) => {
     return { background: mixColor(app.color, APP_BACKGROUND, tone), opacity: 1 };
 };
 
-const lerpRect = (a, b, t) => ({
+export const lerpRect = (a, b, t) => ({
     x0: a.x0 + (b.x0 - a.x0) * t,
     y0: a.y0 + (b.y0 - a.y0) * t,
     x1: a.x1 + (b.x1 - a.x1) * t,
@@ -189,7 +191,7 @@ const lerpRect = (a, b, t) => ({
 
 // the part of a window at rect that #page covers, in the screen's px. #page is laid out at the browser window's size and
 // centered in the app window, which is laid out at the screen's size
-const pageBox = (rect) => {
+export const pageBox = (rect) => {
     const { appW, appH } = state.poses;
     const page = state.surfaces.page;
     const toX = (u) => rect.x0 + (u * (rect.x1 - rect.x0)) / appW;
@@ -202,7 +204,7 @@ const pageBox = (rect) => {
 // the app window at k (0 = the icon, 1 = the whole screen), the way ios grows an app out of its icon: the window's
 // rect and corner radius grow, it starts in the icon's color and the app's content fades in as it gets big, and the
 // home screen behind it zooms in a little around the icon and dims
-const setAppWindow = (k, icon, app) => {
+export const setAppWindow = (k, icon, app) => {
     const { fullW, fullH, radiusPx } = state.screen;
     placeAppWindow(lerpRect(icon, { x0: 0, y0: 0, x1: fullW, y1: fullH }, k), icon.radius + (radiusPx - icon.radius) * k, k, k, icon, app);
 };
@@ -211,7 +213,7 @@ const setAppWindow = (k, icon, app) => {
 // content, and the icon's letter, and home is how far the home screen behind it has zoomed in and dimmed. opening
 // and closing move all three together, while a swipe up keeps the app's look and lets the window go anywhere. crop is
 // how far the cutout has closed in on #page (see below), 1 while a swipe carries the window and 0 otherwise
-const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
+export const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     const { appHole, full, fullW, fullH, texture, material } = state.screen;
     const k = look;
 
@@ -261,7 +263,7 @@ const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
 const projected = new THREE.Vector3();
 
 // a point on the page to the inner screen's own px, through the screen's perspective as it's drawn now
-const toScreenPx = (clientX, clientY) => {
+export const toScreenPx = (clientX, clientY) => {
     const home = state.surfaces.home;
     const corners = home.corners.map((c) => {
         projected.copy(c).applyMatrix4(home.owner.matrixWorld).project(camera);
@@ -397,7 +399,7 @@ export const switchCards = (t, { page, fullW, fullH, back }) => {
 
 // the page's sky at the top and the bottom, darkened by its dim layer, as the stand in card's colors (see .sky in
 // flat.css)
-const pageSky = () => {
+export const pageSky = () => {
     const css = getComputedStyle(document.documentElement);
     const color = (name, dimName) => {
         const parts = css.getPropertyValue(name).match(/[\d.]+/g);
@@ -408,14 +410,37 @@ const pageSky = () => {
     return { top: color("--sky-top", "--dim-top"), low: color("--sky-low", "--dim-low") };
 };
 
-const placeCard = (rect, radius, sky) => {
+// the cards drawn over the screen (see appCardMaterial), as { body, label, kind, slot } in the screen's px, with the
+// corner radius and the page's sky. fade takes them all in or out together
+export const showCards = (cards, radius, sky, fade = 1, backdrop = 0) => {
     const card = state.screen.appCard;
-    const box = pageBox(rect);
-    card.visible = true;
-    card.material.uniforms.rect.value.set(box.x0, box.y0, box.x1, box.y1);
-    card.material.uniforms.radius.value = radius;
-    card.material.uniforms.top.value.copy(sky.top);
-    card.material.uniforms.low.value.copy(sky.low);
+    const u = card.material.uniforms;
+    for (let i = 0; i < CARD_SLOTS; i++) {
+        const c = cards[i];
+        u.kinds.value[i] = c ? c.kind : 0;
+        u.slots.value[i] = c ? c.slot : 0;
+        u.bodies.value[i].set(...(c ? [c.body.x0, c.body.y0, c.body.x1, c.body.y1] : [0, 0, 0, 0]));
+        u.labels.value[i].set(...(c && c.label ? [c.label.x0, c.label.y0, c.label.x1, c.label.y1] : [0, 0, 0, 0]));
+    }
+    u.radius.value = radius;
+    u.top.value.copy(sky.top);
+    u.low.value.copy(sky.low);
+    u.fade.value = fade;
+    u.backdrop.value = backdrop;
+    if (backdrop > 0) {
+        const { fullW, fullH } = state.screen;
+        const page = pageBox({ x0: 0, y0: 0, x1: fullW, y1: fullH });
+        u.span.value.set(page.y0, page.y1);
+    }
+    card.visible = cards.length > 0;
+};
+
+export const hideCards = () => {
+    state.screen.appCard.visible = false;
+};
+
+const placeCard = (rect, radius, sky) => {
+    showCards([{ body: pageBox(rect), kind: 3, slot: 0 }], radius, sky);
 };
 
 const SWITCH_SWAP_WAIT_MS = 4000;
@@ -489,9 +514,9 @@ const HOME_LIFT = 0.42;
 // past two of the window's edges, and the card moves in a frame the size of the part that shows
 const HOME_EDGE = 0.03;
 const HOME_FIT = 0.45;
-const rubberBand = (distance, limit) => limit * (1 - 1 / (distance / limit + 1));
+export const rubberBand = (distance, limit) => limit * (1 - 1 / (distance / limit + 1));
 // the part of the screen the window shows, in the screen's px
-const shownScreenRect = () => {
+export const shownScreenRect = () => {
     const { fullW, fullH } = state.screen;
     const tl = toScreenPx(0, 0);
     const tr = toScreenPx(innerWidth, 0);
@@ -535,15 +560,67 @@ export const dropHomeSwipe = () => {
         homeSwipe.dropped = true;
     }
 };
+// a swipe that rests this long, once it's pulled this far (a share of the screen's height), opens the app switcher
+// the way ios does, and a move of more than this many px starts the wait again
+const SWITCHER_HOLD_MS = 150;
+const SWITCHER_PULL = 0.05;
+const SWITCHER_STILL = 6;
+// a finger slows before it rests, so a wait that ends while the last move was this fast (px per ms) was a stall
+// between moves, and it waits once more instead
+const SWITCHER_REST_SPEED = 0.3;
 const startHomeSwipe = (event) => {
     if (state.busy || !state.zoomed || homeSwipe) {
         return;
     }
-    homeSwipe = { id: event.pointerId, x0: event.clientX, y0: event.clientY, armed: false, lastY: event.clientY, lastT: performance.now(), speed: 0 };
+    homeSwipe = { id: event.pointerId, x0: event.clientX, y0: event.clientY, armed: false, lastX: event.clientX, lastY: event.clientY, lastT: performance.now(), speed: 0, hold: null, holdAt: null, inSwitcher: false };
+};
+// pointer events stop while the finger rests, so a timer that each real move starts again does the waiting
+const waitForRest = (swipe, event) => {
+    if (swipe.inSwitcher) {
+        return;
+    }
+    const moved = swipe.holdAt ? Math.hypot(event.clientX - swipe.holdAt.x, event.clientY - swipe.holdAt.y) : Infinity;
+    if (swipe.pulled < SWITCHER_PULL) {
+        clearTimeout(swipe.hold);
+        swipe.hold = null;
+        swipe.holdAt = null;
+        return;
+    }
+    if (swipe.hold && moved <= SWITCHER_STILL) {
+        return;
+    }
+    clearTimeout(swipe.hold);
+    swipe.holdAt = { x: event.clientX, y: event.clientY };
+    swipe.slowed = false;
+    armRest(swipe);
+};
+const armRest = (swipe) => {
+    const holdAt = swipe.holdAt;
+    swipe.hold = setTimeout(guard(() => {
+        swipe.hold = null;
+        // a frame later, so moves queued behind a busy frame are heard first and can start the wait again
+        requestAnimationFrame(guard(() => {
+            if (homeSwipe !== swipe || swipe.dropped || !swipe.rect || swipe.inSwitcher || swipe.hold || swipe.holdAt !== holdAt) {
+                return;
+            }
+            if (!swipe.slowed && Math.abs(swipe.speed) > SWITCHER_REST_SPEED) {
+                swipe.slowed = true;
+                armRest(swipe);
+                return;
+            }
+            swipe.inSwitcher = enterSwitcher(swipe.rect, swipe.home, swipe.lastX);
+        }));
+    }), SWITCHER_HOLD_MS);
 };
 export const installHomeSwipe = () => {
     addEventListener("pointermove", guard((event) => {
         if (!homeSwipe || event.pointerId !== homeSwipe.id || homeSwipe.dropped) {
+            return;
+        }
+        // the switcher opened mid swipe, and the same press now scrolls its cards
+        if (homeSwipe.inSwitcher) {
+            switcherDrag(event);
+            event.preventDefault();
             return;
         }
         if (!homeSwipe.armed) {
@@ -565,6 +642,7 @@ export const installHomeSwipe = () => {
         }
         const now = performance.now();
         homeSwipe.speed = (homeSwipe.lastY - event.clientY) / Math.max(now - homeSwipe.lastT, 1);
+        homeSwipe.lastX = event.clientX;
         homeSwipe.lastY = event.clientY;
         homeSwipe.lastT = now;
         const { fullW, fullH, radiusPx } = state.screen;
@@ -593,6 +671,7 @@ export const installHomeSwipe = () => {
         homeSwipe.rect = lerpRect({ x0: 0, y0: 0, x1: fullW, y1: fullH }, { x0, y0, x1: x0 + w, y1: y0 + h }, blend);
         homeSwipe.home = 1 - pulled;
         placeAppWindow(homeSwipe.rect, radiusPx, 1, homeSwipe.home, state.openIcon, state.openApp, 1);
+        waitForRest(homeSwipe, event);
         event.preventDefault();
     }), { capture: true, passive: false, signal });
     addEventListener("pointerup", endHomeSwipe, { capture: true, signal });
@@ -604,11 +683,17 @@ const endHomeSwipe = guard(async (event) => {
     }
     const swipe = homeSwipe;
     homeSwipe = null;
+    clearTimeout(swipe.hold);
     if (!swipe.armed) {
         return;
     }
     blockNextClick();
     if (swipe.dropped) {
+        return;
+    }
+    // let go in the switcher, which stays up with its cards settling on the nearest one
+    if (swipe.inSwitcher) {
+        switcherDragEnd();
         return;
     }
     state.busy = false;

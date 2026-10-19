@@ -686,17 +686,29 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
     depthWrite: false
 });
 
-// a card drawn over the screen in the same px as the app window's cutout, filled with the page's sky from top to low
-// (srgb, as css gives it). an app switch shows it for the app whose page #page doesn't hold
+// up to four cards drawn over the screen in the same px as the app window's cutout, for an app switch and the app
+// switcher. each card's kind is 0 (none), 1 (only its label, over the live window), 2 (a stand in in the page's sky
+// with the app's icon in the middle), or 3 (a stand in with nothing on it). a label is the app's icon and name above
+// its card, from the atlas (see cardAtlas), and slot is the app's column there. the sky is srgb, as css gives it
+export const CARD_SLOTS = 4;
 export const appCardMaterial = () => new THREE.ShaderMaterial({
     uniforms: {
         tl: { value: new THREE.Vector2() },
         u: { value: new THREE.Vector2(1, 0) },
         v: { value: new THREE.Vector2(0, 1) },
-        rect: { value: new THREE.Vector4(0, 0, 0, 0) },
+        bodies: { value: Array.from({ length: CARD_SLOTS }, () => new THREE.Vector4()) },
+        labels: { value: Array.from({ length: CARD_SLOTS }, () => new THREE.Vector4()) },
+        kinds: { value: new Array(CARD_SLOTS).fill(0) },
+        slots: { value: new Array(CARD_SLOTS).fill(0) },
         radius: { value: 0 },
         top: { value: new THREE.Vector3() },
-        low: { value: new THREE.Vector3() }
+        low: { value: new THREE.Vector3() },
+        fade: { value: 1 },
+        // the switcher's backdrop: the sky, darkened, over the whole screen behind the cards (0 for none), with the
+        // top and bottom of the page in the screen's px for its gradient
+        backdrop: { value: 0 },
+        span: { value: new THREE.Vector2(0, 1) },
+        atlas: { value: null }
     },
     vertexShader: `
         varying vec2 vLocal;
@@ -709,29 +721,113 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
         uniform vec2 tl;
         uniform vec2 u;
         uniform vec2 v;
-        uniform vec4 rect;
+        uniform vec4 bodies[${CARD_SLOTS}];
+        uniform vec4 labels[${CARD_SLOTS}];
+        uniform float kinds[${CARD_SLOTS}];
+        uniform float slots[${CARD_SLOTS}];
         uniform float radius;
         uniform vec3 top;
         uniform vec3 low;
+        uniform float fade;
+        uniform float backdrop;
+        uniform vec2 span;
+        uniform sampler2D atlas;
         varying vec2 vLocal;
-        void main() {
-            vec2 d = vLocal - tl;
-            float det = u.x * v.y - u.y * v.x;
-            vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
+
+        float roundedDistance(vec2 px, vec4 rect) {
             vec2 center = (rect.xy + rect.zw) * 0.5;
             vec2 halfSize = (rect.zw - rect.xy) * 0.5;
             float r = min(radius, min(halfSize.x, halfSize.y));
             vec2 q = abs(px - center) - halfSize + r;
-            float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-            float aa = fwidth(dist);
-            float inside = 1.0 - smoothstep(-aa, 0.0, dist);
-            if (inside <= 0.0) {
+            return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+        }
+
+        void main() {
+            vec2 d = vLocal - tl;
+            float det = u.x * v.y - u.y * v.x;
+            vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
+            float sy = clamp((px.y - span.x) / max(span.y - span.x, 1.0), 0.0, 1.0);
+            vec4 color = vec4(mix(top, low, sy) * 0.55, backdrop);
+            for (int i = 0; i < ${CARD_SLOTS}; i++) {
+                float kind = kinds[i];
+                if (kind < 0.5) {
+                    continue;
+                }
+                vec4 body = bodies[i];
+                // the live window shows through the backdrop
+                if (kind < 1.5) {
+                    float liveDist = roundedDistance(px, body);
+                    color.a *= smoothstep(-fwidth(liveDist), 0.0, liveDist);
+                }
+                if (kind > 1.5) {
+                    float dist = roundedDistance(px, body);
+                    float inside = 1.0 - smoothstep(-fwidth(dist), 0.0, dist);
+                    if (inside > 0.0) {
+                        float y = clamp((px.y - body.y) / max(body.w - body.y, 1.0), 0.0, 1.0);
+                        vec3 c = mix(top, low, y);
+                        if (kind < 2.5) {
+                            float side = min(body.z - body.x, body.w - body.y) * 0.3;
+                            vec2 q = (px - ((body.xy + body.zw) * 0.5 - side * 0.5)) / side;
+                            if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+                                vec4 icon = texture2D(atlas, vec2((slots[i] * 256.0 + 32.0 + q.x * 192.0) / 1024.0, (64.0 + q.y * 192.0) / 256.0));
+                                c = mix(c, icon.rgb, icon.a);
+                            }
+                        }
+                        color = vec4(mix(color.rgb, c, inside), max(color.a, inside));
+                    }
+                }
+                vec4 label = labels[i];
+                if (label.z > label.x) {
+                    vec2 q = (px - label.xy) / (label.zw - label.xy);
+                    if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+                        vec4 t = texture2D(atlas, vec2((slots[i] * 256.0 + q.x * 256.0) / 1024.0, (q.y * 64.0) / 256.0));
+                        color = vec4(mix(color.rgb, t.rgb, t.a), max(color.a, t.a));
+                    }
+                }
+            }
+            color.a *= fade;
+            if (color.a <= 0.0) {
                 discard;
             }
-            float y = clamp((px.y - rect.y) / max(rect.w - rect.y, 1.0), 0.0, 1.0);
-            gl_FragColor = vec4(mix(top, low, y), inside);
+            gl_FragColor = color;
         }
     `,
     transparent: true,
     depthWrite: false
 });
+
+// each app's label (its icon and name, 256 by 64 at the top of its column) and its large icon (192 square below
+// that), for the cards above. the icons are drawn the way the home screen draws its own, in the glyph's font
+export const cardAtlas = (apps, fontFamily) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256 * CARD_SLOTS;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.textBaseline = "middle";
+    apps.slice(0, CARD_SLOTS).forEach((app, i) => {
+        const x = i * 256;
+        roundedRect(ctx, x + 8, 10, 44, 44, 11);
+        ctx.fillStyle = app.color;
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.font = `700 24px ${fontFamily}`;
+        ctx.fillText(app.glyph, x + 30, 33);
+        ctx.textAlign = "left";
+        ctx.font = `600 26px ${fontFamily}`;
+        ctx.fillText(app.name, x + 62, 33);
+        roundedRect(ctx, x + 48, 80, 160, 160, 38);
+        ctx.fillStyle = app.color;
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.font = `700 88px ${fontFamily}`;
+        ctx.fillText(app.glyph, x + 128, 162);
+    });
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.flipY = false;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    return texture;
+};

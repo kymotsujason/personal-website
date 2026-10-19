@@ -170,6 +170,12 @@ export const sceneNavigation = (scene, given) => {
         const jumps = () => uaTransition || scene.rebuildPending();
         const mine = { known: false, app: null, back: direction === "back", swapped, jumps, switched: false };
         pending = mine;
+        // Back or Forward while the switcher shows puts the open app back first. a card the switcher opened is its own
+        // navigation, which it's already handing over to
+        const now = scene.status();
+        if (now.switcher && now.switchingTo === null) {
+            scene.leaveSwitcher();
+        }
         let swappedYet = false;
         const learn = (name) => {
             if (pending !== mine) {

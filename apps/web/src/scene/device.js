@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { UNITS } from "./handsModel.js";
 import { bakePart, applyFinish, cameraSolid } from "./phoneModel.js";
-import { drawHome, iconTexture, mapScreenUV, appWindowMaterial, appCardMaterial, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
+import { drawHome, iconTexture, mapScreenUV, appWindowMaterial, appCardMaterial, cardAtlas, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
 import { createComposite, skyRectFor } from "./composite.js";
 import { createBlur } from "./blur.js";
 import { createWallpaper } from "./wallpaper.js";
@@ -11,11 +11,14 @@ import { state, pose, settings, DUO, FOV, HOME_FILL } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
 import { applyWallpaperMotion, reducedMotion } from "./quality.js";
-import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus } from "./home.js";
+import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus, siteData } from "./home.js";
 import { APP_BACKGROUND, pageEl, tapApp, tapFromCover, setAppVisible } from "./appWindow.js";
 import { sceneFetch, signal, failScene } from "./lifetime.js";
 
 const PX_PER_CM = 54.4;
+
+// the app switcher's icons and names, shared by every build (see cardAtlas)
+let cardAtlasTexture = null;
 
 let cssLayer = null;
 export const initDevice = (layer) => {
@@ -639,8 +642,14 @@ export const buildDevice = () => {
     appHole.material.uniforms.u.value.set((tr.x - tl.x) / fullW, (tr.y - tl.y) / fullW);
     appHole.material.uniforms.v.value.set((bl.x - tl.x) / fullH, (bl.y - tl.y) / fullH);
     body.add(appHole);
-    // the other app's card in an app switch (appWindow.js switchTo), in the same px and drawn with the cutout
+    // the other apps' cards in an app switch and the app switcher (appWindow.js, switcher.js), in the same px and drawn
+    // with the cutout. the icons' atlas is made once, in the home screen's glyph font
+    if (!cardAtlasTexture) {
+        const glyph = homeEl.querySelector(".app-icon .glyph");
+        cardAtlasTexture = cardAtlas(siteData.apps, getComputedStyle(glyph || homeEl).fontFamily);
+    }
     const appCard = new THREE.Mesh(appHole.geometry, appCardMaterial());
+    appCard.material.uniforms.atlas.value = cardAtlasTexture;
     appCard.position.z = appHole.position.z;
     appCard.renderOrder = 2;
     appCard.visible = false;

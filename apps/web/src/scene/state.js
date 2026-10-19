@@ -73,6 +73,8 @@ export const state = {
     // appWindow.js switchTo)
     switching: null,
     swapOpen: false,
+    // the app switcher while it shows (see switcher.js), or null
+    switcher: null,
     // about the widgets' glass color, as a css color, measured with the sky's tint (see tint.js glassColor)
     widgetGlass: null,
     appEl: null,

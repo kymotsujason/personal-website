@@ -9,6 +9,7 @@ import { installQuality, resize } from "./quality.js";
 import { initDevice, loadKeys, handsRig, buildDevice, loadCharger, watchCharger, chargerWanted } from "./device.js";
 import { initHome, stopHome, showContributions, statusBar, dropScrub } from "./home.js";
 import { initAppWindow, installHomeSwipe, dropHomeSwipe, openApp, openFromCover, closeApp, fadeTo, switchTo, setPageFlatListener } from "./appWindow.js";
+import { installSwitcher, leaveSwitcher } from "./switcher.js";
 import { arrive, holdIntro, showFromAddress, showHome } from "./intro.js";
 import { installGestures, installKeys, dropGesture } from "./fold.js";
 import { installLook } from "./look.js";
@@ -134,6 +135,7 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         installQuality();
         initDevice(stageEl.querySelector("#css-layer"));
         installHomeSwipe();
+        installSwitcher();
         // the time of day sets the room's light, checked each minute
         applyDaylight();
         every(applyDaylight, 60000);
@@ -226,6 +228,10 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
             const app = appNamed(appName);
             return app ? switchTo(app, opts) : Promise.resolve();
         }),
+        // a navigation the switcher didn't start puts the open app back at once, so it isn't held up
+        leaveSwitcher: entry(() => {
+            leaveSwitcher();
+        }),
         // the end state for the page at once, with no animation
         showUrl: entry(() => {
             if (!showFromAddress()) {
@@ -246,6 +252,7 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
             app: state.openApp ? state.openApp.name : null,
             shown: state.appVisible || state.pageFlat || state.pageFade !== null,
             switchingTo: state.switching ? state.switching.to : null,
+            switcher: Boolean(state.switcher),
             swapOpen: state.swapOpen
         })
     };

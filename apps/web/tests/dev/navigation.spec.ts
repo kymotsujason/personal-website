@@ -809,6 +809,146 @@ test.describe("with the clock installed", () => {
     );
   });
 
+  // a swipe up from the home bar that rests a moment opens the app switcher, the way ios does
+  const openSwitcher = async (page: Page) => {
+    const bar = await page.locator("#page .home-bar").boundingBox();
+    const x = bar!.x + bar!.width / 2;
+    const y = bar!.y + bar!.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(x, y - i * 22);
+      await page.waitForTimeout(16);
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(() => Boolean((window as any).spike.state.switcher)),
+      )
+      .toBe(true);
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as any).spike.state.switcher?.anim),
+      )
+      .toBe(false);
+  };
+  const switcher = (page: Page) =>
+    page.evaluate(() => {
+      const sw = (window as any).spike.state.switcher;
+      return sw
+        ? { open: true, scroll: sw.scroll, lift: sw.lift ? sw.lift.dy : 0 }
+        : { open: false };
+    });
+  const cardAt = (page: Page, i: number) =>
+    page.evaluate((i) => (window as any).spike.switcherCard(i), i);
+
+  test("a swipe up that rests opens the switcher and stays, and Escape puts the app back", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await openSwitcher(page);
+    expect(await switcher(page)).toMatchObject({ open: true, scroll: 0 });
+    expect(await phone(page)).toMatchObject({ busy: true, path: "/about" });
+    await page.keyboard.press("Escape");
+    await expect.poll(() => switcher(page)).toEqual({ open: false });
+    await settledOn(page, "/about", "About");
+    await expect
+      .poll(() => page.evaluate(() => (window as any).spike.state.pageFlat))
+      .toBe(true);
+  });
+
+  test("a tap on another app's card in the switcher opens that app", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    const before = await historyIndex(page);
+    await openSwitcher(page);
+    const card = await cardAt(page, 1);
+    await page.mouse.click(card.x, card.y);
+    await settledOn(page, "/projects", "Projects");
+    expect(await historyIndex(page)).toBe(before + 1);
+    expect(await switcher(page)).toEqual({ open: false });
+    const after = await page.evaluate(() => {
+      const s = (window as any).spike.state;
+      return { card: s.screen.appCard.visible, switching: s.switching };
+    });
+    expect(after).toEqual({ card: false, switching: null });
+  });
+
+  test("a tap outside the switcher's cards goes home", async ({ page }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await openSwitcher(page);
+    const size = page.viewportSize()!;
+    await page.mouse.click(10, size.height - 10);
+    await settledOn(page, "/", null);
+    expect(await switcher(page)).toEqual({ open: false });
+  });
+
+  test("a sideways drag scrolls the switcher's cards and settles on one", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await openSwitcher(page);
+    const live = await cardAt(page, 0);
+    const next = await cardAt(page, 1);
+    await page.mouse.move(live.x, live.y);
+    await page.mouse.down();
+    await page.mouse.move(live.x - (next.x - live.x), live.y, { steps: 12 });
+    await page.waitForTimeout(120);
+    await page.mouse.up();
+    await expect
+      .poll(() => switcher(page))
+      .toMatchObject({ open: true, scroll: 1 });
+  });
+
+  test("a card pushed up in the switcher gives a little and springs back, since apps can't be closed", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await openSwitcher(page);
+    const live = await cardAt(page, 0);
+    await page.mouse.move(live.x, live.y);
+    await page.mouse.down();
+    await page.mouse.move(live.x, live.y - 300, { steps: 12 });
+    const lifted = (await switcher(page)) as { lift: number };
+    const limit = await page.evaluate(
+      () => (window as any).spike.state.switcher.layout.ch * 0.12,
+    );
+    expect(lifted.lift).toBeGreaterThan(0);
+    expect(lifted.lift).toBeLessThan(limit);
+    await page.mouse.up();
+    await expect
+      .poll(() => switcher(page))
+      .toEqual({ open: true, scroll: 0, lift: 0 });
+    expect(await page.evaluate(() => location.pathname)).toBe("/about");
+  });
+
+  test("Back while the switcher shows puts the open app back and goes back", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    await openSwitcher(page);
+    await page.goBack();
+    await settledOn(page, "/about", "About");
+    expect(await switcher(page)).toEqual({ open: false });
+  });
+
   // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
   test("the swipe's card is cut to the page, not the whole screen", async ({
     page,
