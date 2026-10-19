@@ -148,6 +148,12 @@ html.scene-failed #page {
   font-size: 15px;
 }
 
+/* the cover's front camera sits in its top right corner, about 10 to 28 px in from the edge, so the wifi and battery
+   end a little before it */
+.screen.cover-screen .status {
+  padding-right: 40px;
+}
+
 .status .indicators {
   display: flex;
   align-items: center;

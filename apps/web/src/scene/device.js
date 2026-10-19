@@ -546,7 +546,7 @@ export const buildDevice = () => {
     screenMaterial.map = homeComposite.texture;
     // the cover is a home screen too, with its own invisible html on top for taps. tapping an app there unfolds the
     // phone straight into it. its wallpaper is the part of the inner one it lies over
-    const coverEl = makeScreenEl("screen hit", coverW, coverH, `${DUO.coverR * PX_PER_CM}px`);
+    const coverEl = makeScreenEl("screen hit cover-screen", coverW, coverH, `${DUO.coverR * PX_PER_CM}px`);
     coverEl.appendChild(buildHomeContent(tapFromCover));
     applyStatus(coverEl);
     const coverFrame = { x: -mainRect.x, y: -mainRect.y, w: fullW, h: fullH };
