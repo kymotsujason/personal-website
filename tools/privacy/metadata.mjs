@@ -149,10 +149,6 @@ export function typeName(type) {
   return typeNames[type];
 }
 
-export function isImagePath(path) {
-  return Object.hasOwn(extensionTypes, extensionOf(path));
-}
-
 const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const jxlContainer = [
   0, 0, 0, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a,
@@ -1897,4 +1893,16 @@ export function scanMetadata(bytes, name) {
 
 export function stripMetadata(bytes, name) {
   return run(strippers, bytes, name, "which the strip doesn't handle");
+}
+
+// the tools that write an image strip it and then scan the result, so a strip that missed a piece stops the write
+export function stripAndVerify(bytes, name) {
+  const clean = stripMetadata(bytes, name);
+  const found = scanMetadata(clean, name);
+  if (found.length > 0) {
+    throw new Error(
+      `${name} still carries ${found.join(", ")} after the strip`,
+    );
+  }
+  return clean;
 }

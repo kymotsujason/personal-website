@@ -11,7 +11,7 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanMetadata, stripMetadata } from "./privacy/metadata.mjs";
+import { stripAndVerify } from "./privacy/metadata.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -449,13 +449,7 @@ export async function importGhost({ exportDir, outDir }) {
     .sort();
   const images = [];
   for (const name of [...used].sort()) {
-    const bytes = stripMetadata(readFileSync(join(imagesDir, name)), name);
-    const found = scanMetadata(bytes, name);
-    if (found.length > 0) {
-      throw new Error(
-        `${name} still carries ${found.join(", ")} after the strip`,
-      );
-    }
+    const bytes = stripAndVerify(readFileSync(join(imagesDir, name)), name);
     images.push({ name, bytes });
   }
 

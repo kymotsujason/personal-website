@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sha256 } from "./privacy/allowlist.mjs";
-import { scanMetadata, stripMetadata } from "./privacy/metadata.mjs";
+import { stripAndVerify } from "./privacy/metadata.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -102,12 +102,7 @@ try {
     writeFileSync(raw, rgba);
     execFileSync("vips", ["rawload", raw, path.join(work, "clouds.v"), String(WIDTH), String(HEIGHT), "4"]);
     execFileSync("vips", ["copy", path.join(work, "clouds.v"), `${encoded}[Q=80,strip]`]);
-    const bytes = stripMetadata(readFileSync(encoded), "clouds.webp");
-    const clean = Buffer.from(bytes.bytes ?? bytes);
-    const found = scanMetadata(clean, "clouds.webp");
-    if (found.length > 0) {
-        throw new Error(`metadata left in clouds.webp: ${found.join(", ")}`);
-    }
+    const clean = stripAndVerify(readFileSync(encoded), "clouds.webp");
     writeFileSync(out, clean);
     console.log(`wrote ${out} (${clean.length} bytes)`);
     console.log(sha256(clean));

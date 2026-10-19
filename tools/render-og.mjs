@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sha256 } from "./privacy/allowlist.mjs";
-import { scanMetadata, stripMetadata } from "./privacy/metadata.mjs";
+import { stripAndVerify } from "./privacy/metadata.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(here, "../apps/web/package.json"));
@@ -74,11 +74,7 @@ try {
   }, hour);
   await page.waitForTimeout(3000);
   const shot = await page.screenshot({ type: "jpeg", quality: 90 });
-  const clean = stripMetadata(new Uint8Array(shot), out);
-  const found = scanMetadata(clean, out);
-  if (found.length > 0) {
-    throw new Error(`metadata is left in the image: ${JSON.stringify(found)}`);
-  }
+  const clean = stripAndVerify(new Uint8Array(shot), out);
   writeFileSync(out, clean);
   console.log(`${out} ${clean.length} bytes`);
   console.log(`sha-256 ${sha256(clean)}`);

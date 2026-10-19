@@ -13,7 +13,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateRawSync, deflateSync, gzipSync } from "node:zlib";
-import { scanMetadata, stripMetadata, walkReadings } from "./metadata.mjs";
+import {
+  scanMetadata,
+  stripAndVerify,
+  stripMetadata,
+  walkReadings,
+} from "./metadata.mjs";
 import { checkFiles } from "./check.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -321,6 +326,24 @@ test("stripMetadata cleans WebP and clears the VP8X flags", () => {
   assert.deepEqual(dirty, before);
   assert.deepEqual(Buffer.from(clean), webp(0));
   assert.ok(Buffer.from(clean).includes(webpImage));
+});
+
+test("stripAndVerify gives back the stripped bytes, which scan clean", () => {
+  const dirty = jpeg(exifApp1, xmpApp1);
+  const clean = stripAndVerify(dirty, "a.jpg");
+  assert.deepEqual(
+    Buffer.from(clean),
+    Buffer.from(stripMetadata(dirty, "a.jpg")),
+  );
+  assert.deepEqual(scanMetadata(clean, "a.jpg"), []);
+});
+
+test("stripAndVerify stops on an image the strip doesn't handle", () => {
+  assert.throws(
+    () =>
+      stripAndVerify(Buffer.concat([ascii("BM"), Buffer.alloc(60)]), "a.bmp"),
+    /a\.bmp/,
+  );
 });
 
 const cleanPng = png();
