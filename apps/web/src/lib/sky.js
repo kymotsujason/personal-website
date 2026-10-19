@@ -123,6 +123,7 @@ export const skyVars = ({
 }) => {
   const { top, low } = skyColors({ day, warm, scene, intensity });
   const look = lookFor(scene, intensity);
+  /** @type {Record<string, string>} */
   const vars = {
     "--sky-top": rgb(top),
     "--sky-low": rgb(low),
