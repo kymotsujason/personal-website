@@ -14,8 +14,6 @@ const STILL_WAIT_MS = 250;
 const root = document.documentElement;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 const host = document.getElementById("player-host");
-const frame = document.createElement("div");
-host?.appendChild(frame);
 
 const storage = storageAdapter("local");
 const listeners = new Set();
@@ -182,7 +180,7 @@ const loadCore = () => {
     .then(([{ createMusic }, { youtubePlayer }]) => {
       core = createMusic({
         tracks: TRACKS,
-        loadPlayer: (events) => whenStill(() => youtubePlayer(frame)(events)),
+        loadPlayer: (events) => whenStill(() => youtubePlayer(host)(events)),
         storage,
         onChange: (state) => {
           markCurrent();
