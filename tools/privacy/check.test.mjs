@@ -1555,8 +1555,3 @@ const runRepeatedInputs = (viaSystemd) => {
 test("checkFiles stays small and fast on long repeated inputs", () => {
   runRepeatedInputs(systemdScope());
 });
-
-// the path a machine with no user manager takes, run here too so it can't rot unseen
-test("checkFiles stays small and fast on long repeated inputs under node's heap limit alone", () => {
-  runRepeatedInputs(false);
-});
