@@ -636,3 +636,75 @@ test("a home bar swipe held when the scene shows the address at once is dropped,
     zoomed: true,
   });
 });
+
+// the fold, the phone, and busy two frames after now
+const twoFramesOn = (page: Page) =>
+  page.evaluate(async () => {
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const { state, pose } = (window as any).spike;
+    return { phone: state.phone, busy: state.busy, fold: pose.fold };
+  });
+
+test("with reduced motion a fold swipe let go lands on its end at once", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openAt(page, "/", false);
+  const { outer, inner } = await page.evaluate(() =>
+    (window as any).spike.phoneEdges(),
+  );
+  const x = (outer.left + inner.left) / 2;
+  const y = (outer.top + outer.bottom) / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(x + i * 50, y);
+  }
+  // a slow last step, so the release finishes by distance and not as a flick
+  await page.waitForTimeout(150);
+  await page.mouse.move(x + 501, y);
+  const held = await page.evaluate(() => (window as any).spike.pose.fold);
+  expect(held, "the swipe moved the fold").toBeGreaterThan(0.2);
+  expect(held).toBeLessThan(1);
+  await page.mouse.up();
+  expect(await twoFramesOn(page)).toEqual({
+    phone: "closed",
+    busy: false,
+    fold: 1,
+  });
+});
+
+test("with reduced motion a home bar swipe let go short fills the screen again at once", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openAt(page, "/about", true);
+  const bar = await page.locator("#page .home-bar").boundingBox();
+  expect(bar).not.toBeNull();
+  const x = bar!.x + bar!.width / 2;
+  const y = bar!.y + bar!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 3; i++) {
+    await page.mouse.move(x, y - i * 10);
+  }
+  // a slow last step, so the release is no flick and springs back
+  await page.waitForTimeout(150);
+  await page.mouse.move(x, y - 31);
+  await page.mouse.up();
+  const after = await page.evaluate(async () => {
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const { state } = (window as any).spike;
+    const r = state.screen.appHole.material.uniforms.rect.value;
+    return {
+      busy: state.busy,
+      zoomed: state.zoomed,
+      card: [r.x, r.y, r.z, r.w].map((v, i) =>
+        Math.round(v - [0, 0, state.screen.fullW, state.screen.fullH][i]),
+      ),
+    };
+  });
+  expect(after).toEqual({ busy: false, zoomed: true, card: [0, 0, 0, 0] });
+});

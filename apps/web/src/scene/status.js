@@ -63,9 +63,11 @@ export const nextCheck = (b, speed) => {
 };
 
 export const createStatus = (onChange) => {
-    const status = { time: clockText(new Date()), ping: null, bars: 0, online: navigator.onLine, level: 100, charging: false };
+    const status = { time: clockText(new Date()), ping: null, bars: 0, level: 100, charging: false };
     const start = batteryStart();
-    const timers = [];
+    let clockTimer = null;
+    let pingTimer = null;
+    let batteryTimer = null;
     // the battery's own clock, so the test controls can jump it or speed it up without touching the saved start
     const clock = { anchorReal: Date.now(), anchorVirtual: Date.now(), speed: 1 };
     const batteryNow = () => clock.anchorVirtual + (Date.now() - clock.anchorReal) * clock.speed;
@@ -74,7 +76,7 @@ export const createStatus = (onChange) => {
         const now = new Date();
         status.time = clockText(now);
         // armed first, so a callback that throws doesn't stop the clock
-        timers[0] = setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 20);
+        clockTimer = setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 20);
         onChange(status, "time");
     };
 
@@ -124,7 +126,7 @@ export const createStatus = (onChange) => {
         const unplugged = !b.charging && status.charging;
         status.level = b.level;
         status.charging = b.charging;
-        timers[2] = setTimeout(tickBattery, nextCheck(b, clock.speed));
+        batteryTimer = setTimeout(tickBattery, nextCheck(b, clock.speed));
         if (changed) {
             onChange(status, plugged ? "plugged" : unplugged ? "unplugged" : "battery");
         }
@@ -134,13 +136,13 @@ export const createStatus = (onChange) => {
         clock.anchorReal = Date.now();
         clock.anchorVirtual = virtual;
         clock.speed = speed;
-        clearTimeout(timers[2]);
+        clearTimeout(batteryTimer);
         tickBattery();
     };
 
     tickClock();
     ping();
-    timers[1] = setInterval(ping, PING_EVERY);
+    pingTimer = setInterval(ping, PING_EVERY);
     addEventListener("online", ping);
     addEventListener("offline", ping);
     addEventListener("visibilitychange", ping);
@@ -158,9 +160,9 @@ export const createStatus = (onChange) => {
         setBatterySpeed: (speed) => retime(batteryNow(), speed),
         batteryLive: () => retime(Date.now(), 1),
         stop: () => {
-            clearTimeout(timers[0]);
-            clearInterval(timers[1]);
-            clearTimeout(timers[2]);
+            clearTimeout(clockTimer);
+            clearInterval(pingTimer);
+            clearTimeout(batteryTimer);
             removeEventListener("online", ping);
             removeEventListener("offline", ping);
             removeEventListener("visibilitychange", ping);

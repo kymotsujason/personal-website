@@ -407,7 +407,10 @@ export const endGesture = guard(async (event) => {
     const finish = event.type === "pointerup" && (g.speed > 0.4 || (g.travel > 0.5 && g.speed > -0.4));
     const remaining = finish ? 1 - g.progress : g.progress;
     const time = Math.max(180, (g.action === "close" ? FOLD_TIME.close : FOLD_TIME.open) * remaining);
-    if ((await runFold(g, g.progress, finish ? 1 : 0, time, ease.outCubic)) === "cancelled") {
+    // with reduced motion only the drag itself moves the fold, and the release lands on its end at once
+    if (reducedMotion.matches) {
+        setFoldProgress(g.from, g.to, g.foldFrom, g.foldTo, finish ? 1 : 0, g.action);
+    } else if ((await runFold(g, g.progress, finish ? 1 : 0, time, ease.outCubic)) === "cancelled") {
         return;
     }
     const endsClosed = (g.action === "close") === finish;

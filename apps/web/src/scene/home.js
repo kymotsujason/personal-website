@@ -209,7 +209,9 @@ export const buildWidgets = (homeEl) => {
         // a share of the track for each key, or null for a key the bar doesn't answer
         const to = {
             ArrowRight: at + 5 / duration,
+            ArrowUp: at + 5 / duration,
             ArrowLeft: at - 5 / duration,
+            ArrowDown: at - 5 / duration,
             PageUp: at + 0.1,
             PageDown: at - 0.1,
             Home: 0,

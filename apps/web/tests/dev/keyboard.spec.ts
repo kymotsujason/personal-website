@@ -713,6 +713,22 @@ test.describe("keyboard use of the 3D screens", () => {
     expect(await toggles()).toBe(2);
   });
 
+  test("the seek slider answers ArrowUp and ArrowDown like ArrowRight and ArrowLeft", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.clock.runFor(1000);
+    await tabTo(page, "#css-layer .m-progress");
+    // the first key press loads the player, which has no length until then
+    await page.keyboard.press("ArrowLeft");
+    await page.clock.runFor(1000);
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowDown");
+    expect(await page.evaluate(() => (window as any).__yt.seeks)).toEqual([
+      5, 0,
+    ]);
+  });
+
   test("the seek slider reads as a time and answers Home, End, and the page keys", async ({
     page,
   }) => {

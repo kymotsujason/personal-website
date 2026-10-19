@@ -516,7 +516,6 @@ export const buildDevice = () => {
     coverScreen.material = coverMaterial;
     flap.add(coverScreen);
 
-
     state.flap = flap;
     state.body = body;
     state.hands = null;

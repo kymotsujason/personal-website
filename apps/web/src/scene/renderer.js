@@ -166,12 +166,14 @@ export const setHourOverride = (hour) => {
     hourOverride = hour;
 };
 export const applyDaylight = () => {
+    // read once, so every part of the room is lit for the same hour even when a minute turns over part way through
+    const hour = hourOverride ?? hourNow();
     // sunrise and sunset come from the weather when it's known, and default to 7 and 19 when it isn't
     const sun = weather ? sunHours(weather) : {};
-    const { day, warm } = daylight(hourOverride ?? hourNow(), sun.sunrise, sun.sunset, weather ? weather.polar : null);
+    const { day, warm } = daylight(hour, sun.sunrise, sun.sunset, weather ? weather.polar : null);
     backdrop.setDaylight(day, warm);
-    backdrop.setWallpaper(hourOverride ?? hourNow());
-    const at =(night) => night + (1 - night) * day;
+    backdrop.setWallpaper(hour);
+    const at = (night) => night + (1 - night) * day;
     hemiLight.intensity = LIGHT_DAY.hemi * at(LIGHT_NIGHT.hemi);
     keyLight.intensity = LIGHT_DAY.key * at(LIGHT_NIGHT.key);
     keyLight.color.set(0xffffff).lerp(KEY_WARM, warm * 0.6);
@@ -182,7 +184,6 @@ export const applyDaylight = () => {
         state.wallpaper.setDaylight(day, warm);
         // the sun and moon cross on their arcs by the real times. without weather the sun keeps the 7 and 19
         // schedule, and there's no moon
-        const hour = hourOverride ?? hourNow();
         const sunAt = sunPlace(hour, { sunrise: sun.sunrise ?? 7, sunset: sun.sunset ?? 19, polar: weather ? weather.polar : null });
         const moonAt = moonPlace(hour, weather ? moonHours(weather) : null);
         state.wallpaper.setBodies({ sun: sunAt, moon: moonAt });
@@ -196,5 +197,5 @@ export const applyDaylight = () => {
         }));
         applyTint();
     }
-    return { hour: hourOverride ?? hourNow(), day, warm };
+    return { hour, day, warm };
 };

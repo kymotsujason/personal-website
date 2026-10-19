@@ -130,3 +130,12 @@ test("the ping skips a hidden tab, and pings again once the tab is shown", async
     }
     assert.equal(listeners.visibilitychange, undefined, "stop takes the listener off");
 });
+
+test("the status has no online flag, which nothing read and nothing kept current", () => {
+    const bar = createStatus(() => {});
+    try {
+        assert.equal("online" in bar.status, false);
+    } finally {
+        bar.stop();
+    }
+});

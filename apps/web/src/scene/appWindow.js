@@ -474,7 +474,10 @@ const endHomeSwipe = guard(async (event) => {
         return;
     }
     state.busy = true;
-    if (swipe.rect) {
+    // with reduced motion only the drag moves the window, so a release that doesn't go home fills the screen at once
+    if (swipe.rect && reducedMotion.matches) {
+        placeAppWindow({ x0: 0, y0: 0, x1: fullW, y1: fullH }, radiusPx, 1, 1, state.openIcon, state.openApp, 0);
+    } else if (swipe.rect) {
         const full = { x0: 0, y0: 0, x1: fullW, y1: fullH };
         const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => placeAppWindow(lerpRect(swipe.rect, full, t), radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp, 1 - t) });
         if (end === "cancelled") {
