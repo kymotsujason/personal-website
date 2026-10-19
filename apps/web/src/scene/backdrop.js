@@ -246,8 +246,11 @@ export const createBackdrop = (renderer, onEnvironment) => {
     // a failed scene ends the worker and starts no more full images, and a slow device keeps the small ones
     let stopped = false;
     let smallOnly = false;
+    // a worker that errored (its script didn't load, say) is ended, and the photos after it are cut on the page, since
+    // a browser can drop what's posted to it without a word
+    let workerBroken = false;
     const cutInWorker = (url) => {
-        if (typeof Worker === "undefined" || stopped) {
+        if (typeof Worker === "undefined" || stopped || workerBroken) {
             return Promise.resolve(null);
         }
         if (!photoWorker) {
@@ -260,7 +263,13 @@ export const createBackdrop = (renderer, onEnvironment) => {
                 }
                 resolve(data.error ? null : data);
             };
+            const worker = photoWorker;
             photoWorker.onerror = () => {
+                workerBroken = true;
+                worker.terminate();
+                if (photoWorker === worker) {
+                    photoWorker = null;
+                }
                 cutting.forEach((resolve) => resolve(null));
                 cutting.clear();
             };
@@ -331,10 +340,16 @@ export const createBackdrop = (renderer, onEnvironment) => {
         });
     };
 
+    // an image that didn't load isn't kept, so it's asked for again the next time it's wanted
     const textures = new Map();
     const once = (key, load) => {
         if (!textures.has(key)) {
-            textures.set(key, load());
+            textures.set(key, load().then((texture) => {
+                if (!texture) {
+                    textures.delete(key);
+                }
+                return texture;
+            }));
         }
         return textures.get(key);
     };
@@ -358,19 +373,22 @@ export const createBackdrop = (renderer, onEnvironment) => {
         }
     };
     // the small copy first and the full image once the desk shows, each given to `apply` as it arrives. a small copy
-    // that fails goes straight to the full one
+    // that fails goes straight to the full one, and when that fails too `apply` gets null, so whatever waits on the
+    // image hears that it isn't coming
     const smallThenFull = (smallUrl, fullUrl, colorSpace, apply) => {
-        const full = () => (smallOnly ? Promise.resolve() : loadPhotoInStrips(fullUrl, colorSpace)).then((texture) => {
+        const full = (orNull) => (smallOnly ? Promise.resolve(null) : loadPhotoInStrips(fullUrl, colorSpace)).then((texture) => {
             if (texture) {
                 apply(sharp(texture));
+            } else if (orNull) {
+                apply(null);
             }
         });
         loadPhoto(smallUrl, colorSpace).then((texture) => {
             if (texture) {
                 apply(sharp(texture));
-                whenShown(full);
+                whenShown(() => full(false));
             } else {
-                full();
+                full(true);
             }
         });
     };
