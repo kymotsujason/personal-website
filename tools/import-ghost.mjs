@@ -364,16 +364,14 @@ const yamlString = (value) =>
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
 
+// ghost's tags are left out: the export's are its own import markers and the old theme's colors, and the site has
+// no use for them
 function postToMarkdown(post) {
-  const tags = (post.tags ?? []).map((tag) =>
-    typeof tag === "string" ? tag : tag.name,
-  );
   const lines = [
     "---",
     `title: ${yamlString(post.title)}`,
     `date: ${yamlString(post.published_at)}`,
     `slug: ${yamlString(post.slug)}`,
-    `tags: [${tags.map(yamlString).join(", ")}]`,
   ];
   if (post.feature_image) {
     lines.push(

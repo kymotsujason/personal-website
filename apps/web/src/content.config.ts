@@ -19,7 +19,6 @@ const blog = defineCollection({
     title: z.string(),
     date: z.string(),
     slug: z.string(),
-    tags: z.array(z.string()),
     feature_image: z.string().optional(),
     thumb: z.string().optional(),
   }),

@@ -121,7 +121,7 @@ const usesImages = (...names) =>
 const read = (outDir, slug) =>
   readFileSync(join(outDir, "blog", `${slug}.md`), "utf8");
 
-test("a post's title, slug, date, and tags come through unchanged", async () => {
+test("a post's title, slug, and date come through unchanged, and its tags are left out", async () => {
   const title = 'Fun with "VMs": part 2 \u2013 caf\u00e9';
   const { outDir } = await run([
     post({
@@ -135,7 +135,7 @@ test("a post's title, slug, date, and tags come through unchanged", async () => 
   assert.equal(fields.title, title);
   assert.equal(fields.slug, "fun-with-vms");
   assert.equal(fields.date, "2019-07-28T00:00:00.000-07:00");
-  assert.deepEqual(fields.tags, ["#green", "plain", "Two Words"]);
+  assert.equal("tags" in fields, false);
   assert.equal("feature_image" in fields, false);
 });
 
