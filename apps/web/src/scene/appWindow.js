@@ -125,13 +125,11 @@ const setAppWindow = (k, icon, app) => {
 
 // the app window at any rect in the screen's px. look is how far it has grown out of its icon, for its color, its
 // content, and the icon's letter, and home is how far the home screen behind it has zoomed in and dimmed. opening
-// and closing move all three together, while a swipe up keeps the app's look and lets the window go anywhere
-const placeAppWindow = (rect, radius, look, home, icon, app) => {
+// and closing move all three together, while a swipe up keeps the app's look and lets the window go anywhere. crop is
+// how far the cutout has closed in on #page (see below), 1 while a swipe carries the window and 0 otherwise
+const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     const { appHole, full, fullW, fullH, texture, material } = state.screen;
     const k = look;
-    appHole.visible = true;
-    appHole.material.uniforms.rect.value.set(rect.x0, rect.y0, rect.x1, rect.y1);
-    appHole.material.uniforms.radius.value = radius;
 
     const [tl, tr, bl] = full.corners;
     const at = (x, y) => new THREE.Vector3(
@@ -160,6 +158,13 @@ const placeAppWindow = (rect, radius, look, home, icon, app) => {
     const py1 = toY(offsetY + page.h);
     page.corners = [at(px0, py0), at(px1, py0), at(px0, py1), at(px1, py1)];
     page.opacity = String(THREE.MathUtils.clamp((k - 0.35) / 0.4, 0, 1));
+    // the window is the whole screen, which runs past a window shaped unlike it, and #page covers only the part the
+    // window shows. a swipe's card shrinks it all into view, so its cutout closes in on #page, or the card would show
+    // the window's bare background above and below it
+    const hole = lerpRect(rect, { x0: px0, y0: py0, x1: px1, y1: py1 }, crop);
+    appHole.visible = true;
+    appHole.material.uniforms.rect.value.set(hole.x0, hole.y0, hole.x1, hole.y1);
+    appHole.material.uniforms.radius.value = radius;
     // while small the window still looks like the icon, so its letter rides along and fades as the app appears
     const splash = state.appSplash;
     splash.textContent = app.glyph;
@@ -380,7 +385,7 @@ export const installHomeSwipe = () => {
         const blend = Math.sin((Math.min(pulled / fitPull, 1) * Math.PI) / 2);
         homeSwipe.rect = lerpRect({ x0: 0, y0: 0, x1: fullW, y1: fullH }, { x0, y0, x1: x0 + w, y1: y0 + h }, blend);
         homeSwipe.home = 1 - pulled;
-        placeAppWindow(homeSwipe.rect, radiusPx, 1, homeSwipe.home, state.openIcon, state.openApp);
+        placeAppWindow(homeSwipe.rect, radiusPx, 1, homeSwipe.home, state.openIcon, state.openApp, 1);
         event.preventDefault();
     }), { capture: true, passive: false, signal });
     addEventListener("pointerup", endHomeSwipe, { capture: true, signal });
@@ -400,14 +405,14 @@ const endHomeSwipe = guard(async (event) => {
     const { fullW, fullH, radiusPx } = state.screen;
     if (swipe.rect && event.type === "pointerup" && (swipe.pulled > HOME_DISTANCE || swipe.speed > HOME_FLICK)) {
         // the close carries on from where the window was let go, and the navigation home waits for it
-        closeApp({ rect: swipe.rect, radius: radiusPx, home: swipe.home }).catch(failScene);
+        closeApp({ rect: swipe.rect, radius: radiusPx, home: swipe.home, crop: 1 }).catch(failScene);
         requestHome();
         return;
     }
     state.busy = true;
     if (swipe.rect) {
         const full = { x0: 0, y0: 0, x1: fullW, y1: fullH };
-        const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => placeAppWindow(lerpRect(swipe.rect, full, t), radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp) });
+        const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => placeAppWindow(lerpRect(swipe.rect, full, t), radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp, 1 - t) });
         if (end === "cancelled") {
             return;
         }
@@ -450,8 +455,8 @@ export const closeApp = async (from = null) => {
     const app = state.openApp;
     const icon = state.openIcon;
     const { fullW, fullH, radiusPx } = state.screen;
-    const start = from || { rect: { x0: 0, y0: 0, x1: fullW, y1: fullH }, radius: radiusPx, home: 1 };
-    const step = (e) => placeAppWindow(lerpRect(start.rect, icon, e), start.radius + (icon.radius - start.radius) * e, 1 - e, start.home * (1 - e), icon, app);
+    const start = from || { rect: { x0: 0, y0: 0, x1: fullW, y1: fullH }, radius: radiusPx, home: 1, crop: 0 };
+    const step = (e) => placeAppWindow(lerpRect(start.rect, icon, e), start.radius + (icon.radius - start.radius) * e, 1 - e, start.home * (1 - e), icon, app, (start.crop ?? 0) * (1 - e));
     step(0);
     hideFlat();
     state.zoomed = false;

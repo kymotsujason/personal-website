@@ -475,6 +475,37 @@ test.describe("with the clock installed", () => {
     expect(await historyIndex(page)).toBe(home);
   });
 
+  // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
+  test("the swipe's card is cut to the page, not the whole screen", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    const bar = await page.locator("#page .home-bar").boundingBox();
+    expect(bar).not.toBeNull();
+    const x = bar!.x + bar!.width / 2;
+    const y = bar!.y + bar!.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(x, y - i * 30);
+    }
+    const shapes = await page.evaluate(() => {
+      const { screen } = (window as any).spike.state;
+      const r = screen.appHole.material.uniforms.rect.value;
+      return {
+        card: (r.z - r.x) / (r.w - r.y),
+        screen: screen.fullW / screen.fullH,
+        window: innerWidth / innerHeight,
+      };
+    });
+    await page.mouse.up();
+    expect(Math.abs(shapes.screen - shapes.window)).toBeGreaterThan(0.05);
+    expect(shapes.card).toBeCloseTo(shapes.window, 1);
+  });
+
   test("the home bar swipe pushes the home screen when the page was opened directly", async ({
     page,
   }) => {
