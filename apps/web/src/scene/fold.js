@@ -389,7 +389,8 @@ export const installKeys = () => {
             } else {
                 closePhone();
             }
-        } else if (event.key === "Enter") {
+        } else if (event.key === "Enter" && !event.target.closest?.("a, button, input, [role=button], [role=slider]")) {
+            // on a button or link, Enter is that element's own activation, such as a cover icon opening its app
             openPhone();
         }
     }), { signal });

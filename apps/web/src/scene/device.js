@@ -20,7 +20,15 @@ const PX_PER_CM = 54.4;
 let cssLayer = null;
 export const initDevice = (layer) => {
     cssLayer = layer;
+    // the screens draw the focused element's ring, so a focus change redraws them
+    const redraw = () => {
+        state.screensChanged = true;
+    };
+    layer.addEventListener("focusin", redraw, { signal });
+    layer.addEventListener("focusout", redraw, { signal });
 };
+
+const HIT_FOCUSABLE = ".screen.hit :is(button, a[href], [tabindex])";
 
 // the baked hand keys and the rig, fetched before the device is built
 let landscapeBaked = null;
@@ -382,6 +390,8 @@ export const buildDevice = () => {
         state.wallpaper.dispose();
         state.frost.dispose();
     }
+    // the rebuild replaces every element, so focus is put back on the one at the same place in the new screens
+    const focusedAt = [...cssLayer.querySelectorAll(HIT_FOCUSABLE)].indexOf(document.activeElement);
     cssLayer.innerHTML = "";
 
     state.portrait = pickPortrait();
@@ -620,4 +630,8 @@ export const buildDevice = () => {
     }
     backdrop.prewarm(renderer);
     focusBlur.prewarm();
+    if (focusedAt >= 0) {
+        cssLayer.querySelectorAll(HIT_FOCUSABLE)[focusedAt]?.focus({ preventScroll: true, focusVisible: true });
+        state.screensChanged = true;
+    }
 };

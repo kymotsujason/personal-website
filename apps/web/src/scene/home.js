@@ -80,7 +80,9 @@ export const showMusic = () => {
     card.dataset.shown = shown;
     card.querySelector(".m-title").textContent = title;
     card.querySelector(".m-channel").textContent = channel;
-    card.querySelector('[data-control="toggle"]').dataset.icon = playing ? "pause" : "play";
+    const toggle = card.querySelector('[data-control="toggle"]');
+    toggle.dataset.icon = playing ? "pause" : "play";
+    toggle.setAttribute("aria-label", playing ? "Pause" : "Play");
     const art = card.querySelector("img.art");
     if (current && art.dataset.src !== current.art) {
         art.dataset.src = current.art;
@@ -89,15 +91,24 @@ export const showMusic = () => {
     state.screensChanged = true;
 };
 
+// a div or span acting as a button answers Enter and Space with the click it would get from a tap
+const pressOnKey = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.click();
+    }
+};
+
 export const buildWidgets = (homeEl) => {
     const latest = siteData.latestProject;
     const widgets = document.createElement("div");
     widgets.className = state.portrait ? "widgets across" : "widgets";
     widgets.innerHTML = `
-        <div class="widget small tappable about-card" data-action="about"><img class="avatar" src="/ice.png" alt=""><span class="wt w-big">Jason</span><span class="wt w-line fit">Just another developer =P</span></div>
-        <div class="widget small tappable" data-action="project"><span class="wt w-title">LATEST PROJECT</span><span class="wt w-big wrap"></span></div>
-        <div class="widget wide tappable" data-action="github"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></div>
-        <div class="widget wide tappable music-card" data-action="music"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous"></span><span class="ctl" data-control="toggle" data-icon="play"></span><span class="ctl" data-control="next" data-icon="next"></span></div></div></div>`;
+        <div class="widget small tappable about-card" data-action="about" role="button" tabindex="0"><img class="avatar" src="/ice.png" alt=""><span class="wt w-big">Jason</span><span class="wt w-line fit">Just another developer =P</span></div>
+        <div class="widget small tappable" data-action="project" role="button" tabindex="0"><span class="wt w-title">LATEST PROJECT</span><span class="wt w-big wrap"></span></div>
+        <div class="widget wide tappable" data-action="github" role="button" tabindex="0"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></div>
+        <div class="widget wide tappable music-card" data-action="music" role="button" tabindex="0"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span></div></div></div>`;
     widgets.querySelector('[data-action="project"] .w-big').textContent = latest.title;
     widgets.querySelector("img.avatar").addEventListener("load", guard(() => {
         state.screensChanged = true;
@@ -114,9 +125,12 @@ export const buildWidgets = (homeEl) => {
     };
     widgets.querySelectorAll("[data-action]").forEach((el) => {
         el.addEventListener("click", guard(() => actions[el.dataset.action](el)));
+        // the card holds the controls, so only a key pressed on the card itself opens its app
+        el.addEventListener("keydown", (event) => event.target === el && pressOnKey(event));
     });
     // the card's play and next buttons act on their own, without opening the music app under them
     widgets.querySelectorAll("[data-control]").forEach((el) => {
+        el.addEventListener("keydown", pressOnKey);
         el.addEventListener("click", guard((event) => {
             event.stopPropagation();
             if (el.dataset.control === "toggle") {
@@ -164,6 +178,15 @@ export const buildWidgets = (homeEl) => {
     bar.addEventListener("pointerup", endScrub);
     bar.addEventListener("pointercancel", endScrub);
     bar.addEventListener("click", (event) => event.stopPropagation());
+    bar.addEventListener("keydown", guard((event) => {
+        const { duration, at } = music.position();
+        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+        if (!step || !duration) {
+            return;
+        }
+        event.preventDefault();
+        music.seek(THREE.MathUtils.clamp(at + (step * 5) / duration, 0, 1));
+    }));
     return widgets;
 };
 
@@ -186,6 +209,7 @@ const showPosition = () => {
         return;
     }
     shownPosition = key;
+    bar.setAttribute("aria-valuenow", String(Math.round(shown * 100)));
     Object.assign(bar.dataset, { at: shown, time: scrub ? shown * duration : time, duration, dragging: scrub && scrub.until === Infinity ? "true" : "false" });
     refreshStatus();
 };
@@ -289,7 +313,12 @@ export const buildHomeContent = (onTap) => {
     status.className = "status";
     status.innerHTML = '<span class="time"></span><span class="indicators"><span class="wifi"></span><span class="battery"></span></span>';
     // tapping the indicators shows the measured ping in place of the clock for a moment
-    status.querySelector(".indicators").addEventListener("click", guard(() => {
+    const indicators = status.querySelector(".indicators");
+    indicators.setAttribute("role", "button");
+    indicators.tabIndex = 0;
+    indicators.setAttribute("aria-label", "Show ping");
+    indicators.addEventListener("keydown", pressOnKey);
+    indicators.addEventListener("click", guard(() => {
         statusBar.pingNow().then(guard(() => {
             showPing = performance.now() + 2500;
             refreshStatus();
@@ -302,7 +331,7 @@ export const buildHomeContent = (onTap) => {
     siteData.apps.forEach((app) => {
         const button = document.createElement("button");
         button.className = "app-icon";
-        button.innerHTML = `<span class="glyph" style="background:${app.color}">${app.glyph}</span><span>${app.name}</span>`;
+        button.innerHTML = `<span class="glyph" aria-hidden="true" style="background:${app.color}">${app.glyph}</span><span>${app.name}</span>`;
         button.addEventListener("click", guard(() => onTap(app)));
         home.appendChild(button);
     });

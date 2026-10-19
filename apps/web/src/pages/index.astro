@@ -41,7 +41,11 @@ const firstTrack = TRACKS[0];
   <nav class="home" aria-label="Apps">
     {APPS.map((app) => (
       <a class="app-icon" href={app.path}>
-        <span class="glyph" style={`background: ${app.color}`}>
+        <span
+          class="glyph"
+          style={`background: ${app.color}`}
+          aria-hidden="true"
+        >
           {app.glyph}
         </span>
         <span>{app.name}</span>

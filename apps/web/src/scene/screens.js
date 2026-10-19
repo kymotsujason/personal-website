@@ -378,7 +378,25 @@ export const drawHome = (homeEl, scale, frame = null, withStatus = true, wallpap
         ink.fillText(label.textContent, l.x + l.w / 2, l.y + l.h / 2);
     });
     homeEl.querySelectorAll(".credit").forEach((el) => drawText(ink, el, homeEl));
+    drawFocusRing(ink, homeEl);
     return { base: canvas, ink: inkCanvas };
+};
+
+// the html over the screen is invisible, so a keyboard focus is shown as a ring on the ink layer, which the composite
+// turns dark over a bright sky like the rest of the white ink. a mouse tap leaves no ring, since :focus-visible skips it
+const drawFocusRing = (ink, homeEl) => {
+    const focused = document.activeElement;
+    if (!focused || focused === homeEl || !homeEl.contains(focused) || !focused.matches(":focus-visible")) {
+        return;
+    }
+    const box = offsetIn(focused, homeEl);
+    const pad = 3;
+    ink.save();
+    ink.lineWidth = 3;
+    ink.strokeStyle = "#fff";
+    roundedRect(ink, box.x - pad, box.y - pad, box.w + pad * 2, box.h + pad * 2, 12);
+    ink.stroke();
+    ink.restore();
 };
 
 // how far off the canvas a label is drawn to throw only its shadow onto it
