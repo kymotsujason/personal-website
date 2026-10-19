@@ -167,3 +167,59 @@ test("a home bar swipe held through a rebuild is dropped, and the app stays whol
     zoomed: true,
   });
 });
+
+test("a rebuild frees the old phone's geometry and textures", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  // the volume buttons load once the intro has played, and they're part of the phone a rebuild makes
+  await page.waitForFunction(() => Boolean((window as any).spike.state.volume));
+  const memory = () =>
+    page.evaluate(() => {
+      const { geometries, textures } = (window as any).spike.renderInfo();
+      return { geometries, textures };
+    });
+  // a texture or two arrive in the frames after a build, so the count is read once it holds for half a second
+  const steady = async () => {
+    let last = await memory();
+    for (let i = 0; i < 20; i++) {
+      await page.waitForTimeout(500);
+      const now = await memory();
+      if (JSON.stringify(now) === JSON.stringify(last)) {
+        return now;
+      }
+      last = now;
+    }
+    return last;
+  };
+  await rebuildAt(page, { width: 1100, height: 700 }, false);
+  const first = await steady();
+  await rebuildAt(page, { width: 1280, height: 720 }, false);
+  await rebuildAt(page, { width: 1100, height: 700 }, false);
+  await rebuildAt(page, { width: 1280, height: 720 }, false);
+  await rebuildAt(page, { width: 1100, height: 700 }, false);
+  expect(await steady()).toEqual(first);
+});
+
+test("a change of the desk's lighting frees the lighting map it replaces", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  const textures = () =>
+    page.evaluate(() => (window as any).spike.renderInfo().textures);
+  // the lighting map follows the wallpaper, image 0 by day and 1 at dusk (see monitors.js). each image loads once, so
+  // after the first two changes a change only makes a new map
+  const lightAt = async (hour: number, wait: number) => {
+    await page.evaluate((h) => (window as any).spike.daylight(h), hour);
+    await page.waitForTimeout(wait);
+  };
+  await lightAt(12, 1500);
+  await lightAt(18, 1500);
+  await lightAt(12, 500);
+  const first = await textures();
+  for (let i = 0; i < 3; i++) {
+    await lightAt(18, 500);
+    await lightAt(12, 500);
+  }
+  expect(await textures()).toBe(first);
+});

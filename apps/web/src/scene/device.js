@@ -375,9 +375,48 @@ export const watchCharger = (status) => {
     }
 };
 
+const materialsOf = (object) => (Array.isArray(object.material) ? object.material : object.material ? [object.material] : []);
+const texturesOf = (material) => Object.values(material).filter((value) => value && value.isTexture);
+
+// three keeps a removed object's buffers, programs, and textures on the gpu until they're disposed, so the phone a
+// rebuild replaced frees what it owned. what the new phone still uses stays, and so do the finishes' materials, the
+// hands' material and model, and the screens' hole material, which are made once and shared by every build. the
+// composites' render targets were already freed with them
+const releasePhone = (old, kept) => {
+    const shared = new Set([...Object.values(MATERIALS.phone).flatMap((finish) => Object.values(finish)), ...Object.values(MATERIALS.hand), holeMaterial]);
+    if (state.handModel) {
+        shared.add(state.handModel.mesh.geometry);
+    }
+    kept.traverse((o) => {
+        if (o.geometry) {
+            shared.add(o.geometry);
+        }
+        materialsOf(o).forEach((material) => {
+            shared.add(material);
+            texturesOf(material).forEach((texture) => shared.add(texture));
+        });
+    });
+    const owned = new Set();
+    old.traverse((o) => {
+        if (o.geometry) {
+            owned.add(o.geometry);
+        }
+        materialsOf(o).forEach((material) => {
+            owned.add(material);
+            texturesOf(material).filter((texture) => !texture.isRenderTargetTexture).forEach((texture) => owned.add(texture));
+        });
+    });
+    owned.forEach((resource) => {
+        if (!shared.has(resource)) {
+            resource.dispose();
+        }
+    });
+};
+
 export const buildDevice = () => {
-    if (state.root) {
-        scene.remove(state.root);
+    const oldRoot = state.root;
+    if (oldRoot) {
+        scene.remove(oldRoot);
     }
     if (state.screen) {
         state.screen.composite.dispose();
@@ -628,6 +667,9 @@ export const buildDevice = () => {
     phoneGlow.position.set(0, 0, 4);
     if (state.charger) {
         compileCharger();
+    }
+    if (oldRoot) {
+        releasePhone(oldRoot, root);
     }
     backdrop.prewarm(renderer);
     focusBlur.prewarm();

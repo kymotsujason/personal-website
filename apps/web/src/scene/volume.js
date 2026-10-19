@@ -161,8 +161,12 @@ const drawBar = (canvas, level, standing) => {
 // the y of the body's top edge, portrait how the phone is held, and level/steps the music's current level and range.
 // step(direction) changes the level and gives back the new one
 export const createVolumeButtons = ({ body, flap, buttons, depth, top, portrait, level, steps, step }) => {
-    const parts = splitVolume(buttons.geometry, top);
+    const joined = buttons.geometry;
+    const parts = splitVolume(joined, top);
     buttons.geometry = parts.rest;
+    // the joined mesh was this build's own copy (bakePart), and may already be on the gpu if the phone drew before
+    // the buttons loaded
+    joined.dispose();
     const pressable = {};
     // the buttons sit closer together than two reaches, so on the side facing each other the hit areas stop halfway
     // across the gap, and a press there goes to the nearer button

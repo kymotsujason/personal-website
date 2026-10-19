@@ -47,14 +47,21 @@ export const initRenderer = (canvas) => {
 
     scene = new THREE.Scene();
     pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const room = new RoomEnvironment();
+    // each lighting map is its own render target, so the one it replaces is freed
+    let environment = pmrem.fromScene(room, 0.04);
+    room.dispose();
+    scene.environment = environment.texture;
     // compiled now, while the page is still black, instead of when the desk's lighting map arrives mid intro
     pmrem.compileEquirectangularShader();
     scene.environmentIntensity = 0.7;
     // the desk behind the phone. once its lighting map loads, the phone and hands are lit by the desk instead of the
     // generic room
     backdrop = createBackdrop(renderer, (envTexture) => {
-        scene.environment = pmrem.fromEquirectangular(envTexture).texture;
+        const previous = environment;
+        environment = pmrem.fromEquirectangular(envTexture);
+        scene.environment = environment.texture;
+        previous.dispose();
     });
     renderer.autoClear = false;
     focusBlur = createFocusBlur(renderer);
