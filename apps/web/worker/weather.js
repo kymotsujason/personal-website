@@ -12,7 +12,8 @@ export const roundCell = (lat, lon) => [
   Math.round(lon / CELL) * CELL,
 ];
 
-// the cache api wants a url for a key, and an address on the site's own host keeps it inside the site's zone
+// the cache api wants a url for a key. it's always on jasonyue.ca, the zone the worker serves, whatever host the
+// request came in on
 export const cacheKey = (cellLat, cellLon) =>
   `https://jasonyue.ca/__cache/weather/${cellLat}/${cellLon}`;
 

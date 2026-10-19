@@ -138,11 +138,9 @@ export const contactCost = (gaps, band, weight, inside = band) => CONTACT_GROUPS
     return c + weight * (Math.max(0, gap - band) ** 2 + Math.max(0, -gap - inside) ** 2);
 }, 0);
 
-// solids are boxes given in the local frame of a device half, so collisions stay right while the flap turns
 // more keys than this means a baked list, joined by a curve instead of eased per key
 const DENSE_KEYS = 20;
 
-// the uniform catmull-rom curve through p1 and p2, with p0 and p3 setting the slopes, at t from 0 to 1
 // a curve through keys spaced unevenly along the fold: the value at `fold` between key 1 (at f1) and key 2 (at f2), with
 // each key's slope taken from its two neighbors over the fold between them, so the motion keeps its speed through every
 // key instead of stopping at it. a missing neighbor is passed as a copy of its key, which makes that slope one sided
@@ -159,6 +157,7 @@ export const foldHermite = (p0, p1, p2, p3, f0, f1, f2, f3, fold) => {
     return (2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * h * m1 + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * h * m2;
 };
 
+// the uniform catmull-rom curve through p1 and p2, with p0 and p3 setting the slopes, at t from 0 to 1
 const catmullRom = (p0, p1, p2, p3, t) => {
     const t2 = t * t;
     return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t2 * t);
@@ -278,6 +277,7 @@ export const createHands = ({ fbx, root, frames, setFold, anchors, solids }) => 
         });
     });
 
+    // solids are boxes given in the local frame of a device half, so collisions stay right while the flap turns
     const solidInverse = solids.map(() => new THREE.Matrix4());
     const local = new THREE.Vector3();
 

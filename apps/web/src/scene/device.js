@@ -537,8 +537,6 @@ export const buildDevice = () => {
     const fullH = full.height * PX_PER_CM;
     const radius = `${screenR * PX_PER_CM}px`;
 
-    // the html home screen stays, invisible, on top of the textured one so the icons still take clicks, and its live
-    // layout is what the texture is drawn from
     // where a point in the body's frame lands on the open inner screen, in its px
     const [innerTl, innerTr, innerBl] = full.corners;
     const innerU = innerTr.clone().sub(innerTl);
@@ -561,6 +559,8 @@ export const buildDevice = () => {
     const sideRect = pxBounds([new THREE.Vector3(-halfScreenW, -sy, 0), new THREE.Vector3(0, sy, 0)]);
     const placePanel = (el, r) => Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
 
+    // the html home screen stays, invisible, on top of the textured one so the icons still take clicks, and its live
+    // layout is what the texture is drawn from
     const homeEl = makeScreenEl("screen hit", fullW, fullH, radius);
     const sidePanel = document.createElement("div");
     sidePanel.className = "panel side";

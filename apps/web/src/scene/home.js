@@ -214,8 +214,6 @@ const showPosition = () => {
     refreshStatus();
 };
 
-// the graph fits as many weeks as the widget is wide, so it's filled once the panel is laid out, and again when the
-// data arrives
 // a line marked .fit shrinks until it's one line in its box, down to 10px, since the card's width follows the screen's
 // size and the font differs between systems. it's measured with the canvas font the screen is drawn with
 const FIT_MIN = 10;
@@ -246,6 +244,8 @@ export const showContributions = (data) => {
     }
 };
 
+// the graph fits as many weeks as the widget is wide, so it's filled once the panel is laid out, and again when the
+// data arrives
 export const fillGithub = (homeEl) => {
     const graph = homeEl.querySelector(".widget .graph");
     if (!graph) {

@@ -17,20 +17,20 @@ import { sceneStarted } from "../scene/index.js";
 import { settleLimit } from "../scene/navigation.js";
 import { showDaylight } from "./panel.js";
 
-// found by searching against grip targets in device space, each hand separately since the rig's hands aren't exact mirrors
-// grips from the apple and cnet references, found by spike.search with skin collision. q is the base orientation:
-// BEHIND has the palm against the back with the fingers up and inward, the way both hands hold the open duo
 const quatFromBasis = (x, y, z) => {
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...x), new THREE.Vector3(...y), new THREE.Vector3(...z)));
     return [q.x, q.y, q.z, q.w];
 };
 // ONE_HAND is the right hand alone on the closed duo, palm on the back with the fingers crossing it toward the hinge edge
 const ONE_HAND = quatFromBasis([0.6, 0.8, 0], [0.8, -0.6, 0], [0, 0, -1]);
+// BEHIND has the palm against the back with the fingers up and inward, the way both hands hold the open duo
 const BEHIND = {
     Left: quatFromBasis([0.707, -0.707, 0], [0.707, 0.707, 0], [0, 0, 1]),
     Right: quatFromBasis([0.707, 0.707, 0], [0.707, -0.707, 0], [0, 0, -1])
 };
 
+// found by searching against grip targets in device space, each hand separately since the rig's hands aren't exact mirrors
+// grips from the apple and cnet references, found by spike.search with skin collision. q is the base orientation
 const POSES = {
     leftOpen: { q: BEHIND.Left, px: -16.8, py: -13.8, pz: -0.3, yaw: 23.6, pitch: 15.7, roll: -4.1, c1: -9.9, c2: 31.7, c3: 13.3, dI: -0.6, dM: -9.4, dR: -6.8, dP: -3.4, t1x: -11.4, t1z: -4.7, t2: 36.7, t3: 80 },
     rightClosed: { q: ONE_HAND, px: 7.7, py: -6.6, pz: -3.8, yaw: 5.8, pitch: -21.4, roll: -19.6, c1: 27.7, c2: 42.4, c3: 65.2, dI: 4.3, dM: -1.4, dR: 0.5, dP: -5.2, t1x: 40.8, t1z: 50, t2: 31.9, t3: 79.9 },

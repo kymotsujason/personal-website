@@ -107,8 +107,6 @@ const placePage = () => {
     }
 };
 
-// the idle drift only translates: any tilt at rest made the screen a true 3d layer, and the browser drew its text
-// with missing vertical strips along the layer's tile seams
 // how far the phone turns its port edge toward the camera while the cable goes in (radians), and the margin it keeps
 // from the window's edges then (of the window's size)
 const PRESENT_TILT = 0.1;
@@ -146,6 +144,8 @@ const fitInView = () => {
     return { x: shiftX * worldPerPx, y: -shiftY * worldPerPx, z: -(d * scale - d) };
 };
 
+// the idle drift only translates: any tilt at rest made the screen a true 3d layer, and the browser drew its text
+// with missing vertical strips along the layer's tile seams
 export const idleDrift = (t, idle) => ({
     x: Math.sin(t * 0.6 + 1) * 0.05 * idle,
     y: Math.sin(t * 0.9) * 0.06 * idle,

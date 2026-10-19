@@ -1,7 +1,7 @@
 // jason's "old goodies" playlist from src/data/tracks.json, played by youtube's player, which loads when first needed
 import { LEVEL_DEFAULT, LEVEL_STEPS, artFor, savedLevel } from "./musicInfo.js";
 
-// the tests still read these from here
+// the home and music pages and the tests read these from here
 export { LEVEL_DEFAULT, LEVEL_STEPS, artFor, cleanTitle } from "./musicInfo.js";
 
 // quiet but noticeable, out of youtube's 100
