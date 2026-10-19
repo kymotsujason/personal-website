@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { globSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,5 +45,30 @@ test("a failing step can't skip the range scan, the suites, or the build's dist 
   }
   for (const step of runs.slice(1)) {
     assert.ok(runsAfterFailure(step), step);
+  }
+});
+
+test("vitest fails when it finds no tests", () => {
+  const run = spawnSync(
+    "pnpm",
+    ["-C", "apps/web", "exec", "vitest", "run", "no-such-test-file"],
+    { cwd: site, encoding: "utf8", env: { ...process.env, CI: "1" } },
+  );
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+});
+
+test("every node --test glob in the scripts matches a test file", () => {
+  const scriptsWithGlobs = [
+    scripts["test:privacy"],
+    scripts["test:tools"],
+    JSON.parse(
+      readFileSync(join(site, "apps/web/package.json"), "utf8"),
+    ).scripts.test.split("&&")[1],
+  ];
+  for (const script of scriptsWithGlobs) {
+    const pattern = script.match(/"([^"]+\.test\.m?js)"/)?.[1];
+    assert.ok(pattern, script);
+    const base = script.includes("src/scene") ? join(site, "apps/web") : site;
+    assert.ok(globSync(pattern, { cwd: base }).length > 0, pattern);
   }
 });

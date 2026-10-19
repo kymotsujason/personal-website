@@ -6,6 +6,5 @@ export default getViteConfig({
     environment: "node",
     include: ["src/**/*.test.{ts,js}", "worker/**/*.test.js"],
     exclude: ["src/scene/**"],
-    passWithNoTests: true,
   },
 });
