@@ -51,14 +51,18 @@ const writeWhole = (file, text) => {
     }
 };
 
-const jsonWriter = (dir, maxBytes) => (req, res) => {
+// a page's origin only names the host its client asked for, so another machine on the network can send one that
+// matches. key files only come from this machine, while the phone sends its frame logs over the network
+const fromThisMachinesPage = (req) => fromThisMachine(req) && fromOwnPage(req);
+
+const jsonWriter = (dir, maxBytes, allowed) => (req, res) => {
     const name = new URL(req.url, "http://localhost").searchParams.get("name") || "";
     if (req.method !== "POST" || !/^[a-z0-9-]+$/.test(name)) {
         res.statusCode = 400;
         res.end("bad request");
         return;
     }
-    if (!fromOwnPage(req)) {
+    if (!allowed(req)) {
         res.statusCode = 403;
         res.end("forbidden");
         return;
@@ -135,8 +139,8 @@ const homeRoute = () => {
 export const devEndpoints = ({ keys = keysDir, perf = perfDir } = {}) => ({
     name: "dev-endpoints",
     configureServer(server) {
-        server.middlewares.use("/__save", jsonWriter(keys, SAVE_MAX_BYTES));
-        server.middlewares.use("/__perf", jsonWriter(perf, PERF_MAX_BYTES));
+        server.middlewares.use("/__save", jsonWriter(keys, SAVE_MAX_BYTES, fromThisMachinesPage));
+        server.middlewares.use("/__perf", jsonWriter(perf, PERF_MAX_BYTES, fromOwnPage));
         server.middlewares.use("/api/home", homeRoute());
     }
 });
@@ -144,7 +148,7 @@ export const devEndpoints = ({ keys = keysDir, perf = perfDir } = {}) => ({
 // a small server on a free local port that answers /__perf, for astro preview to proxy to. gives back its address
 // and a way to close it
 export const startPerfServer = async (dir = perfDir) => {
-    const savePerf = jsonWriter(dir, PERF_MAX_BYTES);
+    const savePerf = jsonWriter(dir, PERF_MAX_BYTES, fromOwnPage);
     const server = http.createServer((req, res) => {
         if (new URL(req.url, "http://localhost").pathname !== "/__perf") {
             res.statusCode = 404;

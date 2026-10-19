@@ -94,6 +94,13 @@ test("/__save and /__perf refuse a post with no origin from another machine", as
     expect(files(perfDir)).toEqual([]);
 });
 
+test("/__save refuses another machine whose origin matches the host it asked for, while /__perf takes it", async () => {
+    const headers = { Origin: lan.base, "Sec-Fetch-Site": "same-origin" };
+    expect(await post(`${lan.base}/__save?name=${NAME}`, '{"a":1}', headers)).toBe(403);
+    expect(files(keysDir)).toEqual([]);
+    expect(await post(`${lan.base}/__perf?name=${NAME}`, "{}", headers)).toBe(200);
+});
+
 test("/__save refuses a post with no origin that a proxy forwarded from another machine", async () => {
     expect(await post(`${local.base}/__save?name=${NAME}`, '{"a":1}', { "X-Forwarded-For": "192.168.1.50" })).toBe(403);
     expect(await post(`${local.base}/__save?name=${NAME}`, '{"a":1}', { "X-Forwarded-For": "127.0.0.1, 192.168.1.50" })).toBe(403);
