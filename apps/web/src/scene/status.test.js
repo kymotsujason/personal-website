@@ -1,6 +1,6 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { nextCheck } from "./status.js";
+import { nextCheck, createStatus } from "./status.js";
 
 test("a draining battery is checked each second while its phase has more than that left", () => {
     assert.equal(nextCheck({ charging: false, phaseLeft: 5000 }, 1), 1000);
@@ -21,4 +21,75 @@ test("a phase that ends before the next check is checked 20 ms after it ends", (
 test("the checks follow the battery's clock speed", () => {
     assert.equal(nextCheck({ charging: false, phaseLeft: 5000 }, 10), 100);
     assert.equal(nextCheck({ charging: false, phaseLeft: 5000 }, 1000), 1);
+});
+
+// the bar's online and offline listeners go on the window, which node doesn't have
+globalThis.addEventListener ??= () => {};
+globalThis.removeEventListener ??= () => {};
+
+// each tick arms the next one before it calls onChange, so a callback that throws once doesn't stop the timer for good.
+// node's mock timers run a timer that threw again on the next tick, which a browser doesn't, so the timers here are
+// taken off before they run, the way a browser's are, with only the date mocked
+const ticksAfterThrow = (kind, start, span) => {
+    const real = { setTimeout, clearTimeout, setInterval, clearInterval };
+    mock.timers.enable({ apis: ["Date"], now: new Date(2026, 0, 1, 12, 0, 30) });
+    const queue = new Map();
+    let nextId = 0;
+    globalThis.setTimeout = (fn, ms = 0) => {
+        queue.set(++nextId, { fn, at: Date.now() + ms });
+        return nextId;
+    };
+    globalThis.clearTimeout = (id) => queue.delete(id);
+    // the ping's interval never comes due here
+    globalThis.setInterval = () => ++nextId;
+    globalThis.clearInterval = () => {};
+    const errors = [];
+    const runUntil = (end) => {
+        for (;;) {
+            const due = [...queue].filter(([, t]) => t.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
+            if (!due) {
+                break;
+            }
+            queue.delete(due[0]);
+            mock.timers.setTime(due[1].at);
+            try {
+                due[1].fn();
+            } catch (error) {
+                errors.push(error);
+            }
+        }
+        mock.timers.setTime(end);
+    };
+    let calls = 0;
+    let throwing = false;
+    const bar = createStatus((s, changed) => {
+        if (changed !== kind) {
+            return;
+        }
+        calls++;
+        if (throwing) {
+            throwing = false;
+            throw new Error("broken");
+        }
+    });
+    try {
+        start(bar);
+        const before = calls;
+        throwing = true;
+        runUntil(Date.now() + span);
+        assert.deepEqual(errors.map((e) => e.message), ["broken"]);
+        return calls - before - 1;
+    } finally {
+        bar.stop();
+        Object.assign(globalThis, real);
+        mock.timers.reset();
+    }
+};
+
+test("the clock keeps ticking after a callback that threw", () => {
+    assert.ok(ticksAfterThrow("time", () => {}, 200000) >= 2);
+});
+
+test("the battery keeps ticking after a callback that threw", () => {
+    assert.ok(ticksAfterThrow("battery", (bar) => bar.setBatterySpeed(1000), 200) >= 2);
 });

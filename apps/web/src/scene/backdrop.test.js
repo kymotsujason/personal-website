@@ -8,6 +8,7 @@ import * as THREE from "three";
 globalThis.createImageBitmap = () => {};
 globalThis.location = { href: "http://localhost/" };
 const { createBackdrop, DESK } = await import("./backdrop.js");
+const { setFail } = await import("./lifetime.js");
 
 const renderer = { capabilities: { getMaxAnisotropy: () => 1 }, initTexture: () => {}, copyTextureToTexture: () => {} };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -92,4 +93,51 @@ test("a wallpaper image that failed is asked for again the next time it's wanted
     await settle();
     await settle();
     assert.equal(asked.filter((url) => url === DESK.wall.small(0)).length, 2);
+});
+
+// a throw in what an image's arrival runs, the renderer's or the lighting map's own, fails the scene instead of being
+// dropped. getMaxAnisotropy is the renderer call each of them makes first
+const broken = new Error("broken");
+const failuresOf = () => {
+    const failures = [];
+    setFail((reason) => failures.push(reason));
+    return failures;
+};
+const throwingWhen = (when) => ({ ...renderer, capabilities: { getMaxAnisotropy: () => {
+    if (when()) {
+        throw broken;
+    }
+    return 1;
+} } });
+
+test("a throw as the desk's small images, its wallpaper, or its lighting map arrive goes to the failure", async () => {
+    reset([], undefined);
+    const failures = failuresOf();
+    const backdrop = createBackdrop(throwingWhen(() => true), () => {
+        throw broken;
+    });
+    backdrop.setWallpaper(12);
+    for (let i = 0; i < 5; i++) {
+        await settle();
+    }
+    // the photo, the screen mask, the wallpaper pair, and the lighting map
+    assert.deepEqual(failures, [broken, broken, broken, broken]);
+});
+
+test("a throw as the desk's full images arrive goes to the failure", async () => {
+    reset([], undefined);
+    let full = false;
+    const backdrop = createBackdrop(throwingWhen(() => full), () => {});
+    backdrop.setWallpaper(12);
+    for (let i = 0; i < 5; i++) {
+        await settle();
+    }
+    const failures = failuresOf();
+    full = true;
+    backdrop.loadRest();
+    for (let i = 0; i < 5; i++) {
+        await settle();
+    }
+    // the photo, the screen mask, and the wallpaper pair's two
+    assert.deepEqual(failures, [broken, broken, broken, broken]);
 });

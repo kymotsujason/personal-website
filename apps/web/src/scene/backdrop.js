@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { wallpaperAt, NIGHT } from "./monitors.js";
-import { loadingManager } from "./lifetime.js";
+import { loadingManager, failScene } from "./lifetime.js";
 
 // jason's desk behind the phone: a partial photo sphere stitched from 21 photos taken from his chair (hugin, with the
 // matches filtered against the shooting grid since every monitor shows the same wallpaper). it's drawn by its own
@@ -383,14 +383,15 @@ export const createBackdrop = (renderer, onEnvironment) => {
                 apply(null);
             }
         });
+        // what each arrival runs fails the scene if it throws, as the intro's chains do
         loadPhoto(smallUrl, colorSpace).then((texture) => {
             if (texture) {
                 apply(sharp(texture));
-                whenShown(() => full(false));
-            } else {
-                full(true);
+                whenShown(() => full(false).catch(failScene));
+                return null;
             }
-        });
+            return full(true);
+        }).catch(failScene);
     };
     const wallEnv = (i) => once(`env ${i}`, () => loadTexture(i === NIGHT ? DESK.env : DESK.wall.env(i), THREE.SRGBColorSpace).then((texture) => {
         if (texture) {
@@ -456,9 +457,9 @@ export const createBackdrop = (renderer, onEnvironment) => {
                         if (texture && wallKey === key) {
                             uniforms[image].value = sharp(texture);
                         }
-                    });
+                    }).catch(failScene);
                 }));
-            });
+            }).catch(failScene);
         }
         const wanted = t < 0.5 ? from : to;
         if (wanted !== envIndex) {
@@ -467,7 +468,7 @@ export const createBackdrop = (renderer, onEnvironment) => {
                 if (texture && envIndex === wanted) {
                     onEnvironment(texture);
                 }
-            });
+            }).catch(failScene);
         }
     };
 

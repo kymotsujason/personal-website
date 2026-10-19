@@ -73,8 +73,9 @@ export const createStatus = (onChange) => {
     const tickClock = () => {
         const now = new Date();
         status.time = clockText(now);
-        onChange(status, "time");
+        // armed first, so a callback that throws doesn't stop the clock
         timers[0] = setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 20);
+        onChange(status, "time");
     };
 
     // a few recent round trips, so one slow request doesn't drop the bars
@@ -119,10 +120,10 @@ export const createStatus = (onChange) => {
         const unplugged = !b.charging && status.charging;
         status.level = b.level;
         status.charging = b.charging;
+        timers[2] = setTimeout(tickBattery, nextCheck(b, clock.speed));
         if (changed) {
             onChange(status, plugged ? "plugged" : unplugged ? "unplugged" : "battery");
         }
-        timers[2] = setTimeout(tickBattery, nextCheck(b, clock.speed));
     };
 
     const retime = (virtual, speed) => {

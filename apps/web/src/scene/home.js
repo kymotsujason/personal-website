@@ -6,7 +6,7 @@ import { GITHUB_URL, fillGraph } from "./github.js";
 import { createStatus } from "./status.js";
 import { state } from "./state.js";
 import { tapApp } from "./appWindow.js";
-import { signal, every, guard } from "./lifetime.js";
+import { signal, every, guard, failScene } from "./lifetime.js";
 
 // { apps, latestProject } from the page's site-data
 export let siteData = null;
@@ -22,7 +22,8 @@ export const initHome = (data, layoutMusic, onBattery = () => {}) => {
     music.waitWhile(() => state.busy);
     stopListening = music.subscribe(guard(showMusic));
     every(showPosition, 500);
-    statusBar = createStatus((s, kind) => {
+    // guarded, since the bar calls it from its own timers and listeners
+    statusBar = createStatus(guard((s, kind) => {
         // a ping that was in flight when the scene failed still answers, into screens that have gone
         if (signal.aborted) {
             return;
@@ -37,7 +38,7 @@ export const initHome = (data, layoutMusic, onBattery = () => {}) => {
         } else if (kind === "unplugged") {
             state.charger.unplug();
         }
-    });
+    }));
 };
 
 // the status bar's own timers and listeners, which outlive the scene's signal
@@ -331,7 +332,7 @@ export const buildHomeContent = (onTap) => {
             showPing = performance.now() + 2500;
             refreshStatus();
             setTimeout(guard(refreshStatus), 2600);
-        }));
+        })).catch(failScene);
     }));
     frag.appendChild(status);
     const home = document.createElement("div");
