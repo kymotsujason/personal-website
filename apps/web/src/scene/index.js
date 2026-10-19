@@ -8,9 +8,9 @@ import { initRenderer, renderer, backdrop, MATERIALS, setWeather, applyWeather, 
 import { installQuality, resize } from "./quality.js";
 import { initDevice, loadKeys, handsRig, buildDevice, loadCharger, watchCharger, chargerWanted } from "./device.js";
 import { initHome, stopHome, showContributions, statusBar } from "./home.js";
-import { initAppWindow, installHomeSwipe, openApp, openFromCover, closeApp, fadeTo, setPageFlatListener } from "./appWindow.js";
+import { initAppWindow, installHomeSwipe, dropHomeSwipe, openApp, openFromCover, closeApp, fadeTo, setPageFlatListener } from "./appWindow.js";
 import { arrive, holdIntro, showFromAddress, showHome } from "./intro.js";
-import { installGestures, installKeys } from "./fold.js";
+import { installGestures, installKeys, dropGesture } from "./fold.js";
 import { installLook } from "./look.js";
 import { startLoop, stopLoop } from "./loop.js";
 import { testSwitches } from "./switches.js";
@@ -26,11 +26,13 @@ export const sceneStarted = new Promise((resolve) => {
 
 // a resize or a rotation builds the phone again, in the state the page asks for (the page a navigation in flight is
 // going to, or else #page's). while the page is still black that's the intro's start, and the intro opens the page's
-// app once it has played. #page and its scroll are left alone
+// app once it has played. #page and its scroll are left alone, and a swipe held through it is dropped
 const rebuild = () => {
     resize();
     state.pageFlat = false;
     cancelAll();
+    dropGesture();
+    dropHomeSwipe();
     state.busy = false;
     state.zoomed = false;
     Object.assign(pose, { blur: 0, idle: 1, fold: 0 });

@@ -235,6 +235,14 @@ export const gestureFor = (x, y) => {
 
 export let gesture = null;
 
+// a rebuild drops a swipe in progress, since its poses and its fold table were measured on the phone it replaced. the
+// release still eats its click
+export const dropGesture = () => {
+    if (gesture) {
+        gesture.dropped = true;
+    }
+};
+
 // a drag ate this press, so the release mustn't also count as a tap on an icon or a button. a drag doesn't always
 // produce a click, so the blocker expires instead of waiting to eat the next real tap
 export const blockNextClick = () => {
@@ -292,7 +300,7 @@ export const installGestures = () => {
     }), { capture: true, signal });
 
     addEventListener("pointermove", guard((event) => {
-        if (!gesture || event.pointerId !== gesture.id) {
+        if (!gesture || event.pointerId !== gesture.id || gesture.dropped) {
             return;
         }
         const along = (gesture.axis === "x" ? event.clientX - gesture.x0 : event.clientY - gesture.y0) * gesture.sign;
@@ -351,6 +359,12 @@ export const endGesture = guard(async (event) => {
     }
     const g = gesture;
     gesture = null;
+    if (g.dropped) {
+        if (g.armed) {
+            blockNextClick();
+        }
+        return;
+    }
     if (!g.armed) {
         if (g.action === "open") {
             leadTo(0);

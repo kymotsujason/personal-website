@@ -350,6 +350,13 @@ const softBetween = (v, a, b, zone) => {
     return v;
 };
 let homeSwipe = null;
+// a rebuild drops a swipe in progress, since its grab and its frame were measured on the screen it replaced. the
+// release still eats its click
+export const dropHomeSwipe = () => {
+    if (homeSwipe) {
+        homeSwipe.dropped = true;
+    }
+};
 const startHomeSwipe = (event) => {
     if (state.busy || !state.zoomed || homeSwipe) {
         return;
@@ -358,7 +365,7 @@ const startHomeSwipe = (event) => {
 };
 export const installHomeSwipe = () => {
     addEventListener("pointermove", guard((event) => {
-        if (!homeSwipe || event.pointerId !== homeSwipe.id) {
+        if (!homeSwipe || event.pointerId !== homeSwipe.id || homeSwipe.dropped) {
             return;
         }
         if (!homeSwipe.armed) {
@@ -417,6 +424,9 @@ const endHomeSwipe = guard(async (event) => {
         return;
     }
     blockNextClick();
+    if (swipe.dropped) {
+        return;
+    }
     state.busy = false;
     const { fullW, fullH, radiusPx } = state.screen;
     if (swipe.rect && event.type === "pointerup" && (swipe.pulled > HOME_DISTANCE || swipe.speed > HOME_FLICK)) {
