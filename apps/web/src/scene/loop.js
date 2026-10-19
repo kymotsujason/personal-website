@@ -50,6 +50,26 @@ const setInert = (surface, inert) => {
     }
 };
 
+// a face going inert or away drops the keyboard focus it held onto the body, so once a face shows again, a focus lost
+// that way moves onto it, and Tab goes on from there. a focus let go while its face still shows stays let go
+let focusedFace = null;
+const usable = (face) => face.el.isConnected && face.shown && !face.el.inert;
+const syncFaceFocus = (faces) => {
+    const active = document.activeElement;
+    const holder = faces.find((face) => face.el.contains(active));
+    if (holder || (active && active !== document.body) || (focusedFace && usable(focusedFace))) {
+        focusedFace = holder || null;
+        return;
+    }
+    const next = focusedFace && faces.find(usable);
+    if (!next) {
+        return;
+    }
+    next.el.tabIndex = -1;
+    next.el.focus({ preventScroll: true });
+    focusedFace = next;
+};
+
 const pin = (surface, show) => {
     if (!show) {
         setShown(surface, false);
@@ -410,6 +430,7 @@ const frame = (now) => {
     setInert(s.home, homeCovered || !s.home.shown);
     setInert(s.cover, !s.cover.shown);
     syncAppFocus(homeCovered);
+    syncFaceFocus([s.home, s.cover]);
     const closedNow = state.phone === "closed" && !state.busy;
     if (closedNow !== document.body.classList.contains("closed")) {
         document.body.classList.toggle("closed", closedNow);

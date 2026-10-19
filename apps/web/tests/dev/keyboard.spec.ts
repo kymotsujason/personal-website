@@ -547,6 +547,78 @@ test.describe("keyboard use of the 3D screens", () => {
     ).toBe(true);
   });
 
+  test("each face of the 3D home is a named region with the site's heading, the shown one only", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await expect(page.getByRole("region", { name: "Home screen" })).toHaveCount(
+      1,
+    );
+    await expect(
+      page.getByRole("region", { name: "Cover screen" }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("region", { name: "Home screen" })
+        .getByRole("heading", { level: 1, name: "Jason Yue" }),
+    ).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await closeToCover(page);
+    await expect(
+      page
+        .getByRole("region", { name: "Cover screen" })
+        .getByRole("heading", { level: 1, name: "Jason Yue" }),
+    ).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Home screen" })).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
+
+  test("Escape's close moves a keyboard focus onto the cover, and Enter's open moves it back onto the home screen", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await tabTo(page, "#css-layer .panel.main .app-icon");
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => phone(page), { timeout: 15000 })
+      .toMatchObject({ busy: false, phone: "closed" });
+    await page.clock.runFor(100);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.activeElement === (window as any).spike.state.cover.el,
+        ),
+      )
+      .toBe(true);
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => phone(page), { timeout: 15000 })
+      .toMatchObject({ busy: false, phone: "open", zoomed: false });
+    await page.clock.runFor(100);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.activeElement ===
+            (window as any).spike.state.screen.homeEl,
+        ),
+      )
+      .toBe(true);
+    await page.keyboard.press("Tab");
+    expect(
+      await page.evaluate(
+        () =>
+          !!document.activeElement?.closest(
+            "#css-layer .screen.hit:not(.cover-screen)",
+          ),
+      ),
+      "Tab goes on into the home screen",
+    ).toBe(true);
+  });
+
   test("the music card holds its controls without being a button itself", async ({
     page,
   }) => {

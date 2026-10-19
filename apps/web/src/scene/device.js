@@ -257,6 +257,17 @@ const makeScreenEl = (className, w, h, radiusPx) => {
     return el;
 };
 
+// #page is hidden on the 3d home, so each face of the phone is a named region with the site's heading for assistive
+// tech. the one that isn't showing is inert (see loop.js), which leaves it out
+const nameFace = (el, label) => {
+    el.setAttribute("role", "region");
+    el.setAttribute("aria-label", label);
+    const heading = document.createElement("h1");
+    heading.className = "face-title";
+    heading.textContent = "Jason Yue";
+    el.prepend(heading);
+};
+
 // the volume buttons and the charging cable are chunks of their own. the buttons load once the intro has played, and the
 // cable once the battery is low or charging, since it only shows then. a rebuild after that makes them again
 let volumeModule = null;
@@ -573,6 +584,7 @@ export const buildDevice = () => {
     mainPanel.appendChild(buildHomeContent(tapApp));
     placePanel(mainPanel, mainRect);
     homeEl.append(sidePanel, mainPanel);
+    nameFace(homeEl, "Home screen");
     fillGithub(homeEl);
     fitLines(homeEl);
     applyStatus(homeEl);
@@ -600,6 +612,7 @@ export const buildDevice = () => {
     // phone straight into it. its wallpaper is the part of the inner one it lies over
     const coverEl = makeScreenEl("screen hit cover-screen", coverW, coverH, `${DUO.coverR * PX_PER_CM}px`);
     coverEl.appendChild(buildHomeContent(tapFromCover));
+    nameFace(coverEl, "Cover screen");
     applyStatus(coverEl);
     const coverFrame = { x: -mainRect.x, y: -mainRect.y, w: fullW, h: fullH };
     const coverLayers = drawHome(coverEl, 2, coverFrame, true, false);

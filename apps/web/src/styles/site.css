@@ -483,6 +483,17 @@ body.closed.over-volume {
   cursor: pointer;
 }
 
+/* each face's heading, for assistive tech only (see nameFace in device.js) */
+.screen .face-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* the weather data's credit and the 2d version link, faint along the bottom edge of each home screen */
 .screen .credits {
   position: absolute;
