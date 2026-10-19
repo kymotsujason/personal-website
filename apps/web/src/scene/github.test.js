@@ -21,7 +21,7 @@ test("a day without a date or with a level outside 0 to 4 gives null", () => {
 });
 
 test("a day whose date isn't a real yyyy-mm-dd day gives null", () => {
-    ["Oct 15, 2026", "2026-10-15T00:00:00Z", "2026-13-45", ""].forEach((date) => {
+    ["Oct 15, 2026", "2026-10-15T00:00:00Z", "2026-13-45", "2026-02-30", ""].forEach((date) => {
         assert.equal(readContributions({ days: [...DAYS, { date, level: 1 }], total: 1 }), null, date);
     });
 });

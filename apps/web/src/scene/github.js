@@ -12,7 +12,15 @@ const GAP = 3;
 // a yyyy-mm-dd day as github's calendar gives it, at noon so no time zone moves it to another day
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const dayOf = (date) => new Date(`${date}T12:00:00`);
-const isDay = (date) => typeof date === "string" && ISO_DAY.test(date) && !Number.isNaN(dayOf(date).getTime());
+const isDay = (date) => {
+    if (typeof date !== "string" || !ISO_DAY.test(date)) {
+        return false;
+    }
+    const [year, month, day] = date.split("-").map(Number);
+    const parsed = new Date(0);
+    parsed.setUTCFullYear(year, month - 1, day);
+    return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+};
 
 // the github part of the home route's answer, { days: [{ date, level }], total }, or null when it's missing or out of
 // shape, so the graph shows the empty grid

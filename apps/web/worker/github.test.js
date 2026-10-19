@@ -85,6 +85,18 @@ test("an answer without the calendar's weeks gives null", () => {
   ).toBeNull();
 });
 
+test("a day that isn't on the calendar gives null", () => {
+  expect(
+    shapeCalendar(
+      calendar([
+        {
+          contributionDays: [{ date: "2026-02-30", contributionLevel: "NONE" }],
+        },
+      ]),
+    ),
+  ).toBeNull();
+});
+
 test("a good answer is saved as days and a total", async () => {
   const env = { HOME: fakeKv({ github: SAVED }), GITHUB_TOKEN: "token" };
   const fetchImpl = answering(200, calendar(WEEKS));

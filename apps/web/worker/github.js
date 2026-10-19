@@ -30,10 +30,17 @@ const LEVELS = {
 
 // a yyyy-mm-dd day, which the widget reads at noon to find the last column's weekday
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-const isDay = (date) =>
-  typeof date === "string" &&
-  ISO_DAY.test(date) &&
-  !Number.isNaN(Date.parse(`${date}T12:00:00`));
+const isDay = (date) => {
+  if (typeof date !== "string" || !ISO_DAY.test(date)) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
 
 // github's answer as { days: [{ date, level }], total }, or null when any part of it isn't in the expected shape, so
 // a strange answer can't replace a saved graph with an empty or all zero one
