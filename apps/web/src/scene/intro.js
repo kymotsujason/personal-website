@@ -3,9 +3,9 @@ import { state, pose, DUO, TAP_FOLD } from "./state.js";
 import { tween, ease, cancelAll } from "./tween.js";
 import { camera, backdrop } from "./renderer.js";
 import { centerComp, setFold, leadOpen, LEAD, loadVolume } from "./device.js";
-import { siteData } from "./home.js";
-import { pageEl, openApp, hideFlat, resetAppWindow, setAppVisible } from "./appWindow.js";
-import { resumeIdle } from "./fold.js";
+import { siteData, dropScrub } from "./home.js";
+import { pageEl, openApp, hideFlat, resetAppWindow, setAppVisible, dropHomeSwipe } from "./appWindow.js";
+import { resumeIdle, dropGesture } from "./fold.js";
 import { read, write } from "../lib/storage.js";
 import { failScene } from "./lifetime.js";
 import { reducedMotion } from "./quality.js";
@@ -176,12 +176,21 @@ export const appForPage = () => {
     return siteData.apps.find((a) => a.name === name) || null;
 };
 
+// a swipe or a scrub held from before is dropped where the phone is set at once, since it would go on moving the
+// phone or the bar from where it was. its release still eats its click
+const dropHeld = () => {
+    dropGesture();
+    dropHomeSwipe();
+    dropScrub();
+};
+
 // the phone open and settled at once, and the page's app open on it, instead of the intro. gives back whether there
 // was one
 export const showFromAddress = (app = appForPage()) => {
     if (!app) {
         return false;
     }
+    dropHeld();
     cancelAll();
     hideFlat();
     resetAppWindow();
@@ -197,6 +206,7 @@ export const showFromAddress = (app = appForPage()) => {
 
 // the phone open and settled at once on the home screen, with no app
 export const showHome = () => {
+    dropHeld();
     cancelAll();
     hideFlat();
     resetAppWindow();

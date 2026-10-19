@@ -18,8 +18,8 @@ if (typeof mock.module !== "function") {
     mock.module("./renderer.js", { namedExports: { camera: {}, backdrop: { lookAhead: () => {}, loadRest: () => {} } } });
     mock.module("./device.js", { namedExports: { centerComp: () => 0, setFold: () => {}, leadOpen: () => Promise.resolve(), leadTo: () => Promise.resolve(), LEAD: { fold: 0.01, time: 300 }, loadVolume: () => Promise.reject(volumeBroken) } });
     mock.module("./loop.js", { namedExports: { idleDrift: () => ({ x: 0, y: 0, z: 0 }), shown: Promise.resolve() } });
-    mock.module("./home.js", { namedExports: { siteData: { apps: [{ name: "About" }] } } });
-    mock.module("./appWindow.js", { namedExports: { pageEl: null, openApp: () => Promise.reject(broken), hideFlat: () => {}, resetAppWindow: () => {}, setAppVisible: () => {}, closeApp: () => Promise.resolve() } });
+    mock.module("./home.js", { namedExports: { siteData: { apps: [{ name: "About" }] }, dropScrub: () => {} } });
+    mock.module("./appWindow.js", { namedExports: { pageEl: null, openApp: () => Promise.reject(broken), hideFlat: () => {}, resetAppWindow: () => {}, setAppVisible: () => {}, closeApp: () => Promise.resolve(), dropHomeSwipe: () => {} } });
     mock.module("./quality.js", { namedExports: { reducedMotion: { matches: true } } });
 
     const { state } = await import("./state.js");

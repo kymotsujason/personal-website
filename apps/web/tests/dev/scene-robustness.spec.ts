@@ -554,3 +554,85 @@ test("a press on the open border that moves sideways sends the thumbs back", asy
     zoomed: false,
   });
 });
+
+// the scene sets the page's end state at once, the way a navigation that jumps does (scene.showUrl)
+const showAddress = (page: Page) =>
+  page.evaluate(async (path) => {
+    const { showFromAddress, showHome } = await import(path);
+    if (!showFromAddress()) {
+      showHome();
+    }
+  }, "/src/scene/intro.js");
+
+test("a fold swipe held when the scene shows the address at once is dropped, not finished", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  const { outer, inner } = await page.evaluate(() =>
+    (window as any).spike.phoneEdges(),
+  );
+  const x = (outer.left + inner.left) / 2;
+  const y = (outer.top + outer.bottom) / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(x + i * 40, y);
+  }
+  expect(await phone(page)).toEqual({
+    phone: "open",
+    busy: true,
+    zoomed: false,
+  });
+  await showAddress(page);
+  await page.mouse.move(x + 400, y);
+  const held = await page.evaluate(() => (window as any).spike.pose.fold);
+  await page.mouse.up();
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => {
+    const { state, pose } = (window as any).spike;
+    return { phone: state.phone, busy: state.busy, fold: pose.fold };
+  });
+  expect({ held, ...after }).toEqual({
+    held: 0,
+    phone: "open",
+    busy: false,
+    fold: 0,
+  });
+});
+
+test("a home bar swipe held when the scene shows the address at once is dropped, and the app stays whole", async ({
+  page,
+}) => {
+  await openAt(page, "/about", true);
+  const bar = await page.locator("#page .home-bar").boundingBox();
+  expect(bar).not.toBeNull();
+  const x = bar!.x + bar!.width / 2;
+  const y = bar!.y + bar!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 3; i++) {
+    await page.mouse.move(x, y - i * 30);
+  }
+  expect(await phone(page)).toEqual({
+    phone: "open",
+    busy: true,
+    zoomed: true,
+  });
+  await showAddress(page);
+  await page.mouse.move(x, y - 200);
+  const card = await page.evaluate(() => {
+    const { screen } = (window as any).spike.state;
+    const r = screen.appHole.material.uniforms.rect.value;
+    return [r.x, r.y, r.z, r.w].map((v, i) =>
+      Math.round(v - [0, 0, screen.fullW, screen.fullH][i]),
+    );
+  });
+  await page.mouse.up();
+  expect(card, "the app window still fills the screen").toEqual([0, 0, 0, 0]);
+  await page.waitForTimeout(800);
+  expect(await phone(page)).toEqual({
+    phone: "open",
+    busy: false,
+    zoomed: true,
+  });
+});
