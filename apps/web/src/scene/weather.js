@@ -86,12 +86,18 @@ export const loadHome = async ({ fetchImpl = fetch, timeoutMs = 6000 } = {}) => 
     }
 };
 
+// { phase, ups } with ups a list of [rise, set] hours, which is all moonHours reads
+const isMoon = (moon) => Boolean(moon) && isNumber(moon.phase) && Array.isArray(moon.ups) && moon.ups.every((up) => Array.isArray(up) && up.length === 2 && up.every(isNumber));
+
 // the weather part of the home route's answer, or null when it's missing or short a number, so the sky just stays
-// clear and follows the clock
+// clear and follows the clock. a moon in any other shape is left out, so the sky has no moon instead of throwing
 export const readWeather = (home) => {
     const data = home ? home.weather : null;
     if (!data || ![data.code, data.sunrise, data.sunset, data.utcOffset].every(isNumber)) {
         return null;
+    }
+    if (data.moon && !isMoon(data.moon)) {
+        return { ...data, moon: null };
     }
     return data;
 };

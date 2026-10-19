@@ -224,3 +224,22 @@ test("an onWeather that throws hands the error on and doesn't leave the feed stu
     assert.equal(load.asks, 2);
     assert.deepEqual(heard, [3, 61]);
 });
+
+test("a moon that isn't the shape the sky reads is left out, and the rest of the weather is kept", () => {
+    const bad = [
+        "full",
+        { phase: "0.5", ups: [] },
+        { phase: 0.5 },
+        { phase: 0.5, ups: "12-19" },
+        { phase: 0.5, ups: [[12.5]] },
+        { phase: 0.5, ups: [[12.5, "19"]] },
+        { phase: 0.5, ups: [null] }
+    ];
+    bad.forEach((moon) => {
+        const read = readWeather({ weather: { ...VANCOUVER, moon } });
+        assert.equal(read.moon, null, JSON.stringify(moon));
+        assert.equal(read.code, VANCOUVER.code);
+        assert.equal(moonHours(read, visitorAt(420)), null);
+    });
+    assert.deepEqual(readWeather({ weather: MOONLIT }), MOONLIT);
+});
