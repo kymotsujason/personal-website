@@ -187,6 +187,7 @@ const activeTags = new Set([
   "form",
   "animate",
   "set",
+  "plaintext",
 ]);
 // a browser reads what's inside these as text up to their closing tag, while the importer would read tags in it
 const textTags = new Set([
@@ -327,7 +328,7 @@ function activeHtml(html) {
     if (closing || !textTags.has(name)) continue;
     const next = html.indexOf("<", at);
     const closer = new RegExp(`^</${name}[\\t\\n\\f\\r />]`, "i");
-    if (next !== -1 && !closer.test(html.slice(next, next + name.length + 3))) {
+    if (next === -1 || !closer.test(html.slice(next, next + name.length + 3))) {
       return `<${name}> holding markup`;
     }
   }

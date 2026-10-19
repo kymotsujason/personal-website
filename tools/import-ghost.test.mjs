@@ -351,6 +351,10 @@ test("tags that never close, comments a browser ends early, and pages that redir
     '<svg><![CDATA[ > <a title=" ]]><img src=x onerror=alert(1)>"></a></svg>',
     '<div><!x <p title="><img src=x onerror=alert(1)>">b</p></div>',
     "<span><javascript:alert(1)></span>",
+    "<plaintext>",
+    "<p>a</p><PLAINTEXT><img src=x onerror=alert(1)>",
+    "<p>a</p><textarea>b",
+    "<title>b",
   ];
   for (const html of active) {
     assert.throws(() => htmlToMarkdown(html), /could run script/, html);
