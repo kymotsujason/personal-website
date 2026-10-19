@@ -544,6 +544,31 @@ test.describe("with the clock installed", () => {
     await expect(page.locator("#page")).not.toHaveClass(/hint-home/);
   });
 
+  // the scene moves focus to the page's heading when an app opens, and its focus ring drew a white box around the
+  // title. the ring stays for anything a Tab reaches
+  test("the heading the scene focuses shows no ring, and a Tab still does", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.tagName))
+      .toBe("H1");
+    expect(
+      await page.evaluate(
+        () => getComputedStyle(document.activeElement!).outlineStyle,
+      ),
+    ).toBe("none");
+    await page.keyboard.press("Tab");
+    const next = await page.evaluate(() => ({
+      tag: document.activeElement?.tagName,
+      outline: getComputedStyle(document.activeElement!).outlineStyle,
+    }));
+    expect(next.tag).not.toBe("H1");
+    expect(next.outline).toBe("solid");
+  });
+
   // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
   test("the swipe's card is cut to the page, not the whole screen", async ({
     page,

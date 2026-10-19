@@ -61,6 +61,12 @@ html {
   outline-offset: 3px;
 }
 
+/* the scene moves focus to the page's heading when an app opens (appWindow.js focusPage), which only a script can do,
+   since a Tab never stops on tabindex -1. a ring there drew a box around the title */
+#page h1[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 /* the sky is the farthest layer, so it drifts the least and the opposite way. the dim keeps text readable over it,
    heavier at the bottom where long text ends up (sky.js sets how heavy, from the scene and the hour), and the stars
    are a tiled gradient that daylight fades out */
