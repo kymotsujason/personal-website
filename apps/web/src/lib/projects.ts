@@ -1,8 +1,9 @@
 import { getCollection } from "astro:content";
+import { newestFirst } from "./format";
 
 export const sortedProjects = async () =>
   (await getCollection("projects")).sort((a, b) =>
-    b.data.date.localeCompare(a.data.date),
+    newestFirst(a.data.date, b.data.date),
   );
 
 export const latestProject = async () => {

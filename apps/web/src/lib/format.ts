@@ -13,6 +13,15 @@ const MONTHS = [
   "December",
 ];
 
+// a day, or a time on that day with its offset, the way the ghost import writes a post's date
+export const ISO_DATE =
+  /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$/;
+
+// by the date's own text, the same text formatDay and postYear read, so a post written late on new year's eve in
+// one zone can't sort as an instant into the next year's group
+export const newestFirst = (a: string, b: string): number =>
+  a < b ? 1 : a > b ? -1 : 0;
+
 // reads the date's own first ten characters, so the time zone never shifts the day
 export const formatDay = (date: string): string => {
   const [year, month, day] = date.slice(0, 10).split("-").map(Number);

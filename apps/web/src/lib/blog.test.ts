@@ -2,7 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 
 vi.mock("astro:content", () => ({ getCollection: vi.fn() }));
 
-const { neighbors } = await import("./blog");
+const { getCollection } = await import("astro:content");
+const { neighbors, postYear, sortedPosts } = await import("./blog");
 
 const post = (slug: string) => ({ data: { slug } }) as never;
 const posts = ["c", "b", "a"].map(post);
@@ -32,5 +33,21 @@ describe("neighbors", () => {
 
   test("an unknown slug has neither", () => {
     expect(neighbors(posts, "z")).toEqual({});
+  });
+});
+
+describe("sortedPosts", () => {
+  test("orders by the date's own text, so the year groups stay in order", async () => {
+    // the first is later as an instant, but it was written on new year's eve where it was written
+    const dates = [
+      "2019-12-31T23:00:00.000-08:00",
+      "2020-01-01T03:00:00.000Z",
+      "2019-06-01",
+    ];
+    vi.mocked(getCollection).mockResolvedValue(
+      dates.map((date) => ({ data: { date } })) as never,
+    );
+    const years = (await sortedPosts()).map((p) => postYear(p.data.date));
+    expect(years).toEqual(["2020", "2019", "2019"]);
   });
 });

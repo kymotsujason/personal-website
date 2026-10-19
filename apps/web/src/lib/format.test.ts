@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatDay, readingMinutes } from "./format";
+import { formatDay, newestFirst, readingMinutes } from "./format";
 
 test("formatDay reads the day from the date's own text", () => {
   expect(formatDay("2020-01-01T17:56:51.000-08:00")).toBe("January 1, 2020");
@@ -12,4 +12,19 @@ test("readingMinutes rounds up and is at least one", () => {
   ).toBe(1);
   expect(readingMinutes(Array(1200).fill("word").join(" "))).toBe(6);
   expect(readingMinutes("")).toBe(1);
+});
+
+test("newestFirst orders dates by their own text, newest first", () => {
+  const dates = [
+    "2019-06-01",
+    "2020-01-01T03:00:00.000Z",
+    "2019-12-31T23:00:00.000-08:00",
+    "2019-06-01T09:00:00.000-07:00",
+  ];
+  expect([...dates].sort(newestFirst)).toEqual([
+    "2020-01-01T03:00:00.000Z",
+    "2019-12-31T23:00:00.000-08:00",
+    "2019-06-01T09:00:00.000-07:00",
+    "2019-06-01",
+  ]);
 });
