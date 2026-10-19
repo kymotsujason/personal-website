@@ -126,8 +126,8 @@ test.describe("with javascript off", () => {
       PROJECT.title,
     );
     await expect(
-      tile.locator('a[href="/blog/old-posts-are-coming-back"]'),
-    ).toContainText("Old posts are coming back");
+      tile.locator('a[href="/blog/planning-on-improvements-to-projects"]'),
+    ).toContainText("Planning on improvements to projects");
   });
 });
 

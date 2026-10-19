@@ -15,7 +15,7 @@ test.describe("the flat site", () => {
     "/projects",
     "/projects/device-intro",
     "/blog",
-    "/blog/old-posts-are-coming-back",
+    "/blog/new-equipment-to-keep-things-interesting",
     "/music",
     "/no-such-page",
   ]) {
@@ -178,7 +178,7 @@ test.describe("the flat site", () => {
         names,
       );
     expect(await written(["--read", "--scroll"])).toEqual(["", ""]);
-    await page.goto("/blog/old-posts-are-coming-back");
+    await page.goto("/blog/new-equipment-to-keep-things-interesting");
     await page.locator("#page > .body").evaluate((el) => (el.scrollTop = 50));
     await expect
       .poll(async () => (await written(["--scroll"]))[0])

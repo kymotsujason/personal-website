@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { posts } from "../posts";
 
 const SITE = "https://jasonyue.ca";
 
@@ -9,7 +10,7 @@ const PAGES = [
   { path: "/projects", type: "website" },
   { path: "/projects/device-intro", type: "article" },
   { path: "/blog", type: "website" },
-  { path: "/blog/old-posts-are-coming-back", type: "article" },
+  { path: "/blog/new-equipment-to-keep-things-interesting", type: "article" },
 ];
 
 const meta = (page: Page, attribute: "name" | "property", key: string) =>
@@ -68,9 +69,9 @@ test.describe("with javascript off", () => {
     expect(await meta(page, "property", "og:description")).toBe(
       "A foldable phone, live in the browser",
     );
-    await page.goto("/blog/old-posts-are-coming-back");
+    await page.goto("/blog/new-equipment-to-keep-things-interesting");
     expect(await meta(page, "property", "og:title")).toBe(
-      "Old posts are coming back",
+      "New equipment to keep things interesting",
     );
   });
 
@@ -139,9 +140,11 @@ test("the sitemap lists every page once, without slashes, and not the 404", asyn
     const text = await sitemap.text();
     urls.push(...[...text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]));
   }
-  expect([...urls].sort()).toEqual(
-    PAGES.map(({ path }) => `${SITE}${path}`).sort(),
-  );
+  const expected = new Set([
+    ...PAGES.map(({ path }) => `${SITE}${path}`),
+    ...posts.map((post) => `${SITE}/blog/${post.slug}`),
+  ]);
+  expect([...urls].sort()).toEqual([...expected].sort());
 });
 
 test("robots.txt allows everything and names the sitemap", async ({
