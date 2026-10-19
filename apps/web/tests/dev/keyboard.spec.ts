@@ -588,8 +588,7 @@ test.describe("keyboard use of the 3D screens", () => {
     await expect
       .poll(() =>
         page.evaluate(
-          () =>
-            document.activeElement === (window as any).spike.state.cover.el,
+          () => document.activeElement === (window as any).spike.state.cover.el,
         ),
       )
       .toBe(true);
