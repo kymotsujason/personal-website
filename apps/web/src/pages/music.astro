@@ -54,14 +54,16 @@ const [first] = TRACKS;
     <ul class="tracks glass depth" style="--d:3;--t:0">
       {TRACKS.map((track, i) => (
         <li data-track={i} class={i === 0 ? "current" : undefined}>
-          <img src={artFor(track.id)} alt="" loading="lazy" />
-          <span class="t">{cleanTitle(track.title)}</span>
-          <span class="c">{track.channel}</span>
-          <span class="eq" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
+          <button type="button" aria-current={i === 0 ? "true" : undefined}>
+            <img src={artFor(track.id)} alt="" loading="lazy" />
+            <span class="t">{cleanTitle(track.title)}</span>
+            <span class="c">{track.channel}</span>
+            <span class="eq" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </button>
         </li>
       ))}
     </ul>

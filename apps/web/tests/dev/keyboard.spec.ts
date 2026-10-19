@@ -4,7 +4,7 @@ import { stubHome } from "../stubHome";
 // youtube's iframe api, standing in: one player per page load, which makes an iframe where youtube's would and
 // counts what it's asked to do
 const FAKE_YOUTUBE = `
-window.__yt = { players: 0, plays: 0, pauses: 0 };
+window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0 };
 window.YT = {
   Player: class {
     constructor(host, options) {
@@ -35,7 +35,7 @@ window.YT = {
       setTimeout(() => this.events.onStateChange({ data: 2 }), 0);
     }
     playVideoAt(i) { this.index = i; this.playVideo(); }
-    nextVideo() { this.index = (this.index + 1) % 3; }
+    nextVideo() { window.__yt.nexts += 1; this.index = (this.index + 1) % 3; }
     getCurrentTime() { return 0; }
     getDuration() { return 200; }
     seekTo() {}
@@ -328,6 +328,49 @@ test.describe("keyboard use of the 3D screens", () => {
       await page.evaluate(() => (window as any).__yt.plays),
     ).toBeGreaterThan(0);
     expect(await phone(page)).toMatchObject({ zoomed: false });
+  });
+
+  test("the music card's next waits for the player, and five presses before it's ready run once", async ({
+    page,
+  }) => {
+    await quiet(page);
+    let asked = 0;
+    let releaseApi = () => {};
+    const apiHeld = new Promise<void>((resolve) => {
+      releaseApi = resolve;
+    });
+    await page.route("https://www.youtube.com/iframe_api", async (route) => {
+      asked += 1;
+      await apiHeld;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: FAKE_YOUTUBE,
+      });
+    });
+    await openHome(page);
+    await page.clock.runFor(1000);
+    await page.evaluate(() => {
+      const next = document.querySelector<HTMLElement>(
+        '#css-layer .ctl[data-control="next"]',
+      )!;
+      for (let i = 0; i < 5; i++) {
+        next.click();
+      }
+    });
+    await expect.poll(() => asked, { timeout: 15000 }).toBe(1);
+    releaseApi();
+    await expect
+      .poll(
+        async () => {
+          await page.clock.runFor(200);
+          return page.evaluate(() => (window as any).__yt?.nexts);
+        },
+        { timeout: 15000 },
+      )
+      .toBe(1);
+    await page.clock.runFor(2000);
+    expect(await page.evaluate(() => (window as any).__yt.nexts)).toBe(1);
   });
 
   test("the progress bar is a slider and the status indicators a button", async ({

@@ -415,6 +415,127 @@ test.describe("the flat music page", () => {
     );
   });
 
+  test("a blocked youtube api says the music is unavailable, and a later press plays once it's back", async ({
+    page,
+  }) => {
+    await quiet(page);
+    const { errors, blocked } = watchErrors(page);
+    const apiUrl = "https://www.youtube.com/iframe_api";
+    blocked.add(apiUrl);
+    await page.route(apiUrl, (route) => route.abort());
+    await flatMusic(page);
+    await page.goto("/music");
+    const toggle = page.locator('#page [data-music="toggle"]');
+    await expect(toggle).toHaveText("Music unavailable");
+    await page.unroute(apiUrl);
+    await page.route(apiUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: FAKE_YOUTUBE,
+      }),
+    );
+    await toggle.click();
+    await expect
+      .poll(() => youtube(page))
+      .toMatchObject({ players: 1, plays: 1, state: 1 });
+    await expect(toggle).toHaveText("Pause");
+    await expect(page.locator("html")).not.toHaveClass(/scene-failed/);
+    expect(errors).toEqual([]);
+  });
+
+  test("five presses on Next before the player is ready run once", async ({
+    page,
+  }) => {
+    await quiet(page);
+    let apiAsked = 0;
+    let releaseApi = () => {};
+    const apiHeld = new Promise<void>((resolve) => {
+      releaseApi = resolve;
+    });
+    await page.route("https://www.youtube.com/iframe_api", async (route) => {
+      apiAsked += 1;
+      await apiHeld;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: FAKE_YOUTUBE,
+      });
+    });
+    await flatMusic(page);
+    await page.goto("/music");
+    await expect.poll(() => apiAsked).toBe(1);
+    const next = page.locator('#page [data-music="next"]');
+    for (let i = 0; i < 5; i++) {
+      await next.click();
+    }
+    releaseApi();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__yt?.nexts))
+      .toBe(1);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => (window as any).__yt.nexts)).toBe(1);
+  });
+
+  test("the track rows are buttons, and the current one is marked", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await flatMusic(page);
+    await page.goto("/music");
+    await ready(page);
+    const rows = page.locator("#page .tracks li[data-track] > button");
+    await expect(rows).toHaveCount(TRACKS.length);
+    await expect(rows.nth(0)).toHaveAttribute("aria-current", "true");
+    await rows.nth(4).focus();
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => youtube(page))
+      .toMatchObject({ playedAt: [4], state: 1 });
+    await expect(rows.nth(4)).toHaveAttribute("aria-current", "true");
+    await expect(rows.nth(0)).not.toHaveAttribute("aria-current", "true");
+    await expect(
+      page.locator('#page .tracks [aria-current="true"]'),
+    ).toHaveCount(1);
+  });
+
+  test("the parked player can't take focus, and can over the slot", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await flatMusic(page);
+    await page.goto("/");
+    const inert = () =>
+      page.evaluate(
+        () => (document.getElementById("player-host") as HTMLElement).inert,
+      );
+    expect(await inert(), "parked on the home page").toBe(true);
+    await page.goto("/music");
+    await ready(page);
+    await expectOverSlot(page);
+    expect(await inert(), "over the slot").toBe(false);
+    await page.locator("#page .home-bar").click();
+    await expectParked(page);
+    expect(await inert(), "parked again").toBe(true);
+  });
+
+  test("a first Escape or modifier key doesn't resume the music, and a letter does", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await flatMusic(page, "on");
+    await page.goto("/");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Shift");
+    await page.keyboard.press("Control");
+    await page.waitForTimeout(500);
+    expect(await youtube(page), "no player yet").toBeNull();
+    await page.keyboard.press("a");
+    await expect
+      .poll(() => youtube(page))
+      .toMatchObject({ players: 1, state: 1 });
+  });
+
   test("art that loads again after a failed track's art shows again", async ({
     page,
   }) => {

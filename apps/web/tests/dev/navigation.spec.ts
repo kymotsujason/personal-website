@@ -581,7 +581,7 @@ test.describe("with the clock installed", () => {
     });
     await openHome(page);
     // browsers hold sound until the first key or tap, which is when the player loads and the music fades in
-    await page.keyboard.press("Shift");
+    await page.keyboard.press("a");
     await expect
       .poll(() => page.evaluate(() => (window as any).spike.music().playing))
       .toBe(true);

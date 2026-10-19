@@ -312,8 +312,10 @@ const placePlayer = () => {
   playerAt = at;
   if (!r || at === "away") {
     Object.assign(host.style, { left: "-10000px", top: "0px" });
+    host.inert = true;
     return;
   }
+  host.inert = false;
   Object.assign(host.style, {
     left: `${r.left}px`,
     top: `${r.top}px`,

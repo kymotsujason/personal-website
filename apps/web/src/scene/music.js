@@ -16,6 +16,8 @@ const RESTART_AFTER = 3;
 const START_WAIT_MS = 3000;
 const PLAYING = 1;
 const PAUSED = 2;
+const BUFFERING = 3;
+const ENDED = 0;
 const CUED = 5;
 
 export const volumeFor = (id, volumes = VOLUMES) => volumes[id] ?? BASE_VOLUME;
@@ -31,6 +33,8 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     let index = 0;
     let playing = false;
     let failures = 0;
+    // the player's code or youtube's api didn't arrive, so the next press asks again
+    let unavailable = false;
     // what to do once the player is ready, for a play or resume that came before it: "fade" or "play"
     let startWhenReady = null;
     // a track tapped before the player was ready, played once it is
@@ -40,7 +44,7 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     let level = savedLevel(storage);
     const loudness = (id = ids[index]) => loudnessAt(id, level, volumes);
 
-    const state = () => ({ ready: player !== null, ids, index, playing, tracks, current: tracks[index] ?? null, volume: player ? player.getVolume() : null, level, failed: ids.length > 0 && failures >= ids.length });
+    const state = () => ({ ready: player !== null, ids, index, playing, tracks, current: tracks[index] ?? null, volume: player ? player.getVolume() : null, level, failed: ids.length > 0 && failures >= ids.length, unavailable });
     const changed = () => onChange(state());
 
     const load = () => {
@@ -48,7 +52,8 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
             return;
         }
         loading = true;
-        loadPlayer({ onReady, onStateChange, onError, onAutoplayBlocked });
+        unavailable = false;
+        loadPlayer({ onReady, onStateChange, onError, onAutoplayBlocked, onLoadFailed });
     };
 
     const stopFade = () => {
@@ -155,8 +160,13 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     // a new track starts at its own volume, unless a fade in is still bringing the volume up
     // playing or pausing from youtube's own controls in the music app is remembered the same as from the card
     const onStateChange = (event) => {
-        playing = event.data === PLAYING;
-        if (playing) {
+        // buffering is still playing, and an unstarted player keeps what it had
+        if (event.data === PLAYING || event.data === BUFFERING) {
+            playing = true;
+        } else if (event.data === PAUSED || event.data === ENDED || event.data === CUED) {
+            playing = false;
+        }
+        if (event.data === PLAYING) {
             failures = 0;
             stopStartCheck();
             storage.setItem("music", "on");
@@ -184,6 +194,14 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     };
 
     const onAutoplayBlocked = () => blocked();
+
+    const onLoadFailed = () => {
+        loading = false;
+        unavailable = true;
+        startWhenReady = null;
+        trackWhenReady = null;
+        changed();
+    };
 
     return {
         state,

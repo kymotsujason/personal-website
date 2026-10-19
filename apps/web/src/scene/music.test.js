@@ -441,3 +441,52 @@ test("the volume buttons step a level that scales the track's volume and is reme
     storage.setItem("volumeLevel", "loud");
     assert.equal(make(fakePlayer(), { storage }).level(), LEVEL_DEFAULT);
 });
+
+test("a player load that fails clears the wait, so the next play asks again and the music says it's unavailable", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    music.play();
+    assert.equal(yt.loads(), 1);
+    yt.fire("onLoadFailed");
+    assert.equal(music.state().unavailable, true);
+    music.play();
+    assert.equal(yt.loads(), 2);
+    assert.equal(music.state().unavailable, false);
+    yt.fire("onReady");
+    assert.deepEqual(yt.calls.at(-1), ["playVideo"]);
+});
+
+test("a failed load forgets the play and track that were waiting on it", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    music.playAt(3);
+    yt.fire("onLoadFailed");
+    music.load();
+    yt.fire("onReady");
+    assert.equal(yt.started(), false);
+});
+
+test("a track that is buffering still counts as playing, so a toggle pauses it", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    music.play();
+    yt.fire("onStateChange", 1);
+    yt.fire("onStateChange", 3);
+    assert.equal(music.state().playing, true);
+    const before = yt.calls.length;
+    music.toggle();
+    assert.deepEqual(yt.calls.slice(before), [["pauseVideo"]]);
+});
+
+test("an unstarted player keeps the playing state it had", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    music.play();
+    yt.fire("onStateChange", 1);
+    yt.fire("onStateChange", -1);
+    assert.equal(music.state().playing, true);
+    yt.fire("onStateChange", 2);
+    assert.equal(music.state().playing, false);
+});

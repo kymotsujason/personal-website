@@ -41,7 +41,14 @@ const markCurrent = () => {
     .querySelectorAll("#page .music .tracks li[data-track]")
     .forEach((item) => {
       if (item instanceof HTMLElement) {
-        item.classList.toggle("current", Number(item.dataset.track) === index);
+        const current = Number(item.dataset.track) === index;
+        item.classList.toggle("current", current);
+        const button = item.querySelector("button");
+        if (current) {
+          button?.setAttribute("aria-current", "true");
+        } else {
+          button?.removeAttribute("aria-current");
+        }
       }
     });
 };
@@ -136,10 +143,10 @@ const showNow = () => {
   if (!page) {
     return;
   }
-  const { current, playing } = music.state();
+  const { current, playing, unavailable } = music.state();
   setText(
     page.querySelector('[data-music="toggle"]'),
-    playing ? "Pause" : "Play",
+    unavailable ? "Music unavailable" : playing ? "Pause" : "Play",
   );
   if (!current) {
     return;
@@ -202,19 +209,30 @@ const withCore = (fn) => {
   loadCore().then(fn, () => {});
 };
 
-// the core drops a previous or next before youtube's player is ready, so a press waits for it
+// the core drops a previous or next before youtube's player is ready, so a press waits for it. one action waits at a
+// time, and the last press wins
+let pendingAction = null;
+let stopPending = null;
 const whenReady = (fn) =>
   withCore((c) => {
     if (c.state().ready) {
       fn(c);
       return;
     }
+    pendingAction = fn;
     c.load();
-    const stop = music.subscribe((state) => {
-      if (state.ready) {
-        stop();
-        fn(c);
+    if (stopPending) {
+      return;
+    }
+    stopPending = music.subscribe((state) => {
+      if (!state.ready && !state.unavailable) {
+        return;
       }
+      const run = state.ready ? pendingAction : null;
+      stopPending();
+      stopPending = null;
+      pendingAction = null;
+      run?.(c);
     });
   });
 
@@ -236,6 +254,7 @@ const waitingState = () => ({
   volume: null,
   level: waitingLevel,
   failed: false,
+  unavailable: false,
 });
 
 // the scene gets this object instead of the music itself, since the music loads on demand
@@ -243,8 +262,8 @@ export const music = {
   state: () => (core ? core.state() : waitingState()),
   position: () => (core ? core.position() : { time: 0, duration: 0, at: 0 }),
   toggle: () => withCore((c) => c.toggle()),
-  previous: () => core?.previous(),
-  next: () => core?.next(),
+  previous: () => whenReady((c) => c.previous()),
+  next: () => whenReady((c) => c.next()),
   seek: (at) => core?.seek(at),
   level: () => (core ? core.level() : waitingLevel),
   stepLevel: (delta) => {
@@ -282,9 +301,16 @@ const loadOnMusicPage = () => {
   }
 };
 
+// escape and the modifiers alone don't give the page the activation a start needs, and a blocked start turns the saved
+// preference off
+const NOT_GESTURE_KEYS = new Set(["Escape", "Shift", "Control", "Alt", "Meta"]);
+
 // a first press on the card's own buttons, or the music page's, is left to them, so one press doesn't resume and
 // toggle both
 const onFirstGesture = (event) => {
+  if (event.type === "keydown" && NOT_GESTURE_KEYS.has(event.key)) {
+    return;
+  }
   removeEventListener("pointerup", onFirstGesture, true);
   removeEventListener("keydown", onFirstGesture, true);
   const target = event.target instanceof Element ? event.target : null;

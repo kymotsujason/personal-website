@@ -3,7 +3,7 @@ import { stubHome } from "../stubHome";
 
 // youtube's iframe api, standing in, counting what it's asked to do in window.__yt
 export const FAKE_YOUTUBE = `
-window.__yt = { players: 0, plays: 0, pauses: 0, playedAt: [], cued: [], state: -1 };
+window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0, playedAt: [], cued: [], state: -1 };
 window.YT = {
   Player: class {
     constructor(host, options) {
@@ -43,7 +43,7 @@ window.YT = {
       window.__yt.playedAt.push(i);
       this.playVideo();
     }
-    nextVideo() {}
+    nextVideo() { window.__yt.nexts += 1; }
     getCurrentTime() { return 0; }
     getDuration() { return 0; }
     seekTo() {}
