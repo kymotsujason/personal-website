@@ -1,10 +1,8 @@
 import { getCollection, type CollectionEntry } from "astro:content";
-import { newestFirst } from "./format";
+import { newestEntryFirst } from "./format";
 
 export const sortedPosts = async () =>
-  (await getCollection("blog")).sort((a, b) =>
-    newestFirst(a.data.date, b.data.date),
-  );
+  (await getCollection("blog")).sort(newestEntryFirst);
 
 // posts are newest first, so the older one comes after
 export const neighbors = (

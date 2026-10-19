@@ -23,8 +23,8 @@ export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 // whether the text's first ten characters are a day on the calendar, so 2019-02-31 is refused
 export const isRealDay = (text: string): boolean => {
   const [year, month, day] = text.slice(0, 10).split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  parsed.setUTCFullYear(year);
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
   return (
     parsed.getUTCFullYear() === year &&
     parsed.getUTCMonth() === month - 1 &&
@@ -36,6 +36,14 @@ export const isRealDay = (text: string): boolean => {
 // one zone can't sort as an instant into the next year's group
 export const newestFirst = (a: string, b: string): number =>
   a < b ? 1 : a > b ? -1 : 0;
+
+// two entries on the same date keep one order, by id, since the collection's own order isn't promised
+export const newestEntryFirst = (
+  a: { id: string; data: { date: string } },
+  b: { id: string; data: { date: string } },
+): number =>
+  newestFirst(a.data.date, b.data.date) ||
+  (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 // reads the date's own first ten characters, so the time zone never shifts the day
 export const formatDay = (date: string): string => {

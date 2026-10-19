@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { formatDay, isRealDay, newestFirst, readingMinutes } from "./format";
+import {
+  formatDay,
+  isRealDay,
+  newestEntryFirst,
+  newestFirst,
+  readingMinutes,
+} from "./format";
 
 test("formatDay reads the day from the date's own text", () => {
   expect(formatDay("2020-01-01T17:56:51.000-08:00")).toBe("January 1, 2020");
@@ -36,4 +42,24 @@ test("isRealDay checks the day against the calendar", () => {
   expect(isRealDay("2019-02-29")).toBe(false);
   expect(isRealDay("2026-13-01")).toBe(false);
   expect(isRealDay("0000-01-01")).toBe(true);
+  expect(isRealDay("0000-02-29")).toBe(true);
+  expect(isRealDay("0100-02-29")).toBe(false);
+});
+
+test("newestEntryFirst breaks a tie on the date by the entry's id, whatever order they came in", () => {
+  const entries = [
+    { id: "b", data: { date: "2020-01-01" } },
+    { id: "c", data: { date: "2021-01-01" } },
+    { id: "a", data: { date: "2020-01-01" } },
+  ];
+  const expected = ["c", "a", "b"];
+  expect([...entries].sort(newestEntryFirst).map((e) => e.id)).toEqual(
+    expected,
+  );
+  expect(
+    [...entries]
+      .reverse()
+      .sort(newestEntryFirst)
+      .map((e) => e.id),
+  ).toEqual(expected);
 });
