@@ -13,7 +13,7 @@ import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, hol
 import { applyWallpaperMotion } from "./quality.js";
 import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus } from "./home.js";
 import { APP_BACKGROUND, pageEl, tapApp, tapFromCover, setAppVisible } from "./appWindow.js";
-import { sceneFetch, signal } from "./lifetime.js";
+import { sceneFetch, signal, failScene } from "./lifetime.js";
 
 const PX_PER_CM = 54.4;
 
@@ -370,7 +370,7 @@ export const chargerWanted = (status) => status.charging || status.level <= CHAR
 
 export const watchCharger = (status) => {
     if (!chargerModule && !chargerFailed && chargerWanted(status)) {
-        loadCharger();
+        loadCharger().catch(failScene);
     }
 };
 

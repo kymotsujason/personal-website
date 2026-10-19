@@ -25,7 +25,8 @@ if (typeof mock.module !== "function") {
     const { state, pose } = await import("./state.js");
     const { cancelAll, runTweens } = await import("./tween.js");
     const { openPhone, closePhone } = await import("./fold.js");
-    const { openFromCover } = await import("./appWindow.js");
+    const { openFromCover, tapApp, tapFromCover } = await import("./appWindow.js");
+    const { setFail } = await import("./lifetime.js");
 
     const REST = { x: 0, y: 0, z: -40, rx: 0, ry: 0, rz: 0 };
     const STAGE = { x: 0, y: -0.5, z: -44, rx: 0.05, ry: 0, rz: 0 };
@@ -78,5 +79,33 @@ if (typeof mock.module !== "function") {
         await tapped;
         assert.equal(state.openApp, null);
         assert.equal(state.busy, false);
+    });
+
+    // with no navigation installed a tap opens the app itself, and an open that throws (here, with no screen built to
+    // find the icon on) fails the scene instead of being dropped
+    const failuresOf = () => {
+        const failures = [];
+        setFail((reason) => failures.push(reason));
+        return failures;
+    };
+
+    test("a tap on an icon hands an open that rejects to the failure", async () => {
+        reset("open", 0);
+        const failures = failuresOf();
+        tapApp({ name: "About", glyph: "A", color: "#3d405b", path: "/about" });
+        await settle();
+        assert.equal(failures.length, 1);
+        assert.ok(failures[0] instanceof TypeError);
+    });
+
+    test("a tap on the cover hands an open that rejects to the failure", async () => {
+        reset("closed", 1);
+        const failures = failuresOf();
+        tapFromCover({ name: "About", glyph: "A", color: "#3d405b", path: "/about" });
+        await settle();
+        runTweens(performance.now() + 5000);
+        await settle();
+        assert.equal(failures.length, 1);
+        assert.ok(failures[0] instanceof TypeError);
     });
 }

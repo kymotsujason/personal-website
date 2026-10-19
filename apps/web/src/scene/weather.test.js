@@ -184,3 +184,43 @@ test("the moon's stretches move onto the visitor's clock the same way the sun's 
 test("weather without a moon gives no moon", () => {
     assert.equal(moonHours(VANCOUVER, visitorAt(420)), null);
 });
+
+test("a load that rejects hands the error on and leaves the feed free to ask again after 5 minutes", async () => {
+    let clock = 0;
+    const offline = new Error("offline");
+    let asks = 0;
+    const load = async () => {
+        asks++;
+        if (asks === 1) {
+            throw offline;
+        }
+        return VANCOUVER;
+    };
+    const feed = createWeatherFeed({ load, now: () => clock });
+    await assert.rejects(feed.refresh(), offline);
+    clock = 4 * 60 * 1000;
+    await feed.refresh();
+    assert.equal(asks, 1);
+    clock = 5 * 60 * 1000;
+    assert.deepEqual(await feed.refresh(), VANCOUVER);
+    assert.equal(asks, 2);
+});
+
+test("an onWeather that throws hands the error on and doesn't leave the feed stuck on that ask", async () => {
+    let clock = 0;
+    const broken = new Error("broken");
+    const heard = [];
+    const load = answers(VANCOUVER, { ...VANCOUVER, code: 61 });
+    const onWeather = (w) => {
+        heard.push(w.code);
+        if (heard.length === 1) {
+            throw broken;
+        }
+    };
+    const feed = createWeatherFeed({ load, now: () => clock, onWeather });
+    await assert.rejects(feed.refresh(), broken);
+    clock = 30 * 60 * 1000;
+    await feed.refresh();
+    assert.equal(load.asks, 2);
+    assert.deepEqual(heard, [3, 61]);
+});

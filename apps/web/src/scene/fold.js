@@ -6,7 +6,7 @@ import { centerComp, setFold, leadOpen, leadTo } from "./device.js";
 import { closeApp } from "./appWindow.js";
 import { requestHome } from "./navigation.js";
 import { idleDrift } from "./loop.js";
-import { signal, guard } from "./lifetime.js";
+import { signal, guard, failScene } from "./lifetime.js";
 
 // closing and opening the phone. a swipe drives the fold directly (the hands follow the fold), and on release it
 // finishes or springs back. keys play the same motion on their own
@@ -384,14 +384,14 @@ export const installKeys = () => {
             // escape goes home the way the home bar does, Back when that leads home
             if (state.zoomed) {
                 if (!requestHome()) {
-                    closeApp();
+                    closeApp().catch(failScene);
                 }
             } else {
-                closePhone();
+                closePhone().catch(failScene);
             }
         } else if (event.key === "Enter" && !event.target.closest?.("a, button, input, [role=button], [role=slider]")) {
             // on a button or link, Enter is that element's own activation, such as a cover icon opening its app
-            openPhone();
+            openPhone().catch(failScene);
         }
     }), { signal });
 };

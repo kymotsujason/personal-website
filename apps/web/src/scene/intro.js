@@ -191,7 +191,7 @@ export const showFromAddress = (app = appForPage()) => {
     state.busy = false;
     state.phone = "open";
     resumeIdle();
-    openApp(app, { instant: true });
+    openApp(app, { instant: true }).catch(failScene);
     return true;
 };
 
@@ -216,13 +216,13 @@ export const arrive = () => {
         if (!showFromAddress()) {
             showHome();
         }
-        loadVolume();
+        loadVolume().catch(failScene);
         return;
     }
     const seen = read("local", "introSeen") === "1";
     const arrival = window.__arrival || (seen ? "fast" : "full");
     if (arrival === "page" && showFromAddress()) {
-        loadVolume();
+        loadVolume().catch(failScene);
         return;
     }
     // a page the scene has no app for plays the intro the visit would have had otherwise

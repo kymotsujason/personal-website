@@ -60,7 +60,7 @@ export const tapApp = (app, { from = null, path = app.path } = {}) => {
         return;
     }
     if (!requestApp(app, { from, path })) {
-        openApp(app, { from });
+        openApp(app, { from }).catch(failScene);
     }
 };
 
@@ -69,7 +69,7 @@ export const tapFromCover = (app) => {
         return;
     }
     if (!requestApp(app)) {
-        openFromCover(app);
+        openFromCover(app).catch(failScene);
     }
 };
 

@@ -146,12 +146,12 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         // replaces the shown one. ?noweather asks once for the graph and leaves the sky on that fallback, for checking it
         const askHome = async () => {
             const home = await loadHome({ fetchImpl: sceneFetch });
-            // guarded, so a throw fails the scene instead of leaving the feed stuck on a rejected ask
+            // guarded, so a throw in the graph fails the scene
             guard(showContributions)(readContributions(home ? home.github : null));
             return home;
         };
         if (testSwitches && new URLSearchParams(location.search).has("noweather")) {
-            askHome();
+            guard(askHome)();
         } else {
             const feed = createWeatherFeed({
                 load: () => askHome().then(readWeather),
@@ -161,13 +161,9 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
                     applyDaylight();
                 }
             });
-            feed.refresh();
+            guard(feed.refresh)();
             every(feed.refresh, 60000);
-            document.addEventListener("visibilitychange", guard(() => {
-                if (!document.hidden) {
-                    feed.refresh();
-                }
-            }), { signal });
+            document.addEventListener("visibilitychange", guard(() => (document.hidden ? null : feed.refresh())), { signal });
         }
         // the two models load at the same time, the hands once their rig has arrived with the keys. neither has a
         // stand in, so the page shows flat without them
