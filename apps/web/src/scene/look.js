@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { state } from "./state.js";
 import { backdrop } from "./renderer.js";
-import { gesture, phoneEdges, blockNextClick, endGesture } from "./fold.js";
+import { gesture, phoneEdges, blockNextClick } from "./fold.js";
 import { signal, guard } from "./lifetime.js";
 
 // with the phone closed, dragging anywhere but the phone's border looks around the desk. the desk moves with the
@@ -90,5 +90,4 @@ export const installLook = () => {
         avoid.ty = 0;
     }), { signal });
     addEventListener("pointercancel", endLook, { capture: true, signal });
-    addEventListener("pointercancel", endGesture, { capture: true, signal });
 };

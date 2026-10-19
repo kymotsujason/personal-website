@@ -168,6 +168,160 @@ test("a home bar swipe held through a rebuild is dropped, and the app stays whol
   });
 });
 
+test("a fold swipe that arms after Escape started the close doesn't move the phone alongside it", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  const { outer, inner } = await page.evaluate(() =>
+    (window as any).spike.phoneEdges(),
+  );
+  const x = (outer.left + inner.left) / 2;
+  const y = (outer.top + outer.bottom) / 2;
+  // the fold and busy in every frame from here until the close has long ended
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__folds = [];
+    const take = () => {
+      const { state, pose } = w.spike;
+      w.__folds.push({ fold: pose.fold, busy: state.busy });
+      if (w.__folds.length < 240) {
+        requestAnimationFrame(take);
+      }
+    };
+    requestAnimationFrame(take);
+  });
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => (window as any).spike.state.busy, null, {
+    polling: "raf",
+  });
+  for (let i = 1; i <= 3; i++) {
+    await page.mouse.move(x + i * 15, y);
+  }
+  // a slow last step, so the release is no flick and a swipe that took hold would spring back
+  await page.waitForTimeout(150);
+  await page.mouse.move(x + 46, y);
+  await page.mouse.up();
+  await page.waitForFunction(
+    () => (window as any).__folds.length >= 240,
+    null,
+    { timeout: 15000 },
+  );
+  const folds: { fold: number; busy: boolean }[] = await page.evaluate(
+    () => (window as any).__folds,
+  );
+  const backward = folds.findIndex(
+    (f, i) => i > 0 && f.fold < folds[i - 1].fold - 1e-9,
+  );
+  expect(backward, "the fold never turned back during the close").toBe(-1);
+  expect(
+    folds.some((f) => !f.busy && f.fold > 0.001 && f.fold < 0.999),
+    "the phone never folded while the scene said it was still",
+  ).toBe(false);
+  const after = await page.evaluate(() => {
+    const { state, pose } = (window as any).spike;
+    return { phone: state.phone, busy: state.busy, fold: pose.fold };
+  });
+  expect(after).toEqual({ phone: "closed", busy: false, fold: 1 });
+});
+
+test("a home bar swipe that arms after Escape started the close is dropped, and the flat page doesn't stay over home", async ({
+  page,
+}) => {
+  await openAt(page, "/about", true);
+  const bar = await page.locator("#page .home-bar").boundingBox();
+  expect(bar).not.toBeNull();
+  const x = bar!.x + bar!.width / 2;
+  const y = bar!.y + bar!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => {
+      const { state } = (window as any).spike;
+      return state.busy && !state.zoomed;
+    },
+    null,
+    { polling: "raf" },
+  );
+  for (let i = 1; i <= 3; i++) {
+    await page.mouse.move(x, y - i * 6);
+  }
+  // a slow last step, so the release is no flick and a swipe that took hold would spring back
+  await page.waitForTimeout(150);
+  await page.mouse.move(x, y - 19);
+  await page.mouse.up();
+  await expect
+    .poll(() => phone(page), { timeout: 15000 })
+    .toEqual({ phone: "open", busy: false, zoomed: false });
+  await page.waitForTimeout(800);
+  const after = await page.evaluate(() => {
+    const { state } = (window as any).spike;
+    return {
+      pageFlat: state.pageFlat,
+      busy: state.busy,
+      zoomed: state.zoomed,
+      path: location.pathname,
+    };
+  });
+  expect(after).toEqual({
+    pageFlat: false,
+    busy: false,
+    zoomed: false,
+    path: "/",
+  });
+});
+
+test("a fold swipe that's cancelled springs back instead of finishing", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  const { outer, inner } = await page.evaluate(() =>
+    (window as any).spike.phoneEdges(),
+  );
+  const x = (outer.left + inner.left) / 2;
+  const y = (outer.top + outer.bottom) / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(x + i * 50, y);
+  }
+  // a slow last step, so it's no flick either way
+  await page.waitForTimeout(150);
+  await page.mouse.move(x + 501, y);
+  const held = await page.evaluate(async (path) => {
+    const { gesture } = await import(path);
+    return gesture
+      ? { armed: gesture.armed, travel: gesture.travel, id: gesture.id }
+      : null;
+  }, "/src/scene/fold.js");
+  expect(held, "the swipe took hold").not.toBeNull();
+  expect(held!.armed).toBe(true);
+  expect(
+    held!.travel,
+    "far enough that a release would finish it",
+  ).toBeGreaterThan(0.5);
+  await page.evaluate(
+    (id) =>
+      dispatchEvent(
+        new PointerEvent("pointercancel", {
+          pointerId: id,
+          pointerType: "mouse",
+        }),
+      ),
+    held!.id,
+  );
+  await page.mouse.up();
+  // longer than the spring back or the finish would take
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => {
+    const { state, pose } = (window as any).spike;
+    return { phone: state.phone, busy: state.busy, fold: pose.fold };
+  });
+  expect(after).toEqual({ phone: "open", busy: false, fold: 0 });
+});
+
 test("a rebuild frees the old phone's geometry and textures", async ({
   page,
 }) => {

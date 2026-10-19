@@ -372,6 +372,12 @@ export const installHomeSwipe = () => {
             if (homeSwipe.y0 - event.clientY < 8) {
                 return;
             }
+            // a key or a navigation started the close since the press, and the swipe would fight it. an armed swipe
+            // has set busy itself, so its release only ever clears its own
+            if (state.busy || !state.zoomed) {
+                homeSwipe = null;
+                return;
+            }
             homeSwipe.armed = true;
             state.busy = true;
             hideFlat();

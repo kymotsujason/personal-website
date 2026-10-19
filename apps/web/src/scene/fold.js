@@ -292,7 +292,7 @@ export const installGestures = () => {
         if (!found) {
             return;
         }
-        gesture = { ...found, id: event.pointerId, x0: event.clientX, y0: event.clientY, armed: false, progress: 0, travel: 0, lastT: performance.now(), lastD: 0, speed: 0 };
+        gesture = { ...found, id: event.pointerId, phone: state.phone, x0: event.clientX, y0: event.clientY, armed: false, progress: 0, travel: 0, lastT: performance.now(), lastD: 0, speed: 0 };
         // the thumbs get ready on the press, before the drag moves the fold
         if (found.action === "open") {
             leadOpen();
@@ -312,6 +312,11 @@ export const installGestures = () => {
                 return;
             }
             if (along < 10) {
+                return;
+            }
+            // a key or a navigation moved the phone since the press, and the swipe would fight that move
+            if (state.busy || state.zoomed || state.phone !== gesture.phone) {
+                gesture = null;
                 return;
             }
             gesture.armed = true;
@@ -351,6 +356,7 @@ export const installGestures = () => {
     }), { passive: false, signal });
 
     addEventListener("pointerup", endGesture, { capture: true, signal });
+    addEventListener("pointercancel", endGesture, { capture: true, signal });
 };
 
 export const endGesture = guard(async (event) => {
@@ -372,8 +378,9 @@ export const endGesture = guard(async (event) => {
         return;
     }
     blockNextClick();
-    // a flick finishes from anywhere, otherwise it goes to whichever end the edge is closer to on screen
-    const finish = g.speed > 0.4 || (g.travel > 0.5 && g.speed > -0.4);
+    // a flick finishes from anywhere, otherwise it goes to whichever end the edge is closer to on screen. a cancelled
+    // swipe springs back, as the home bar's does
+    const finish = event.type === "pointerup" && (g.speed > 0.4 || (g.travel > 0.5 && g.speed > -0.4));
     const remaining = finish ? 1 - g.progress : g.progress;
     const time = Math.max(180, (g.action === "close" ? FOLD_TIME.close : FOLD_TIME.open) * remaining);
     if ((await runFold(g, g.progress, finish ? 1 : 0, time, ease.outCubic)) === "cancelled") {
