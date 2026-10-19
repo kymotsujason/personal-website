@@ -12,7 +12,8 @@
     "html_handling": "drop-trailing-slash",
   },
   "workers_dev": false,
-  "preview_urls": true,
+  // off so an uploaded version doesn't stay public at its own workers.dev address after a rollback
+  "preview_urls": false,
   // the site's one address. a custom domain makes its own dns record and certificate, and keeping it here means every
   // deploy keeps it
   "routes": [{ "pattern": "jasonyue.ca", "custom_domain": true }],
@@ -20,11 +21,4 @@
   "kv_namespaces": [{ "binding": "HOME" }],
   // the daily github fetch
   "triggers": { "crons": ["17 9 * * *"] },
-  // previews get their own namespace, seeded once from github-fixture.json, and no GITHUB_TOKEN. previews bind KV
-  // only by id, so this one can't be left for wrangler to create
-  "previews": {
-    "kv_namespaces": [
-      { "binding": "HOME", "id": "536be70a170044c1bc198737e3c543cc" },
-    ],
-  },
 }
