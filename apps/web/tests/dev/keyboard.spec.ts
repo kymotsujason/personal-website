@@ -154,10 +154,25 @@ const ringSum = (
     { which, selector, text },
   );
 
+// the render loop sets a face's inert a frame after the scene state settles, and Tab skips an inert face
+const faceReady = (page: Page, which: "home" | "cover") =>
+  expect
+    .poll(() =>
+      page.evaluate((which) => {
+        const face = (window as any).spike.state[
+          which === "home" ? "screen" : "cover"
+        ];
+        const el = which === "home" ? face.homeEl : face.el;
+        return el.isConnected && !el.inert;
+      }, which),
+    )
+    .toBe(true);
+
 const openHome = async (page: Page) => {
   await page.goto("/?dev&noweather");
   await page.waitForFunction(() => Boolean((window as any).spike));
   await settledOn(page, "/", null);
+  await faceReady(page, "home");
 };
 
 const closeToCover = async (page: Page) => {
@@ -165,6 +180,7 @@ const closeToCover = async (page: Page) => {
   await expect
     .poll(() => phone(page))
     .toMatchObject({ busy: false, phone: "closed" });
+  await faceReady(page, "cover");
 };
 
 // tabs until focus lands on something matching the selector, so the focus is a keyboard one
