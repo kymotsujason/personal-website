@@ -124,11 +124,15 @@ if (typeof mock.module !== "function") {
         assert.deepEqual({ phone: state.phone, app: state.openApp, fade: state.pageFade, leads, ...poseNow() }, { phone: "open", app, fade: 0, leads: 0, z: REST.z, fold: 0 });
     }));
 
-    // with no navigation installed a tap opens the app itself, and an open that throws (here, with no screen built to
-    // find the icon on) fails the scene instead of being dropped
+    // with no navigation installed a tap opens the app itself, and an open that rejects (here, with a screen whose icon
+    // lookup throws the sentinel) fails the scene instead of being dropped
+    const sentinel = new Error("sentinel");
     const failuresOf = () => {
         const failures = [];
         setFail((reason) => failures.push(reason));
+        state.screen = { get homeEl() {
+            throw sentinel;
+        } };
         return failures;
     };
 
@@ -137,8 +141,7 @@ if (typeof mock.module !== "function") {
         const failures = failuresOf();
         tapApp({ name: "About", glyph: "A", color: "#3d405b", path: "/about" });
         await settle();
-        assert.equal(failures.length, 1);
-        assert.ok(failures[0] instanceof TypeError);
+        assert.deepEqual(failures, [sentinel]);
     });
 
     test("a tap on the cover hands an open that rejects to the failure", async () => {
@@ -148,7 +151,6 @@ if (typeof mock.module !== "function") {
         await settle();
         runTweens(performance.now() + 5000);
         await settle();
-        assert.equal(failures.length, 1);
-        assert.ok(failures[0] instanceof TypeError);
+        assert.deepEqual(failures, [sentinel]);
     });
 }

@@ -221,6 +221,9 @@ test("an onWeather that throws hands the error on and doesn't leave the feed stu
     };
     const feed = createWeatherFeed({ load, now: () => clock, onWeather });
     await assert.rejects(feed.refresh(), broken);
+    clock = 10 * 60 * 1000;
+    await feed.refresh();
+    assert.equal(load.asks, 1);
     clock = 30 * 60 * 1000;
     await feed.refresh();
     assert.equal(load.asks, 2);

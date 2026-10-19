@@ -59,8 +59,11 @@ const fakePlayer = () => {
     const setTime = (t) => {
         time = t;
     };
+    const setState = (data) => {
+        playerState = data;
+    };
     const started = () => calls.some(([name]) => name === "playVideo" || name === "playVideoAt");
-    return { calls, load, fire, moveTo, setTime, started, loads: () => loads, volume: () => volume };
+    return { calls, load, fire, moveTo, setTime, setState, started, loads: () => loads, volume: () => volume };
 };
 
 const memory = () => {
@@ -171,6 +174,37 @@ test("a player still cued 3 s after a play call stops the music for this page, a
             assert.equal(music.state().playing, false);
             assert.ok(changes > before, "the card and the app hear about it");
             // a slow start isn't a refusal, so a later visit still resumes
+            assert.equal(storage.getItem("music"), "on");
+        }
+    } finally {
+        mock.timers.reset();
+    }
+});
+
+test("a start that buffered and then sat cued with no event stops the music once the 3 s are up, for a play, a track, and a resume", () => {
+    mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+    try {
+        const starts = [
+            (music) => music.play(),
+            (music) => music.playAt(3),
+            (music) => {
+                assert.equal(music.resume(), true);
+            }
+        ];
+        for (const start of starts) {
+            const yt = fakePlayer();
+            const storage = memory();
+            storage.setItem("music", "on");
+            const music = make(yt, { storage });
+            ready(music, yt);
+            start(music);
+            yt.fire("onStateChange", 3);
+            assert.equal(music.state().playing, true);
+            yt.setState(CUED);
+            mock.timers.tick(2900);
+            assert.equal(music.state().playing, true);
+            mock.timers.tick(200);
+            assert.equal(music.state().playing, false);
             assert.equal(storage.getItem("music"), "on");
         }
     } finally {
