@@ -128,7 +128,7 @@ export const buildWidgets = (homeEl) => {
         <div class="widget small tappable about-card" data-action="about" role="button" tabindex="0"><img class="avatar" src="/ice.png" alt=""><span class="wt w-big">Jason</span><span class="wt w-line fit">Just another developer =P</span></div>
         <div class="widget small tappable" data-action="project" role="button" tabindex="0"><span class="wt w-title">LATEST PROJECT</span><span class="wt w-big wrap"></span></div>
         <div class="widget wide tappable" data-action="github" role="button" tabindex="0"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></div>
-        <div class="widget wide tappable music-card" data-action="music"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span><span class="ctl" data-control="open" data-icon="open" role="button" tabindex="0" aria-label="Open Music"></span></div></div></div>`;
+        <div class="widget wide tappable music-card" data-action="music"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span></div></div></div>`;
     widgets.querySelector('[data-action="project"] .w-big').textContent = latest.title;
     widgets.querySelector("img.avatar").addEventListener("load", guard(() => {
         state.screensChanged = true;
@@ -157,9 +157,7 @@ export const buildWidgets = (homeEl) => {
                 music.toggle();
             } else if (el.dataset.control === "previous") {
                 music.previous();
-            } else if (el.dataset.control === "open") {
-                actions.music(el);
-            } else {
+            } else if (el.dataset.control === "next") {
                 music.next();
             }
         }));

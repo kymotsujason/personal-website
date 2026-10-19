@@ -555,7 +555,7 @@ body.closed.over-volume {
 .music-card .m-controls {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 22px;
   margin-top: auto;
 }
 

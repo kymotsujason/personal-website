@@ -320,7 +320,6 @@ test.describe("keyboard use of the 3D screens", () => {
       ["button", "Previous", "0"],
       ["button", "Play", "0"],
       ["button", "Next", "0"],
-      ["button", "Open Music", "0"],
     ]);
     await tabTo(page, '#css-layer .ctl[data-control="toggle"]');
     await page.keyboard.press("Space");
@@ -548,7 +547,7 @@ test.describe("keyboard use of the 3D screens", () => {
     ).toBe(true);
   });
 
-  test("the music card holds its controls without being a button itself, and an Open Music control opens the app", async ({
+  test("the music card holds its controls without being a button itself", async ({
     page,
   }) => {
     await openHome(page);
@@ -558,11 +557,6 @@ test.describe("keyboard use of the 3D screens", () => {
         return [card.getAttribute("role"), card.getAttribute("tabindex")];
       }),
     ).toEqual([null, null]);
-    await tabTo(page, '#css-layer .ctl[data-control="open"]');
-    await page.keyboard.press("Enter");
-    await expect
-      .poll(() => phone(page), { timeout: 15000 })
-      .toMatchObject({ busy: false, zoomed: true, app: "Music" });
   });
 
   test("holding Enter or Space on a control presses it once", async ({
