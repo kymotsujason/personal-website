@@ -213,13 +213,19 @@ const drawControl = (ctx, box, icon) => {
         ctx.closePath();
         ctx.rect(cx + s * 0.5, cy - s, s * 0.4, s * 2);
     } else if (icon === "open") {
-        ctx.moveTo(cx - s * 0.2, cy - s);
-        ctx.lineTo(cx + s * 0.8, cy);
-        ctx.lineTo(cx - s * 0.2, cy + s);
-        ctx.lineTo(cx - s * 0.5, cy + s * 0.7);
-        ctx.lineTo(cx + s * 0.2, cy);
-        ctx.lineTo(cx - s * 0.5, cy - s * 0.7);
-        ctx.closePath();
+        // an arrow up and out, the open in app sign, so it doesn't read as a second next
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = s * 0.34;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.moveTo(cx - s * 0.75, cy + s * 0.75);
+        ctx.lineTo(cx + s * 0.75, cy - s * 0.75);
+        ctx.moveTo(cx - s * 0.15, cy - s * 0.75);
+        ctx.lineTo(cx + s * 0.75, cy - s * 0.75);
+        ctx.lineTo(cx + s * 0.75, cy + s * 0.15);
+        ctx.stroke();
+        ctx.restore();
+        return;
     } else {
         ctx.moveTo(cx - s * 0.7, cy - s);
         ctx.lineTo(cx + s, cy);
