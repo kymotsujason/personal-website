@@ -22,8 +22,12 @@ const [first] = TRACKS;
       </div>
       <div class="now-info">
         <p class="label">Now playing</p>
-        <h2 class="now-title">{cleanTitle(first.title)}</h2>
-        <p class="now-channel">{first.channel}</p>
+        <h2 class="now-title" aria-live="polite">
+          {cleanTitle(first.title)}
+        </h2>
+        <p class="now-channel" aria-live="polite">
+          {first.channel}
+        </p>
         <div class="controls">
           <button
             class="pill glass"

@@ -241,6 +241,15 @@ test.describe("with javascript off", () => {
       cleanTitle(TRACKS[0].title),
     );
     await expect(now.locator(".now-channel")).toHaveText(TRACKS[0].channel);
+    // a track change is announced, since the title and channel are rewritten in place
+    await expect(now.locator(".now-title")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
+    await expect(now.locator(".now-channel")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
     await expect(page.locator("#page > .backdrop img")).toHaveAttribute(
       "src",
       artFor(TRACKS[0].id),
