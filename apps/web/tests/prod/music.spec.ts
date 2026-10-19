@@ -563,6 +563,53 @@ test.describe("the flat music page", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a player chunk that fails on a blog post doesn't load the page again at the first click, and the music page does", async ({
+    page,
+  }) => {
+    await quiet(page);
+    const { errors, blocked } = watchErrors(page);
+    await page.route("**/_astro/music.*.js", (route) => {
+      blocked.add(route.request().url());
+      return route.abort();
+    });
+    let loads = 0;
+    page.on("load", () => {
+      loads += 1;
+    });
+    await flatMusic(page, "on");
+    await page.goto("/blog/new-equipment-to-keep-things-interesting");
+    await expect(page.locator("#page h1")).toBeVisible();
+    const failed = page.waitForEvent("console", {
+      predicate: (message) =>
+        message.text().includes("the music player didn't load"),
+    });
+    await page.locator("#page h1").click();
+    await failed;
+    await page.waitForTimeout(1000);
+    expect(loads, "no reload at the first click").toBe(1);
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname === "/blog/new-equipment-to-keep-things-interesting",
+    );
+    // the post's hero image covers the top of its column, where followLink puts the link
+    await page.evaluate(() => {
+      const link = document.createElement("a");
+      link.href = "/music";
+      link.id = "test-link";
+      link.textContent = "a link";
+      document.querySelector("#page .column")!.append(link);
+    });
+    await page.locator("#test-link").click();
+    await expect
+      .poll(() => loads, { message: "the music page reloads once" })
+      .toBe(2);
+    await expect(page.locator('#page [data-music="toggle"]')).toHaveText(
+      "Music unavailable",
+    );
+    expect(loads, "no third load").toBe(2);
+    expect(errors).toEqual([]);
+  });
+
   test("a list where every track fails says the music is unavailable", async ({
     page,
   }) => {
