@@ -145,8 +145,9 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         resize();
         // the home route's answer carries the weather and the github graph, asked while the hands load and the intro
         // plays. until it answers the sky is clear and follows the clock. after that it's asked again once the weather
-        // is half an hour old, checked each minute and when a hidden tab is shown again, and a later answer's graph
-        // replaces the shown one. ?noweather asks once for the graph and leaves the sky on that fallback, for checking it
+        // is half an hour old, checked each minute and when a hidden tab is shown again (never while it's hidden), and a
+        // later answer's graph replaces the shown one. ?noweather asks once for the graph and leaves the sky on that
+        // fallback, for checking it
         const askHome = async () => {
             const home = await loadHome({ fetchImpl: sceneFetch });
             // guarded, so a throw in the graph fails the scene
@@ -158,6 +159,7 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         } else {
             const feed = createWeatherFeed({
                 load: () => askHome().then(readWeather),
+                hidden: () => document.hidden,
                 onWeather: (data) => {
                     setWeather(data);
                     applyWeather();

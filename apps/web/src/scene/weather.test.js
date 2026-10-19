@@ -245,3 +245,38 @@ test("a moon that isn't the shape the sky reads is left out, and the rest of the
     });
     assert.deepEqual(readWeather({ weather: MOONLIT }), MOONLIT);
 });
+
+test("a hidden tab doesn't ask, and the next refresh once it's shown asks", async () => {
+    let hidden = true;
+    const load = answers(VANCOUVER);
+    const feed = createWeatherFeed({ load, now: () => 0, hidden: () => hidden });
+    assert.equal(await feed.refresh(), null);
+    assert.equal(load.asks, 0);
+    hidden = false;
+    assert.deepEqual(await feed.refresh(), VANCOUVER);
+    assert.equal(load.asks, 1);
+});
+
+test("asks that keep failing wait twice as long each time, up to the 30 minutes a good answer waits", async () => {
+    let clock = 0;
+    const load = answers(null, null, null, null, null, VANCOUVER, null);
+    const feed = createWeatherFeed({ load, now: () => clock });
+    await feed.refresh();
+    const minutes = [5, 15, 35, 65, 95];
+    for (const [i, at] of minutes.entries()) {
+        clock = at * 60 * 1000 - 1;
+        await feed.refresh();
+        assert.equal(load.asks, i + 1, `not yet at ${at} minutes`);
+        clock = at * 60 * 1000;
+        await feed.refresh();
+        assert.equal(load.asks, i + 2, `asked at ${at} minutes`);
+    }
+    assert.deepEqual(feed.weather(), VANCOUVER);
+    // a good answer starts the wait over, so the next failure waits 5 minutes again
+    clock += 30 * 60 * 1000;
+    await feed.refresh();
+    assert.equal(load.asks, 7);
+    clock += 5 * 60 * 1000;
+    await feed.refresh();
+    assert.equal(load.asks, 8);
+});

@@ -81,7 +81,11 @@ export const createStatus = (onChange) => {
     // a few recent round trips, so one slow request doesn't drop the bars
     const recent = [];
     let pinging = null;
+    // a hidden tab isn't pinged, so a forgotten one isn't asking every 15 s all day. it's pinged again once shown
     const ping = async () => {
+        if (globalThis.document?.hidden) {
+            return;
+        }
         if (!navigator.onLine) {
             recent.length = 0;
             status.ping = null;
@@ -139,6 +143,7 @@ export const createStatus = (onChange) => {
     timers[1] = setInterval(ping, PING_EVERY);
     addEventListener("online", ping);
     addEventListener("offline", ping);
+    addEventListener("visibilitychange", ping);
     tickBattery();
 
     return {
@@ -158,6 +163,7 @@ export const createStatus = (onChange) => {
             clearTimeout(timers[2]);
             removeEventListener("online", ping);
             removeEventListener("offline", ping);
+            removeEventListener("visibilitychange", ping);
             if (pinging) {
                 pinging.abort();
             }

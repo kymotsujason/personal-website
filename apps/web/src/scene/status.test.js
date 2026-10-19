@@ -93,3 +93,40 @@ test("the clock keeps ticking after a callback that threw", () => {
 test("the battery keeps ticking after a callback that threw", () => {
     assert.ok(ticksAfterThrow("battery", (bar) => bar.setBatterySpeed(1000), 200) >= 2);
 });
+
+test("the ping skips a hidden tab, and pings again once the tab is shown", async () => {
+    const saved = {
+        navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+        document: globalThis.document,
+        fetch: globalThis.fetch,
+        addEventListener: globalThis.addEventListener,
+        removeEventListener: globalThis.removeEventListener
+    };
+    const listeners = {};
+    let pings = 0;
+    Object.defineProperty(globalThis, "navigator", { value: { onLine: true }, configurable: true, writable: true });
+    globalThis.document = { hidden: true };
+    globalThis.fetch = async () => {
+        pings++;
+    };
+    globalThis.addEventListener = (type, fn) => {
+        listeners[type] = fn;
+    };
+    globalThis.removeEventListener = (type) => {
+        delete listeners[type];
+    };
+    const bar = createStatus(() => {});
+    try {
+        await bar.pingNow();
+        assert.equal(pings, 0);
+        assert.equal(typeof listeners.visibilitychange, "function");
+        globalThis.document.hidden = false;
+        await listeners.visibilitychange();
+        assert.equal(pings, 1);
+    } finally {
+        bar.stop();
+        Object.defineProperty(globalThis, "navigator", saved.navigator);
+        Object.assign(globalThis, { document: saved.document, fetch: saved.fetch, addEventListener: saved.addEventListener, removeEventListener: saved.removeEventListener });
+    }
+    assert.equal(listeners.visibilitychange, undefined, "stop takes the listener off");
+});

@@ -105,33 +105,41 @@ export const readWeather = (home) => {
 };
 
 // keeps the weather current on a long visit. refresh asks the route once the last good answer is `every` old, keeps
-// that answer if an ask fails (trying again after `retry`), and lets overlapping refreshes share one ask. onWeather
-// hears each new answer. a load that rejects rejects that refresh and the next ask still goes ahead after `retry`. an
-// onWeather that throws also rejects that refresh, but the answer is kept and the next ask waits `every`
-export const createWeatherFeed = ({ load, every = 30 * 60 * 1000, retry = 5 * 60 * 1000, now = Date.now, onWeather = () => {} } = {}) => {
+// that answer if an ask fails, and lets overlapping refreshes share one ask. a failed ask tries again after `retry`,
+// and each failure in a row after it waits twice as long, up to `every`, so a forgotten tab with the weather down asks
+// a few times an hour. a hidden tab doesn't ask at all. onWeather hears each new answer. a load that rejects rejects
+// that refresh and counts as a failure. an onWeather that throws also rejects that refresh, but the answer is kept and
+// the next ask waits `every`
+export const createWeatherFeed = ({ load, every = 30 * 60 * 1000, retry = 5 * 60 * 1000, now = Date.now, hidden = () => false, onWeather = () => {} } = {}) => {
     let weather = null;
     let nextAt = -Infinity;
     let asking = null;
+    let failures = 0;
+    const failed = () => {
+        nextAt = now() + Math.min(retry * 2 ** failures, every);
+        failures++;
+    };
     const refresh = () => {
         if (asking) {
             return asking;
         }
-        if (now() < nextAt) {
+        if (hidden() || now() < nextAt) {
             return Promise.resolve(weather);
         }
         asking = Promise.resolve()
             .then(load)
             .then((data) => {
                 if (!data) {
-                    nextAt = now() + retry;
+                    failed();
                     return weather;
                 }
                 weather = data;
+                failures = 0;
                 nextAt = now() + every;
                 onWeather(data);
                 return weather;
             }, (error) => {
-                nextAt = now() + retry;
+                failed();
                 throw error;
             })
             .finally(() => {
