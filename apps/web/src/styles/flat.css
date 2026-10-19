@@ -2,8 +2,7 @@
    a transform, a clip, an opacity, and a visibility on top while it pins #page onto the phone. #page is the window's
    size and doesn't scroll itself, its .body does, so the scene can pin it as one box and its scroll survives */
 
-/* the sky behind the column. these are the clear night colors, for before a script sets the real ones (see lib/sky.js),
-   and --mx and --my put the highlight on the side facing the sky's light until a pointer moves it */
+/* the sky behind the column. these are the clear night colors, for before a script sets the real ones (see lib/sky.js) */
 html {
   --sky-top: rgb(13, 18, 51);
   --sky-low: rgb(61, 46, 107);
@@ -20,8 +19,6 @@ html {
   --py: 0;
   --scroll: 0;
   --read: 0;
-  --mx: calc(50vw - sin(var(--rim-angle)) * 40vw);
-  --my: calc(50vh + cos(var(--rim-angle)) * 40vh);
 }
 
 #page {

@@ -111,11 +111,54 @@ test.describe("the flat site", () => {
     await page.mouse.move(1000, 600);
     await page.waitForTimeout(500);
     const inputs = await page.evaluate(() =>
-      ["--px", "--py", "--mx", "--my"].map((name) =>
+      ["--px", "--py"].map((name) =>
         document.documentElement.style.getPropertyValue(name),
       ),
     );
-    expect(inputs).toEqual(["", "", "", ""]);
+    expect(inputs).toEqual(["", ""]);
+    const lit = await page.evaluate(
+      () =>
+        [...document.querySelectorAll<HTMLElement>("#page .glass")].filter(
+          (el) => el.style.getPropertyValue("--hl-x"),
+        ).length,
+    );
+    expect(lit).toBe(0);
+  });
+
+  // the panes carry a depth transform, which measures a fixed background from the pane, so the highlight is written
+  // in each pane's own coordinates
+  test("the glass highlight sits under the pointer", async ({ page }) => {
+    await flatSite(page);
+    await page.goto("/about");
+    const pane = page.locator("#page .glass").first();
+    const box = await pane.boundingBox();
+    if (!box) {
+      throw new Error("no glass pane on /about");
+    }
+    await page.mouse.move(box.x + 120, box.y + 80);
+    await expect
+      .poll(async () => {
+        const [x, y, now] = await pane.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return [
+            el.style.getPropertyValue("--hl-x"),
+            el.style.getPropertyValue("--hl-y"),
+            { x: r.x, y: r.y },
+          ] as const;
+        });
+        return [
+          Math.abs(parseFloat(x) - (box.x + 120 - now.x)) <= 1,
+          Math.abs(parseFloat(y) - (box.y + 80 - now.y)) <= 1,
+        ];
+      })
+      .toEqual([true, true]);
+    await page.mouse.move(-10, -10);
+    await page.evaluate(() =>
+      document.documentElement.dispatchEvent(new PointerEvent("pointerleave")),
+    );
+    await expect
+      .poll(() => pane.evaluate((el) => el.style.getPropertyValue("--hl-x")))
+      .toBe("");
   });
 
   test("only a page with a ring or a hero gets the scroll inputs", async ({

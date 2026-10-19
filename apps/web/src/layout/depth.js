@@ -1,8 +1,8 @@
 // the page's depth inputs, written to the root since #page's style belongs to the scene and the root survives
 // navigation. --px and --py (-1 to 1) come from the pointer where there's a fine one, and from the scroll otherwise.
-// --mx and --my put the glass highlight under the pointer. --scroll and --read come from the page's own scroll, and
-// only on a page with a ring or a hero. the pointer is read at most once a frame, and a value is only written when it
-// changed
+// --scroll and --read come from the page's own scroll, and only on a page with a ring or a hero. the pointer is read at
+// most once a frame, and a value is only written when it changed. the glass highlight is placed on each pane in its
+// own coordinates, since a fixed background inside a transformed pane is measured from the pane and not the window
 const root = document.documentElement;
 const fine = matchMedia("(hover: hover) and (pointer: fine)");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -26,6 +26,32 @@ const put = (name, value) => {
 const round = (v) => String(Math.round(v * 1000) / 1000);
 const clamp = (v) => Math.min(Math.max(v, 0), 1);
 
+// panes with a highlight written on them, so taking it off touches only those
+const lit = new Set();
+
+const unlight = () => {
+  for (const pane of lit) {
+    pane.style.removeProperty("--hl-x");
+    pane.style.removeProperty("--hl-y");
+  }
+  lit.clear();
+};
+
+// every rect is read before any pane is written, so a frame lays out once. a pane off screen keeps its last place
+const light = () => {
+  const panes = [...document.querySelectorAll("#page .glass")];
+  const rects = panes.map((pane) => pane.getBoundingClientRect());
+  panes.forEach((pane, i) => {
+    const r = rects[i];
+    if (r.bottom < 0 || r.top > innerHeight || r.width === 0) {
+      return;
+    }
+    pane.style.setProperty("--hl-x", `${Math.round(pointer.x - r.left)}px`);
+    pane.style.setProperty("--hl-y", `${Math.round(pointer.y - r.top)}px`);
+    lit.add(pane);
+  });
+};
+
 const frame = () => {
   queued = false;
   const body = document.querySelector("#page > .body");
@@ -42,28 +68,24 @@ const frame = () => {
   if (reduced.matches || root.classList.contains("page-pinned")) {
     put("--px", null);
     put("--py", null);
-    put("--mx", null);
-    put("--my", null);
+    unlight();
     return;
   }
   if (fine.matches) {
     if (pointer) {
       put("--px", round((pointer.x / innerWidth) * 2 - 1));
       put("--py", round((pointer.y / innerHeight) * 2 - 1));
-      put("--mx", `${Math.round(pointer.x)}px`);
-      put("--my", `${Math.round(pointer.y)}px`);
+      light();
     } else {
       put("--px", null);
       put("--py", null);
-      put("--mx", null);
-      put("--my", null);
+      unlight();
     }
     return;
   }
   put("--px", null);
   put("--py", round(clamp(top / 600)));
-  put("--mx", null);
-  put("--my", null);
+  unlight();
 };
 
 // the failure test counts the scene's frames and leaves this one out by the mark
@@ -92,7 +114,10 @@ document.documentElement.addEventListener("pointerleave", () => {
   queue();
 });
 document.addEventListener("scroll", queue, { capture: true, passive: true });
-document.addEventListener("astro:after-swap", frame);
+document.addEventListener("astro:after-swap", () => {
+  lit.clear();
+  frame();
+});
 addEventListener("resize", queue);
 fine.addEventListener("change", queue);
 reduced.addEventListener("change", queue);

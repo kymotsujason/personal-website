@@ -405,8 +405,8 @@ html.scene-failed #page {
 /* a glass pane: a frosted fill, a rim that's bright on the side facing the sky's light (--rim-angle, set from where
    the sun or moon is) and faint on the far side, and a soft highlight that follows the pointer across it. the fill is
    translucent, so the rim gradient behind it tints the whole pane faintly. --fill and --r are the knobs, and --tint
-   puts a color over the fill. under a fine pointer the highlight's gradient is fixed to the window, so it needs no
-   measuring per pane, and otherwise it sits at the rim's side of each pane */
+   puts a color over the fill. the highlight sits at the rim's side of each pane, and under a fine pointer
+   layout/depth.js moves it under the pointer by writing --hl-x and --hl-y on each pane */
 .glass {
   position: relative;
   border: 1px solid transparent;
@@ -440,16 +440,6 @@ html.scene-failed #page {
   -webkit-backdrop-filter: blur(22px) saturate(1.7);
   backdrop-filter: blur(22px) saturate(1.7);
   box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.55);
-}
-
-/* with a fine pointer the highlight follows it. fixed to the window it needs no measuring per pane. iOS Safari draws
-   a fixed background as a scrolling one, but it never matches there */
-@media (hover: hover) and (pointer: fine) {
-  .glass {
-    --hl-x: var(--mx);
-    --hl-y: var(--my);
-    background-attachment: fixed, scroll, scroll, scroll, scroll;
-  }
 }
 
 /* no backdrop blur while #page is pinned on the phone (small, and fading in or out) or once the quality ladder has
