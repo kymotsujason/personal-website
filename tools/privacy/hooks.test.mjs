@@ -302,6 +302,47 @@ test("the hooks refuse an EXIF commit in a fresh clone and in a worktree", (t) =
   assert.equal(commitCount(worktree), "1");
 });
 
+// the push workflow's call, check.mjs --range with the push's before and after commits
+function checkRange(repo, before, after) {
+  return spawnSync(
+    "node",
+    ["tools/privacy/check.mjs", "--range", before, after],
+    { cwd: repo, env, encoding: "utf8" },
+  );
+}
+
+test("--range from a zero before scans every commit up to after", (t) => {
+  const { repo } = makeRepo(t);
+  writeFile(repo, "art/secret.png", cleanPng);
+  ok(commitAll(repo, "Add secret", "--no-verify"));
+  rmSync(join(repo, "art"), { recursive: true });
+  ok(commitAll(repo, "Remove secret"));
+  refused(
+    checkRange(repo, "0".repeat(40), "HEAD"),
+    /art\/secret\.png is on the deny list/,
+  );
+});
+
+test("--range scans the commits after before and none before it", (t) => {
+  const { repo } = makeRepo(t);
+  writeFile(repo, "art/secret.png", cleanPng);
+  ok(commitAll(repo, "Add secret", "--no-verify"));
+  const added = ok(git(repo, "rev-parse", "HEAD"));
+  rmSync(join(repo, "art"), { recursive: true });
+  ok(commitAll(repo, "Remove secret"));
+  const removed = ok(git(repo, "rev-parse", "HEAD"));
+  writeFile(repo, "notes.txt", "notes\n");
+  ok(commitAll(repo, "Add notes"));
+  const after = ok(git(repo, "rev-parse", "HEAD"));
+  const clean = checkRange(repo, removed, after);
+  assert.equal(clean.status, 0, `${clean.stdout}\n${clean.stderr}`);
+  assert.match(clean.stdout, /in 1 commits/);
+  refused(
+    checkRange(repo, `${added}~1`, after),
+    /art\/secret\.png is on the deny list/,
+  );
+});
+
 test("both hooks are committed as executable", () => {
   const modes = ok(git(siteRoot, "ls-files", "-s", ".githooks"));
   assert.match(modes, /^100755 \S+ 0\t\.githooks\/pre-commit$/m);
