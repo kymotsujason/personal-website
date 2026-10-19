@@ -173,12 +173,31 @@ function parseHtml(html) {
   return root;
 }
 
-// tags that run script or load another page, which no post on this site needs. the tag may be cut off, since a block
-// kept as HTML would let the page's own markup after it close the tag
-const activeTag =
-  /<\/?(script|iframe|frame|frameset|object|embed|applet)(?![a-z0-9-])/i;
-const attributePattern =
-  /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>`=]+)))?/g;
+// tags that run script, load another page, or send the visitor or a form to one, which no post on this site needs
+const activeTags = new Set([
+  "script",
+  "iframe",
+  "frame",
+  "frameset",
+  "object",
+  "embed",
+  "applet",
+  "base",
+  "meta",
+  "form",
+  "animate",
+  "set",
+]);
+// a browser reads what's inside these as text up to their closing tag, while the importer would read tags in it
+const textTags = new Set([
+  "style",
+  "textarea",
+  "title",
+  "xmp",
+  "noembed",
+  "noframes",
+  "noscript",
+]);
 const urlEntities = new Map([
   ["tab", "\t"],
   ["newline", "\n"],
@@ -202,18 +221,114 @@ function urlText(value) {
     .replace(/[\u0000-\u0020]/g, "");
 }
 
-// what in a post's html could run script on the site, or null. the site has no content security policy to stop it
+const scriptUrl = /^(?:javascript|vbscript):/i;
+
+// a tag read the way a browser's tokenizer reads it, from its name on. its end is -1 when it never closes, since a
+// block kept as HTML would let the page's own markup after it close the tag
+function readTag(html, from) {
+  let at = from;
+  const skipUntil = (stop) => {
+    while (at < html.length && !stop.test(html[at])) at++;
+  };
+  skipUntil(/[\t\n\f\r />]/);
+  const name = html.slice(from, at);
+  const attributes = [];
+  while (at < html.length) {
+    if (html[at] === ">") return { name, attributes, end: at + 1 };
+    if (/[\t\n\f\r /]/.test(html[at])) {
+      at++;
+      continue;
+    }
+    const nameStart = at;
+    at++;
+    skipUntil(/[\t\n\f\r />=]/);
+    const attribute = {
+      name: html.slice(nameStart, at),
+      value: "",
+      quoted: false,
+    };
+    attributes.push(attribute);
+    skipUntil(/[^\t\n\f\r ]/);
+    if (html[at] !== "=") continue;
+    at++;
+    skipUntil(/[^\t\n\f\r ]/);
+    const quote = html[at];
+    if (quote === '"' || quote === "'") {
+      const close = html.indexOf(quote, at + 1);
+      const valueEnd = close === -1 ? html.length : close;
+      attribute.value = html.slice(at + 1, valueEnd);
+      attribute.quoted = true;
+      at = valueEnd + 1;
+      continue;
+    }
+    const valueStart = at;
+    skipUntil(/[\t\n\f\r >]/);
+    attribute.value = html.slice(valueStart, at);
+  }
+  return { name, attributes, end: -1 };
+}
+
+// what in a post's html could run script on the site, or null. the site has no content security policy to stop it.
+// markup a browser could end somewhere else than the importer's parser does is refused too, since a block kept as
+// HTML has to end where the parser thinks it does
 function activeHtml(html) {
-  const tag = activeTag.exec(html);
-  if (tag) return `<${tag[1].toLowerCase()}>`;
-  for (const match of html.matchAll(tokenPattern)) {
-    if (match[0].startsWith("<!--") || match[1] === "/") continue;
-    const attributes = match[0].slice(match[2].length + 1, -1);
-    for (const [, name, ...values] of attributes.matchAll(attributePattern)) {
-      if (/^on/i.test(name)) return `an ${name.toLowerCase()} handler`;
-      const value = values.find((part) => part !== undefined) ?? "";
-      if (/^(?:javascript|vbscript):/i.test(urlText(value)))
-        return "a script URL";
+  let at = 0;
+  while ((at = html.indexOf("<", at)) !== -1) {
+    if (html.startsWith("<!--", at)) {
+      if (html.startsWith("<!-->", at) || html.startsWith("<!--->", at)) {
+        return "a comment a browser would end early";
+      }
+      const close = html.indexOf("-->", at + 4);
+      if (close === -1) return "a comment that never ends";
+      const body = html.slice(at + 4, close);
+      if (body.includes("<") || body.includes("--!>")) {
+        return "a comment a browser would end early";
+      }
+      at = close + 3;
+      continue;
+    }
+    const closing = html[at + 1] === "/";
+    const nameAt = closing ? at + 2 : at + 1;
+    if (!/[a-z]/i.test(html[nameAt] ?? "")) {
+      if (/^<(?:[!?]|\/[^>])/.test(html.slice(at, at + 3))) {
+        return "markup a browser reads as a comment";
+      }
+      at++;
+      continue;
+    }
+    const tag = readTag(html, nameAt);
+    const name = tag.name.toLowerCase();
+    if (activeTags.has(name)) return `<${name}>`;
+    const bareParts = [
+      tag.name,
+      ...tag.attributes.map((attribute) => attribute.name),
+      ...tag.attributes
+        .filter((attribute) => !attribute.quoted)
+        .map((attribute) => attribute.value),
+    ];
+    if (bareParts.some((part) => /["']/.test(part))) {
+      return "a quote outside an attribute's quotes";
+    }
+    if (!closing) {
+      if (scriptUrl.test(urlText(tag.name))) return "a script URL";
+      for (const attribute of tag.attributes) {
+        const attributeName = attribute.name.toLowerCase();
+        if (attributeName.startsWith("on")) {
+          return `an ${attributeName} handler`;
+        }
+        if (attributeName === "formaction") return "a formaction attribute";
+        const text = urlText(attribute.value);
+        const parts = attributeName === "values" ? text.split(";") : [text];
+        if (parts.some((part) => scriptUrl.test(part))) return "a script URL";
+      }
+    }
+    if (tag.end === -1) return "a tag that never closes";
+    at = tag.end;
+    if (closing || !textTags.has(name)) continue;
+    const next = html.indexOf("<", at);
+    const closer = new RegExp(`^</${name}[\\t\\n\\f\\r />]`, "i");
+    if (next !== -1 && !closer.test(html.slice(next, next + name.length + 3))) {
+      return `<${name}> holding markup`;
     }
   }
   return null;

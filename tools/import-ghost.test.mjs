@@ -328,6 +328,47 @@ test("html that could run script on the site stops the import with nothing writt
   assert.equal(existsSync(join(outDir, "blog")), false);
 });
 
+test("tags that never close, comments a browser ends early, and pages that redirect or post elsewhere stop the import", () => {
+  const active = [
+    "<!--><img src=x onerror=alert(1)>-->",
+    "<!---><img src=x onerror=alert(1)>-->",
+    "<!-- a --!><img src=x onerror=alert(1)>-->",
+    "<!-- <img src=x onerror=alert(1)> -->",
+    "<p>a</p><!-- never ends",
+    '<div><img src=x onerror="alert(1)"',
+    "<div></span><img src=x onerror=alert(1)",
+    '<p>a</p><a href="javascript:alert(1)"',
+    "<p>a</p><img src=x",
+    '<base href="https://x.test/">',
+    '<meta http-equiv="refresh" content="0;url=https://x.test">',
+    '<form action="https://x.test"><p>a</p></form>',
+    '<svg><animate attributeName="href" values="https://x.test"/></svg>',
+    '<svg><set attributeName="href" to="https://x.test"/></svg>',
+    '<p><button formaction="https://x.test">x</button></p>',
+    '<svg><animateTransform attributeName="transform" values="0;javascript:alert(1)"/></svg>',
+    '<style><a title="</style><img src=x onerror=alert(1)>"></style>',
+    '<div a"b=" c></div><p>say "hi</p><ul title=\'" onmouseover=alert(1) \'></ul>',
+    '<svg><![CDATA[ > <a title=" ]]><img src=x onerror=alert(1)>"></a></svg>',
+    '<div><!x <p title="><img src=x onerror=alert(1)>">b</p></div>',
+    "<span><javascript:alert(1)></span>",
+  ];
+  for (const html of active) {
+    assert.throws(() => htmlToMarkdown(html), /could run script/, html);
+  }
+});
+
+test("comments, svg styles, quotes in values, and comparisons come through", () => {
+  const svg =
+    '<svg viewBox="0 0 1 1"><style>.a{fill:red}</style><metadata>m</metadata><path d="M0 0"/></svg>';
+  assert.equal(htmlToMarkdown(svg), svg);
+  assert.equal(htmlToMarkdown("<!----><p>x</p>"), "<!---->\n\nx");
+  assert.equal(htmlToMarkdown("<p>1 < 2 and 3 > 2</p>"), "1 \\< 2 and 3 \\> 2");
+  const image = '<img src="a.png" alt="it\'s">';
+  assert.equal(htmlToMarkdown(`<p>${image}</p>`), image);
+  const link = '<a href="https://x.test/a;b" title="values">x</a>';
+  assert.equal(htmlToMarkdown(`<p>${link}</p>`), link);
+});
+
 test("text and code that only name script, handlers, or javascript: come through", () => {
   assert.equal(
     htmlToMarkdown(
