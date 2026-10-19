@@ -33,6 +33,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
         id: install
         if: ${{ !cancelled() }}
+      # the ghost import's contact sheet test renders in chromium, and the runner has no playwright browsers
+      - run: pnpm -C apps/web exec playwright install --with-deps --only-shell chromium
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       # the privacy and tools suites, then the web app's format, lint, types, and unit tests
       - run: pnpm check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
