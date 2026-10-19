@@ -32,7 +32,7 @@ if (typeof mock.module !== "function") {
     const { state, pose } = await import("./state.js");
     const { cancelAll, runTweens } = await import("./tween.js");
     const { openPhone, closePhone } = await import("./fold.js");
-    const { openFromCover, tapApp, tapFromCover } = await import("./appWindow.js");
+    const { openFromCover, tapApp, tapFromCover, windowLook, APP_BACKGROUND } = await import("./appWindow.js");
     const { setFail } = await import("./lifetime.js");
 
     const REST = { x: 0, y: 0, z: -40, rx: 0, ry: 0, rz: 0 };
@@ -152,5 +152,32 @@ if (typeof mock.module !== "function") {
         runTweens(performance.now() + 5000);
         await settle();
         assert.deepEqual(failures, [sentinel]);
+    });
+
+    // the window grown out of a widget showed the app's icon color as it shrank and faded, an orange flash for
+    // Projects, and it was gone while still a few times the widget's size
+    const PROJECTS = { name: "Projects", color: "#e07a5f" };
+    const GLASS = "#4a5a70";
+
+    test("a window out of an icon starts in the icon's color and covers it the whole way", () => {
+        assert.deepEqual(windowLook(0, PROJECTS, false, GLASS), { background: PROJECTS.color, opacity: 1 });
+        assert.deepEqual(windowLook(1, PROJECTS, false, GLASS), { background: APP_BACKGROUND, opacity: 1 });
+    });
+
+    test("a window out of a widget never takes the icon's color, and turns the widget's glass color as it shrinks", () => {
+        for (let k = 0; k <= 1; k += 0.05) {
+            assert.notEqual(windowLook(k, PROJECTS, true, GLASS).background, PROJECTS.color, `at ${k}`);
+        }
+        assert.equal(windowLook(0, PROJECTS, true, GLASS).background, GLASS);
+        assert.equal(windowLook(1, PROJECTS, true, GLASS).background, APP_BACKGROUND);
+        assert.equal(windowLook(0, PROJECTS, true, null).background, APP_BACKGROUND);
+    });
+
+    test("a window out of a widget stays solid until it's about the widget's size, then fades into it", () => {
+        assert.equal(windowLook(0.3, PROJECTS, true, GLASS).opacity, 1);
+        assert.equal(windowLook(0.12, PROJECTS, true, GLASS).opacity, 1);
+        assert.equal(windowLook(0, PROJECTS, true, GLASS).opacity, 0);
+        const mid = windowLook(0.06, PROJECTS, true, GLASS).opacity;
+        assert.ok(mid > 0 && mid < 1, `got ${mid}`);
     });
 }

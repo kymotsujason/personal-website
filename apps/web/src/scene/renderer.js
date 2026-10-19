@@ -4,7 +4,7 @@ import { createBackdrop } from "./backdrop.js";
 import { createFocusBlur } from "./focus.js";
 import { conditionFor, sunHours, moonHours } from "./weather.js";
 import { sunPlace, moonPlace, rimAngle } from "./skyPath.js";
-import { skyTint } from "./tint.js";
+import { skyTint, glassColor } from "./tint.js";
 import { daylight, hourNow } from "./daylight.js";
 import { state, FOV } from "./state.js";
 import { guard } from "./lifetime.js";
@@ -143,8 +143,10 @@ export const applyTint = () => {
     if (!state.wallpaper || !state.screen) {
         return;
     }
-    const [r, g, b] = skyTint(state.wallpaper.measure());
+    const probe = state.wallpaper.measure();
+    const [r, g, b] = skyTint(probe);
     const color = new THREE.Color(r, g, b);
+    state.widgetGlass = "#" + new THREE.Color().setRGB(...glassColor(probe, [r, g, b]), THREE.SRGBColorSpace).getHexString(THREE.SRGBColorSpace);
     state.screen.composite.setTint(color);
     state.cover.composite.setTint(color);
     const byte = (v, scale) => Math.round(v * scale);

@@ -148,6 +148,23 @@ const mixColor = (a, b, t) => {
     return "#" + ca.lerp(new THREE.Color(b), t).getHexString();
 };
 
+// how far grown (look) a window out of a widget is when it's fully over the widget. it fades between the widget and
+// here, while it's close to the widget's own size, so it turns into the widget in place instead of thinning out mid
+// flight while it's still a few times bigger
+const WIDGET_FADE = 0.12;
+
+// the window's color and how much of it shows over the home screen at look k. out of an icon it starts in the icon's
+// color and covers the icon from the start. out of a widget it starts in the widget's glass color (glass, or the apps'
+// background before the sky is first measured) and fades in over the widget as it grows, the way ios opens one, and
+// back into it
+export const windowLook = (k, app, fromWidget, glass) => {
+    const tone = THREE.MathUtils.smoothstep(k, 0.15, 0.6);
+    if (fromWidget) {
+        return { background: mixColor(glass || APP_BACKGROUND, APP_BACKGROUND, tone), opacity: THREE.MathUtils.smoothstep(k, 0, WIDGET_FADE) };
+    }
+    return { background: mixColor(app.color, APP_BACKGROUND, tone), opacity: 1 };
+};
+
 const lerpRect = (a, b, t) => ({
     x0: a.x0 + (b.x0 - a.x0) * t,
     y0: a.y0 + (b.y0 - a.y0) * t,
@@ -181,8 +198,9 @@ const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     surface.corners = [at(rect.x0, rect.y0), at(rect.x1, rect.y0), at(rect.x0, rect.y1), at(rect.x1, rect.y1)];
     const { appW, appH } = state.poses;
     const elementPxPerScreenPx = appW / (rect.x1 - rect.x0);
+    const looks = windowLook(k, app, state.openFromWidget, state.widgetGlass);
     state.appEl.style.borderRadius = `${radius * elementPxPerScreenPx}px`;
-    state.appEl.style.background = mixColor(app.color, APP_BACKGROUND, THREE.MathUtils.smoothstep(k, 0.15, 0.6));
+    state.appEl.style.background = looks.background;
     // #page is laid out at the window's size and centered in the app window, as if it were inside it, so it takes the
     // window's corners in its own px. the canvas over it is opaque outside the window's rounded cutout, which clips it
     // the way the app window clipped the spike's copy. a css clip-path here made the first frame of a close take 25 s
@@ -205,9 +223,7 @@ const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     appHole.visible = true;
     appHole.material.uniforms.rect.value.set(hole.x0, hole.y0, hole.x1, hole.y1);
     appHole.material.uniforms.radius.value = radius;
-    // grown out of a widget, the window fades in over it as it grows, the way ios opens one, and back into it on the
-    // way home. out of an icon it covers the icon from the start
-    appHole.material.uniforms.opacity.value = state.openFromWidget ? THREE.MathUtils.smoothstep(k, 0.2, 0.6) : 1;
+    appHole.material.uniforms.opacity.value = looks.opacity;
     // while small the window still looks like the icon, so its letter rides along and fades as the app appears
     const splash = state.appSplash;
     splash.textContent = app.glyph;

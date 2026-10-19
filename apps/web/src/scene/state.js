@@ -69,6 +69,8 @@ export const state = {
     openIcon: null,
     // the open app grew out of a widget instead of its icon, so it fades in over it and back into it
     openFromWidget: false,
+    // about the widgets' glass color, as a css color, measured with the sky's tint (see tint.js glassColor)
+    widgetGlass: null,
     appEl: null,
     appSplash: null,
     // #page shown as a plain flat page at full zoom, with no transform, in place of pinned onto the app window
