@@ -50,6 +50,14 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     let level = savedLevel(storage);
     const loudness = (id = ids[index]) => loudnessAt(id, level, volumes);
 
+    // the list position of the video youtube is on. youtube's own playlist position was one ahead of its video right
+    // after a cue, so the video it names wins, and the position is only for a video it doesn't name
+    const playingIndex = () => {
+        const id = player.getVideoData ? player.getVideoData()?.video_id : null;
+        const i = id ? ids.indexOf(id) : -1;
+        return i >= 0 ? i : player.getPlaylistIndex();
+    };
+
     const state = () => ({ ready: player !== null, ids, index, playing, tracks, current: tracks[index] ?? null, volume: player ? player.getVolume() : null, level, failed: ids.length > 0 && failures >= ids.length, unavailable });
     const changed = () => onChange(state());
 
@@ -195,7 +203,7 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
         } else if (event.data === PAUSED && visible()) {
             storage.setItem("music", "off");
         }
-        const i = player.getPlaylistIndex();
+        const i = playingIndex();
         if (i >= 0 && i !== index) {
             index = i;
             if (!fade) {
@@ -269,7 +277,7 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
                 player.seekTo(0, true);
                 return;
             }
-            const i = Math.max(player.getPlaylistIndex(), 0);
+            const i = Math.max(playingIndex(), 0);
             player.playVideoAt((i - 1 + ids.length) % ids.length);
         },
         playAt: (i) => {

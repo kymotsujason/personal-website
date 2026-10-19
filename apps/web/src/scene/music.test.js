@@ -22,12 +22,16 @@ const fakePlayer = () => {
     let volume = 100;
     let time = 30;
     let playerState = -1;
+    // youtube's playlist position, when it disagrees with the video it's on (see misreport)
+    let reported = null;
+    let videoId = null;
     const player = {
         cuePlaylist: (ids) => {
             playerState = CUED;
             calls.push(["cuePlaylist", ids]);
         },
-        getPlaylistIndex: () => index,
+        getPlaylistIndex: () => reported ?? index,
+        getVideoData: () => ({ video_id: videoId ?? IDS[index] }),
         getPlayerState: () => playerState,
         setVolume: (v) => {
             volume = v;
@@ -62,8 +66,16 @@ const fakePlayer = () => {
     const setState = (data) => {
         playerState = data;
     };
+    // youtube reports playlist position i while it's still on the same video, as the real player did right after a cue
+    const misreport = (i) => {
+        reported = i;
+    };
+    // the video youtube says it's on, or "" for one it doesn't name
+    const videoIs = (id) => {
+        videoId = id;
+    };
     const started = () => calls.some(([name]) => name === "playVideo" || name === "playVideoAt");
-    return { calls, load, fire, moveTo, setTime, setState, started, loads: () => loads, volume: () => volume };
+    return { calls, load, fire, moveTo, setTime, setState, misreport, videoIs, started, loads: () => loads, volume: () => volume };
 };
 
 const memory = () => {
@@ -576,4 +588,40 @@ test("a pause while the page is hidden keeps the saved preference, and the site'
     assert.equal(storage.getItem("music"), "on");
     music.pause();
     assert.equal(storage.getItem("music"), "off");
+});
+
+// youtube's player said playlist position 1 right after cueing while it was on the first video, so the card showed the
+// second song's title and art over the first song's music
+test("the card follows the video youtube is on, even when its playlist position is off", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    yt.misreport(1);
+    yt.fire("onStateChange", CUED);
+    assert.equal(music.state().index, 0);
+    assert.equal(music.state().current.id, IDS[0]);
+    yt.moveTo(3);
+    yt.misreport(4);
+    yt.fire("onStateChange", 1);
+    assert.equal(music.state().current.id, IDS[3]);
+});
+
+test("previous on the first song plays the last one, even when youtube reports the position off", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    yt.misreport(1);
+    yt.setTime(0);
+    music.previous();
+    assert.deepEqual(yt.calls.at(-1), ["playVideoAt", IDS.length - 1]);
+});
+
+test("a video youtube doesn't name falls back on its playlist position", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    yt.videoIs("");
+    yt.moveTo(2);
+    yt.fire("onStateChange", 1);
+    assert.equal(music.state().index, 2);
 });
