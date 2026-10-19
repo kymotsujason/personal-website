@@ -120,11 +120,11 @@ export function checkDist(dist) {
       text: readFileSync(file, "utf8"),
     }));
   for (const { file, name, text } of files) {
-    if (file.endsWith(".html")) {
+    if (/\.html$/i.test(file)) {
       for (const tag of bodyScripts(text)) {
         problems.push(`${name} has ${tag} in the body outside #page`);
       }
-    } else if (file.endsWith(".js")) {
+    } else if (/\.m?js$/i.test(file)) {
       const chunk = basename(file);
       // only a runtime chunk's exemption turns on whether anything names it, so only that one searches the rest
       const referenced =

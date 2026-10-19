@@ -149,3 +149,17 @@ test("the check reads only the files that can refer to a script as text", (t) =>
   );
   assert.ok(!read.some((file) => /\.(glb|jpg)$/.test(file)), read.join("\n"));
 });
+
+test("a .mjs file or a capitalized name in the dist gets the same checks", () => {
+  const dist = distWith({
+    "index.html": page("", '<script src="/_astro/site.mjs"></script>'),
+    "_astro/site.mjs": 'document.createElement("style")',
+    "_astro/LOUD.JS": 'document.createElement("style")',
+    "OTHER.HTML": page('<script src="/_astro/LOUD.JS"></script>'),
+  });
+  assert.deepEqual(checkDist(dist).sort(), [
+    'OTHER.HTML has <script src="/_astro/LOUD.JS"> in the body outside #page',
+    `${join("_astro", "LOUD.JS")} adds css with createElement("style")`,
+    `${join("_astro", "site.mjs")} adds css with createElement("style")`,
+  ]);
+});
