@@ -10,7 +10,7 @@ import { createHands, handMatrix, LIMITS } from "./hands.js";
 import { state, pose, settings, DUO, FOV, HOME_FILL } from "./state.js";
 import { tween, ease } from "./tween.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
-import { applyWallpaperMotion } from "./quality.js";
+import { applyWallpaperMotion, reducedMotion } from "./quality.js";
 import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus } from "./home.js";
 import { APP_BACKGROUND, pageEl, tapApp, tapFromCover, setAppVisible } from "./appWindow.js";
 import { sceneFetch, signal, failScene } from "./lifetime.js";
@@ -334,7 +334,8 @@ const buildCharger = (root, flap) => {
             const joints = Object.fromEntries(Object.keys(LIMITS).map((n) => [n, carried[n]]));
             return { position, quaternion, joints, release: { ...joints, ...grip.release } };
         },
-        onChange: () => refreshStatus()
+        onChange: () => refreshStatus(),
+        still: () => reducedMotion.matches
     });
     charger.snap(statusBar.status.charging);
     return charger;

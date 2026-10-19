@@ -166,7 +166,8 @@ export const swapSchedule = (t, swap, run) => {
 };
 let TO_OPEN = viaThumb(OPEN);
 
-export const createCharger = ({ root, frame, port, getHands, getBones, getSupport = () => null, getPinch = () => null, onChange = () => {} }) => {
+// still says whether motion is reduced, which plugs and unplugs at once with no reach for the cable
+export const createCharger = ({ root, frame, port, getHands, getBones, getSupport = () => null, getPinch = () => null, onChange = () => {}, still = () => false }) => {
     const white = new THREE.MeshPhysicalMaterial({ color: 0xf5f5f3, roughness: 0.55, clearcoat: 0.15 });
     const metal = new THREE.MeshStandardMaterial({ color: 0xc4c7cc, metalness: 1, roughness: 0.28 });
     const opening = new THREE.MeshBasicMaterial({ color: 0x141414 });
@@ -414,7 +415,7 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
 
     const start = (plugIn) => {
         const hands = getHands();
-        if (!hands || !hands.setOverride || !getBones().J_Left_HandThumb4) {
+        if (still() || !hands || !hands.setOverride || !getBones().J_Left_HandThumb4) {
             snap(plugIn);
             return;
         }
@@ -442,6 +443,10 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
     // how far the left hand is off its grip, 0 to 1, so the phone can wobble more while one hand holds it
     let handOff = 0;
     const step = (dtIn) => {
+        // motion reduced part way through a run finishes it at once
+        if (job && !hold && still()) {
+            snap(job.plugIn);
+        }
         const dt = hold ? 0 : dtIn;
         const hands = getHands();
         if (!job || !hands) {
