@@ -53,6 +53,38 @@ export const reportPageFlat = () => {
     pageFlatListener(reportedFlat);
 };
 
+// the home screen's html sits under #page in tab order but is invisible, so while an app covers it the loop makes it
+// inert, and the focus it had is gone. focus goes to the page's heading when the app is up at full zoom, and back to
+// the app's icon once the home screen is uncovered again
+let wasFlat = false;
+let wasCovered = false;
+const focusPage = () => {
+    const target = pageEl.querySelector("h1") || pageEl;
+    if (!target.hasAttribute("tabindex")) {
+        target.tabIndex = -1;
+    }
+    target.focus({ preventScroll: true });
+};
+const focusIcon = () => {
+    const name = state.openApp && state.openApp.name;
+    const button = [...state.screen.homeEl.querySelectorAll(".app-icon")].find((b) => b.textContent.trim().endsWith(name));
+    if (button) {
+        button.focus({ preventScroll: true });
+    }
+};
+export const syncAppFocus = (covered) => {
+    const active = document.activeElement;
+    const lost = !active || active === document.body;
+    if (state.pageFlat && !wasFlat && lost) {
+        focusPage();
+    }
+    if (!covered && wasCovered && state.screen && (lost || pageEl.contains(active))) {
+        focusIcon();
+    }
+    wasFlat = state.pageFlat;
+    wasCovered = covered;
+};
+
 // a tap on an icon or a widget goes to the app's page, and the open follows. the spike ignored taps while the phone
 // moved, which still holds except in the intro, where the app opens once it's over
 export const tapApp = (app, { from = null, path = app.path } = {}) => {

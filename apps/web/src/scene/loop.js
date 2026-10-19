@@ -6,7 +6,7 @@ import { renderer, scene, camera, backdrop, focusBlur } from "./renderer.js";
 import { frameTimes, stepQuality, reducedMotion, laterLevel } from "./quality.js";
 import { homeCache, refreshStatus } from "./home.js";
 import { centerComp, setFold, handFold, placeKeys, handKeys } from "./device.js";
-import { APP_BACKGROUND, reportPageFlat } from "./appWindow.js";
+import { APP_BACKGROUND, reportPageFlat, syncAppFocus } from "./appWindow.js";
 import { phoneEdges } from "./fold.js";
 import { avoid } from "./look.js";
 import { failScene, guard } from "./lifetime.js";
@@ -41,6 +41,12 @@ const setShown = (surface, shown) => {
     if (surface.shown !== shown) {
         surface.shown = shown;
         surface.el.style.visibility = shown ? "visible" : "hidden";
+    }
+};
+
+const setInert = (surface, inert) => {
+    if (surface.el.inert !== inert) {
+        surface.el.inert = inert;
     }
 };
 
@@ -398,6 +404,12 @@ const frame = (now) => {
     }
     pin(s.cover, state.phone === "closed" && !state.busy);
     reportPageFlat();
+    // an app, flat or moving, covers the home screen, whose invisible controls would otherwise stay in the tab order.
+    // a face that isn't showing is left out of it too
+    const homeCovered = state.appVisible || state.pageFlat || state.pageFade !== null;
+    setInert(s.home, homeCovered || !s.home.shown);
+    setInert(s.cover, !s.cover.shown);
+    syncAppFocus(homeCovered);
     const closedNow = state.phone === "closed" && !state.busy;
     if (closedNow !== document.body.classList.contains("closed")) {
         document.body.classList.toggle("closed", closedNow);

@@ -94,13 +94,30 @@ export const showMusic = () => {
     state.screensChanged = true;
 };
 
-// a div or span acting as a button answers Enter and Space with the click it would get from a tap
+// a div or span acting as a button answers Enter and Space with the click it would get from a tap. like a button, Enter
+// clicks on keydown and Space on keyup, and a held key doesn't repeat the click
 const pressOnKey = (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.click();
+    if (event.key !== "Enter" && event.key !== " ") {
+        return;
     }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat || (event.key === " ") !== (event.type === "keyup")) {
+        return;
+    }
+    event.currentTarget.click();
+};
+
+const listenForPress = (el, accept = () => true) => {
+    const press = (event) => accept(event) && pressOnKey(event);
+    el.addEventListener("keydown", press);
+    el.addEventListener("keyup", press);
+};
+
+// the time as the slider reads it aloud, as 1:05 of 3:20
+const clock = (seconds) => {
+    const s = Math.max(Math.floor(seconds), 0);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
 export const buildWidgets = (homeEl) => {
@@ -111,7 +128,7 @@ export const buildWidgets = (homeEl) => {
         <div class="widget small tappable about-card" data-action="about" role="button" tabindex="0"><img class="avatar" src="/ice.png" alt=""><span class="wt w-big">Jason</span><span class="wt w-line fit">Just another developer =P</span></div>
         <div class="widget small tappable" data-action="project" role="button" tabindex="0"><span class="wt w-title">LATEST PROJECT</span><span class="wt w-big wrap"></span></div>
         <div class="widget wide tappable" data-action="github" role="button" tabindex="0"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></div>
-        <div class="widget wide tappable music-card" data-action="music" role="button" tabindex="0"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span></div></div></div>`;
+        <div class="widget wide tappable music-card" data-action="music"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span><span class="ctl" data-control="open" data-icon="open" role="button" tabindex="0" aria-label="Open Music"></span></div></div></div>`;
     widgets.querySelector('[data-action="project"] .w-big').textContent = latest.title;
     widgets.querySelector("img.avatar").addEventListener("load", guard(() => {
         state.screensChanged = true;
@@ -128,18 +145,20 @@ export const buildWidgets = (homeEl) => {
     };
     widgets.querySelectorAll("[data-action]").forEach((el) => {
         el.addEventListener("click", guard(() => actions[el.dataset.action](el)));
-        // the card holds the controls, so only a key pressed on the card itself opens its app
-        el.addEventListener("keydown", (event) => event.target === el && pressOnKey(event));
+        // the card holds the controls, so only a key pressed on the widget itself opens its app
+        listenForPress(el, (event) => event.target === el);
     });
-    // the card's play and next buttons act on their own, without opening the music app under them
+    // the card's buttons act on their own, without opening the music app under them
     widgets.querySelectorAll("[data-control]").forEach((el) => {
-        el.addEventListener("keydown", pressOnKey);
+        listenForPress(el);
         el.addEventListener("click", guard((event) => {
             event.stopPropagation();
             if (el.dataset.control === "toggle") {
                 music.toggle();
             } else if (el.dataset.control === "previous") {
                 music.previous();
+            } else if (el.dataset.control === "open") {
+                actions.music(el);
             } else {
                 music.next();
             }
@@ -185,12 +204,23 @@ export const buildWidgets = (homeEl) => {
     bar.addEventListener("click", (event) => event.stopPropagation());
     bar.addEventListener("keydown", guard((event) => {
         const { duration, at } = music.position();
-        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-        if (!step || !duration) {
+        if (!duration) {
+            return;
+        }
+        // a share of the track for each key, or null for a key the bar doesn't answer
+        const to = {
+            ArrowRight: at + 5 / duration,
+            ArrowLeft: at - 5 / duration,
+            PageUp: at + 0.1,
+            PageDown: at - 0.1,
+            Home: 0,
+            End: 1
+        }[event.key];
+        if (to === undefined) {
             return;
         }
         event.preventDefault();
-        music.seek(THREE.MathUtils.clamp(at + (step * 5) / duration, 0, 1));
+        music.seek(THREE.MathUtils.clamp(to, 0, 1));
     }));
     return widgets;
 };
@@ -219,6 +249,7 @@ const showPosition = () => {
     }
     shownPosition = key;
     bar.setAttribute("aria-valuenow", String(Math.round(shown * 100)));
+    bar.setAttribute("aria-valuetext", `${clock(scrub ? shown * duration : time)} of ${clock(duration)}`);
     Object.assign(bar.dataset, { at: shown, time: scrub ? shown * duration : time, duration, dragging: scrub && scrub.until === Infinity ? "true" : "false" });
     refreshStatus();
 };
@@ -326,7 +357,7 @@ export const buildHomeContent = (onTap) => {
     indicators.setAttribute("role", "button");
     indicators.tabIndex = 0;
     indicators.setAttribute("aria-label", "Show ping");
-    indicators.addEventListener("keydown", pressOnKey);
+    listenForPress(indicators);
     indicators.addEventListener("click", guard(() => {
         statusBar.pingNow().then(guard(() => {
             showPing = performance.now() + 2500;

@@ -189,7 +189,7 @@ const drawText = (ctx, el, homeEl) => {
     ctx.restore();
 };
 
-// the music card's buttons as shapes: play, pause, and skip to the next or previous track
+// the music card's buttons as shapes: play, pause, skip to the next or previous track, and open the music app
 const drawControl = (ctx, box, icon) => {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
@@ -212,6 +212,14 @@ const drawControl = (ctx, box, icon) => {
         ctx.lineTo(cx - s, cy + s);
         ctx.closePath();
         ctx.rect(cx + s * 0.5, cy - s, s * 0.4, s * 2);
+    } else if (icon === "open") {
+        ctx.moveTo(cx - s * 0.2, cy - s);
+        ctx.lineTo(cx + s * 0.8, cy);
+        ctx.lineTo(cx - s * 0.2, cy + s);
+        ctx.lineTo(cx - s * 0.5, cy + s * 0.7);
+        ctx.lineTo(cx + s * 0.2, cy);
+        ctx.lineTo(cx - s * 0.5, cy - s * 0.7);
+        ctx.closePath();
     } else {
         ctx.moveTo(cx - s * 0.7, cy - s);
         ctx.lineTo(cx + s, cy);

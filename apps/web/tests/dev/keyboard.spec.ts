@@ -4,7 +4,7 @@ import { stubHome } from "../stubHome";
 // youtube's iframe api, standing in: one player per page load, which makes an iframe where youtube's would and
 // counts what it's asked to do
 const FAKE_YOUTUBE = `
-window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0 };
+window.__yt = { players: 0, plays: 0, pauses: 0, nexts: 0, seeks: [] };
 window.YT = {
   Player: class {
     constructor(host, options) {
@@ -38,7 +38,7 @@ window.YT = {
     nextVideo() { window.__yt.nexts += 1; this.index = (this.index + 1) % 3; }
     getCurrentTime() { return 0; }
     getDuration() { return 200; }
-    seekTo() {}
+    seekTo(t) { window.__yt.seeks.push(t); }
   },
 };
 window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady();
@@ -320,6 +320,7 @@ test.describe("keyboard use of the 3D screens", () => {
       ["button", "Previous", "0"],
       ["button", "Play", "0"],
       ["button", "Next", "0"],
+      ["button", "Open Music", "0"],
     ]);
     await tabTo(page, '#css-layer .ctl[data-control="toggle"]');
     await page.keyboard.press("Space");
@@ -327,6 +328,11 @@ test.describe("keyboard use of the 3D screens", () => {
     expect(
       await page.evaluate(() => (window as any).__yt.plays),
     ).toBeGreaterThan(0);
+    expect(
+      await page.evaluate(() =>
+        document.activeElement!.getAttribute("aria-label"),
+      ),
+    ).toBe("Pause");
     expect(await phone(page)).toMatchObject({ zoomed: false });
   });
 
@@ -459,5 +465,154 @@ test.describe("keyboard use of the 3D screens", () => {
     expect(flat.filter((tag) => !tag.includes('aria-hidden="true"'))).toEqual(
       [],
     );
+  });
+
+  test("an open app takes the home screen out of the tab order, focus moves into the page, and closing puts it back on the icon", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await tabTo(page, "#css-layer .app-icon");
+    const name = await page.evaluate(() =>
+      document.activeElement!.lastElementChild!.textContent!.trim(),
+    );
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/" + name.toLowerCase(), name);
+    await page.clock.runFor(500);
+    const open = await page.evaluate(() => ({
+      inert: (
+        document.querySelector(
+          "#css-layer .screen.hit:not(.cover-screen)",
+        ) as HTMLElement
+      ).inert,
+      inPage: document.getElementById("page")!.contains(document.activeElement),
+    }));
+    expect(open).toEqual({ inert: true, inPage: true });
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Tab");
+      expect(
+        await page.evaluate(
+          () => !!document.activeElement?.closest("#css-layer"),
+        ),
+      ).toBe(false);
+    }
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement).blur();
+      (window as any).spike.closeApp();
+    });
+    await expect
+      .poll(() => phone(page), { timeout: 15000 })
+      .toMatchObject({ busy: false, zoomed: false, shown: false });
+    await page.clock.runFor(500);
+    expect(
+      await page.evaluate(() => {
+        const a = document.activeElement as HTMLElement;
+        return [
+          a.matches("#css-layer .app-icon"),
+          a.lastElementChild!.textContent!.trim(),
+          (
+            document.querySelector(
+              "#css-layer .screen.hit:not(.cover-screen)",
+            ) as HTMLElement
+          ).inert,
+        ];
+      }),
+    ).toEqual([true, name, false]);
+  });
+
+  test("with reduced motion an open app still takes focus and a close gives it back to the icon", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openHome(page);
+    await tabTo(page, "#css-layer .app-icon");
+    const name = await page.evaluate(() =>
+      document.activeElement!.lastElementChild!.textContent!.trim(),
+    );
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/" + name.toLowerCase(), name);
+    await page.clock.runFor(500);
+    expect(
+      await page.evaluate(() =>
+        document.getElementById("page")!.contains(document.activeElement),
+      ),
+    ).toBe(true);
+    await page.evaluate(() => (window as any).spike.closeApp());
+    await expect
+      .poll(() => phone(page), { timeout: 15000 })
+      .toMatchObject({ busy: false, zoomed: false, shown: false });
+    await page.clock.runFor(500);
+    expect(
+      await page.evaluate(() =>
+        document.activeElement!.matches("#css-layer .app-icon"),
+      ),
+    ).toBe(true);
+  });
+
+  test("the music card holds its controls without being a button itself, and an Open Music control opens the app", async ({
+    page,
+  }) => {
+    await openHome(page);
+    expect(
+      await page.evaluate(() => {
+        const card = document.querySelector("#css-layer .music-card")!;
+        return [card.getAttribute("role"), card.getAttribute("tabindex")];
+      }),
+    ).toEqual([null, null]);
+    await tabTo(page, '#css-layer .ctl[data-control="open"]');
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => phone(page), { timeout: 15000 })
+      .toMatchObject({ busy: false, zoomed: true, app: "Music" });
+  });
+
+  test("holding Enter or Space on a control presses it once", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.clock.runFor(1000);
+    const toggles = () =>
+      page.evaluate(() => {
+        const yt = (window as any).__yt;
+        return yt.plays + yt.pauses;
+      });
+    await tabTo(page, '#css-layer .ctl[data-control="toggle"]');
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.down("Enter");
+    }
+    await page.keyboard.up("Enter");
+    await page.clock.runFor(500);
+    expect(await toggles()).toBe(1);
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.down("Space");
+    }
+    await page.clock.runFor(500);
+    expect(await toggles()).toBe(1);
+    await page.keyboard.up("Space");
+    await page.clock.runFor(500);
+    expect(await toggles()).toBe(2);
+  });
+
+  test("the seek slider reads as a time and answers Home, End, and the page keys", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.clock.runFor(1000);
+    const bar = "#css-layer .m-progress";
+    await tabTo(page, bar);
+    // the first key press loads the player, which has no length until then
+    await page.keyboard.press("ArrowLeft");
+    await page.clock.runFor(1000);
+    expect(
+      await page.evaluate(
+        (s) => document.querySelector(s)!.getAttribute("aria-valuetext"),
+        bar,
+      ),
+    ).toBe("0:00 of 3:20");
+    for (const key of ["ArrowRight", "PageUp", "PageDown", "End", "Home"]) {
+      await page.keyboard.press(key);
+    }
+    expect(await page.evaluate(() => (window as any).__yt.seeks)).toEqual([
+      5, 20, 0, 200, 0,
+    ]);
   });
 });
