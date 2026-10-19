@@ -529,3 +529,17 @@ test("a resume while the music is already playing leaves it playing at its volum
     assert.deepEqual(yt.calls.slice(before), []);
     assert.equal(yt.volume(), BASE_VOLUME);
 });
+
+test("a pause while the page is hidden keeps the saved preference, and the site's own pause still saves off", () => {
+    const yt = fakePlayer();
+    const storage = memory();
+    const music = make(yt, { storage, visible: () => false });
+    ready(music, yt);
+    music.play();
+    yt.fire("onStateChange", 1);
+    yt.fire("onStateChange", 2);
+    assert.equal(music.state().playing, false);
+    assert.equal(storage.getItem("music"), "on");
+    music.pause();
+    assert.equal(storage.getItem("music"), "off");
+});

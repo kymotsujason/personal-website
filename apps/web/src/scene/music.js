@@ -26,7 +26,9 @@ export const volumeFor = (id, volumes = VOLUMES) => volumes[id] ?? BASE_VOLUME;
 // a track plays at its own volume at LEVEL_DEFAULT, scaled up or down from there
 export const loudnessAt = (id, level, volumes = VOLUMES) => Math.min(100, Math.round((volumeFor(id, volumes) * level) / LEVEL_DEFAULT));
 
-export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUMES, onChange = () => {} }) => {
+// visible says whether the page shows, since a pause the browser or the os makes for a hidden page (ios suspends
+// media in the background) isn't the visitor turning the music off
+export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUMES, onChange = () => {}, visible = () => globalThis.document?.visibilityState !== "hidden" }) => {
     const tracks = list.map(({ id, title, channel }) => ({ id, title, channel, art: artFor(id) }));
     const ids = tracks.map((t) => t.id);
     let player = null;
@@ -190,7 +192,7 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
             failures = 0;
             stopStartCheck();
             storage.setItem("music", "on");
-        } else if (event.data === PAUSED) {
+        } else if (event.data === PAUSED && visible()) {
             storage.setItem("music", "off");
         }
         const i = player.getPlaylistIndex();
