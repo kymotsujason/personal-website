@@ -19,6 +19,7 @@ const PAUSED = 2;
 const BUFFERING = 3;
 const ENDED = 0;
 const CUED = 5;
+const UNSTARTED = -1;
 
 export const volumeFor = (id, volumes = VOLUMES) => volumes[id] ?? BASE_VOLUME;
 
@@ -32,6 +33,9 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     let loading = false;
     let index = 0;
     let playing = false;
+    // whether the player has really played since the music last stopped, since a blocked start can go from buffering
+    // back to unstarted without ever playing
+    let played = false;
     let failures = 0;
     // the player's code or youtube's api didn't arrive, so the next press asks again
     let unavailable = false;
@@ -69,12 +73,19 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     };
 
     // the play control shows again, so the next tap plays
-    const blocked = () => {
+    const stopStarting = () => {
         stopFade();
         stopStartCheck();
         playing = false;
-        storage.setItem("music", "off");
+        played = false;
         changed();
+    };
+
+    // only youtube saying so turns the saved preference off, since a start that's just slow looks the same as a
+    // silent block
+    const blocked = () => {
+        stopStarting();
+        storage.setItem("music", "off");
     };
 
     // some browsers block a start without saying so, and the player just stays cued
@@ -83,7 +94,7 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
         startCheck = setTimeout(() => {
             startCheck = null;
             if (player.getPlayerState() === CUED) {
-                blocked();
+                stopStarting();
             }
         }, START_WAIT_MS);
     };
@@ -160,11 +171,17 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
     // a new track starts at its own volume, unless a fade in is still bringing the volume up
     // playing or pausing from youtube's own controls in the music app is remembered the same as from the card
     const onStateChange = (event) => {
-        // buffering is still playing, and an unstarted player keeps what it had
-        if (event.data === PLAYING || event.data === BUFFERING) {
+        // buffering is still playing, and an unstarted player keeps playing only once it has played
+        if (event.data === PLAYING) {
             playing = true;
+            played = true;
+        } else if (event.data === BUFFERING) {
+            playing = true;
+        } else if (event.data === UNSTARTED) {
+            playing = played;
         } else if (event.data === PAUSED || event.data === ENDED || event.data === CUED) {
             playing = false;
+            played = false;
         }
         if (event.data === PLAYING) {
             failures = 0;

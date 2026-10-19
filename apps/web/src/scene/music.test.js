@@ -155,20 +155,23 @@ test("a start the browser blocks leaves the music off, so the next tap plays", (
     assert.equal(storage.getItem("music"), "on");
 });
 
-test("a player still cued 3 s after a play call counts as blocked", () => {
+test("a player still cued 3 s after a play call stops the music for this page, and keeps the saved preference", () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
         for (const start of [(music) => music.play(), (music) => music.playAt(3)]) {
             const yt = fakePlayer();
             const storage = memory();
-            const music = make(yt, { storage });
+            let changes = 0;
+            const music = make(yt, { storage, onChange: () => changes++ });
             ready(music, yt);
             start(music);
             mock.timers.tick(2900);
-            assert.equal(storage.getItem("music"), "on");
+            const before = changes;
             mock.timers.tick(200);
             assert.equal(music.state().playing, false);
-            assert.equal(storage.getItem("music"), "off");
+            assert.ok(changes > before, "the card and the app hear about it");
+            // a slow start isn't a refusal, so a later visit still resumes
+            assert.equal(storage.getItem("music"), "on");
         }
     } finally {
         mock.timers.reset();
@@ -477,6 +480,17 @@ test("a track that is buffering still counts as playing, so a toggle pauses it",
     const before = yt.calls.length;
     music.toggle();
     assert.deepEqual(yt.calls.slice(before), [["pauseVideo"]]);
+});
+
+test("an unstarted player after a start that never played isn't playing", () => {
+    const yt = fakePlayer();
+    const music = make(yt);
+    ready(music, yt);
+    music.play();
+    yt.fire("onStateChange", 3);
+    assert.equal(music.state().playing, true);
+    yt.fire("onStateChange", -1);
+    assert.equal(music.state().playing, false);
 });
 
 test("an unstarted player keeps the playing state it had", () => {
