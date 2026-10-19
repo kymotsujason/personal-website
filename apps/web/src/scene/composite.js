@@ -51,8 +51,10 @@ const fragmentShader = `
     varying vec2 vUv;
 
     // the brightness at which white ink starts to turn dark, and where it's fully dark
-    const float INK_FROM = 0.55;
-    const float INK_TO = 0.72;
+    const float INK_FROM = 0.36;
+    const float INK_TO = 0.46;
+    // the brightest a widget's glass gets (relative luminance), so white text keeps about 3 to 1 on it
+    const float GLASS_CEILING = 0.3;
     const vec3 DARK = vec3(0.07);
 
     float luma(vec3 c) {
@@ -62,6 +64,10 @@ const fragmentShader = `
 
     vec3 toLinear(vec3 c) {
         return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+    }
+
+    vec3 toSrgb(vec3 c) {
+        return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
     }
 
     vec2 skyUvOf(vec2 uv) {
@@ -95,6 +101,7 @@ const fragmentShader = `
 
         float d = 1e5;
         vec4 hit = vec4(0.0);
+        float cardCover = 0.0;
         for (int i = 0; i < ${MAX_CARDS}; i++) {
             if (i >= cardCount) {
                 break;
@@ -116,6 +123,12 @@ const fragmentShader = `
             // the frost lifted toward white, a white with a little of the sky's color in it (tint.js). plain glass, on a
             // slow device, lifts the sky itself a little further instead, with no blur and no lens
             vec3 glass = frosted > 0.5 ? mix(texture2D(frost, skyUvOf(bent)).rgb, tint, 0.14) : mix(back, tint, 0.22);
+            // over a bright cloud, fog, or the sun's glare the glass darkens to a ceiling, as ios darkens its widgets,
+            // instead of going pale under white text
+            float glassLight = luma(glass);
+            if (glassLight > GLASS_CEILING) {
+                glass = toSrgb(toLinear(glass) * (GLASS_CEILING / glassLight));
+            }
 
             float sun = sunUp * smoothstep(-0.05, 0.08, sunAt.y);
             float moon = moonUp * smoothstep(-0.03, 0.05, moonAt.y) * (1.0 - day) * 0.6;
@@ -131,6 +144,7 @@ const fragmentShader = `
             vec3 rim = line * (0.2 * tint + 0.85 * lit + vec3(flash)) + glow * 0.3 * lit;
 
             float cover = clamp(0.5 - d, 0.0, 1.0);
+            cardCover = cover;
             back = mix(back, min(glass + rim, vec3(1.0)), cover);
             behind = mix(behind, glass, cover);
         }
@@ -159,7 +173,9 @@ const fragmentShader = `
             vec3 inked = mix(neutral, c * mix(1.0, 0.35, dark), colored);
             color = inked * inkPx.a + color * (1.0 - inkPx.a);
         }
-        gl_FragColor = vec4(toLinear(color), 1.0);
+        // the alpha is how much bare sky shows here, for the glass to draw the rain and snow over (precipitation.js)
+        float skyShows = (1.0 - front.a) * (1.0 - cardCover) * (1.0 - inkPx.a);
+        gl_FragColor = vec4(toLinear(color), skyShows);
     }
 `;
 

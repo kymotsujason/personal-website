@@ -10,8 +10,11 @@ import { APP_BACKGROUND, reportPageFlat } from "./appWindow.js";
 import { phoneEdges } from "./fold.js";
 import { avoid } from "./look.js";
 import { failScene, guard } from "./lifetime.js";
+import { SHADER_PERIOD } from "./wallpaper.js";
 
 let lastFrame = performance.now();
+// the rain and snow's own clock, which moves every frame unless the sky is held still
+let fallClock = 0;
 let onShown = () => {};
 // set when the scene fails, so no frame after that does any work or asks for another
 let stopped = false;
@@ -315,6 +318,16 @@ const frame = (now) => {
     // of its frames lays both screens out again with their blur and mipmaps (74 times in an intro and 18 in an app
     // opening, measured on a pc). it catches up once they're still. a page opened straight into an app, or a rebuild
     // while one is open, makes a sky that was never drawn, so it's drawn once anyway, or a swipe home shows black
+    // the rain and snow fall every frame on the screens' glass, even while the sky itself waits (precipitation.js)
+    const fall = state.wallpaper.precipitation();
+    if (!state.wallpaper.still()) {
+        fallClock = (fallClock + dt) % SHADER_PERIOD;
+    }
+    state.glass.precipKind.value = fall.kind;
+    state.glass.precipK.value = fall.intensity;
+    state.glass.precipFade.value = fall.fade;
+    state.glass.precipDay.value = fall.day;
+    state.glass.precipTime.value = fallClock;
     const skyDue = (!state.zoomed && !state.busy) || !state.wallpaper.drawn();
     if (skyDue && state.wallpaper.update(now / 1000)) {
         if (state.glassLevel.frosted) {

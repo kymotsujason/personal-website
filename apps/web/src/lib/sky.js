@@ -33,6 +33,7 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 // greyer the more overcast, and a dim blue grey at night, darker in a storm
 const COVER = {
   "partly cloudy": 0.45,
+  fog: 0.35,
   cloudy: 0.85,
   drizzle: 0.75,
   rain: 0.85,
@@ -47,7 +48,8 @@ const CLOUD_TOP = [0.96, 0.97, 0.99];
 const cloudsFor = (scene, intensity, day) => {
   const look = lookFor(scene, intensity);
   const shown = Math.min((COVER[scene] ?? 0) / DRAWN_COVER, 1);
-  const dayLight = 0.97 + (0.8 - 0.97) * look.overcast;
+  // fog's haze is the shader's pale blue grey, not a cloud's white
+  const dayLight = scene === "fog" ? 0.64 : 0.97 + (0.8 - 0.97) * look.overcast;
   const light = (0.33 + (dayLight - 0.33) * day) * (1 - look.dark * 0.55);
   return { shown, light };
 };
@@ -59,10 +61,10 @@ export const skyColors = ({ day, warm, scene, intensity }) => {
   let nightTop = mix([0.05, 0.07, 0.2], [0.08, 0.1, 0.17], look.overcast);
   let nightLow = mix([0.24, 0.18, 0.42], [0.18, 0.19, 0.27], look.overcast);
   if (scene === "fog") {
-    dayTop = [0.86, 0.8, 0.72];
-    dayLow = [0.74, 0.72, 0.68];
-    nightTop = [0.17, 0.16, 0.18];
-    nightLow = [0.25, 0.23, 0.24];
+    dayTop = [0.4, 0.45, 0.53];
+    dayLow = [0.42, 0.47, 0.54];
+    nightTop = [0.1, 0.11, 0.14];
+    nightLow = [0.15, 0.16, 0.19];
   }
   const top = mix(nightTop, dayTop, day).map((v) => v * (1 - look.dark * 0.35));
   let low = mix(nightLow, dayLow, day).map((v) => v * (1 - look.dark * 0.3));

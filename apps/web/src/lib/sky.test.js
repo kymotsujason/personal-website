@@ -56,8 +56,8 @@ test("fog by day uses the haze colors", () => {
     scene: "fog",
     intensity: "moderate",
   });
-  close(top, [0.86, 0.8, 0.72]);
-  close(low, [0.74, 0.72, 0.68]);
+  close(top, [0.4, 0.45, 0.53]);
+  close(low, [0.42, 0.47, 0.54]);
 });
 
 test("rain darkens more as it gets heavier", () => {
@@ -154,11 +154,13 @@ test("a clear night keeps the night floors for the dim", () => {
 
 test("a bright day is dimmed more than a dark one", () => {
   const dim = (vars) => Number(vars["--dim-low"]);
-  const fog = skyVars({ ...noon, scene: "fog" });
-  const cloudy = skyVars({ ...noon, scene: "cloudy" });
-  expect(Number(fog["--dim-top"])).toBeGreaterThan(0.25);
-  expect(dim(fog)).toBeGreaterThan(dim(cloudy));
-  expect(dim(cloudy)).toBeGreaterThanOrEqual(0.55);
+  const bright = skyVars({ ...noon, scene: "partly cloudy" });
+  const dark = skyVars({ ...noon, scene: "thunder" });
+  expect(Number(bright["--dim-top"])).toBeGreaterThan(
+    Number(dark["--dim-top"]),
+  );
+  expect(dim(bright)).toBeGreaterThan(dim(dark));
+  expect(dim(dark)).toBeGreaterThanOrEqual(0.55);
 });
 
 test("the sun glow adds to the dim over it", () => {

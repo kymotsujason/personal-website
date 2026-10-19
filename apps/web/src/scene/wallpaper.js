@@ -1,17 +1,19 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { SCENES } from "./weather.js";
+import { precipitationKind } from "./precipitation.js";
 
 // the animated weather sky behind the home screen, drawn into its own target at the home screen's px (half the icon
 // canvas's resolution). it's one shader for all eight scenes, picked by uniforms, so a change of weather doesn't
 // compile anything. colors are written as srgb, like the icon canvas, and the composite blends the two. the look
-// follows the ios weather backgrounds: the sun as a big glow at the top, clouds hanging from the top of the screen,
-// sparse vertical rain, a jagged lightning bolt, warm haze for fog, and navy to purple nights
+// follows the ios weather backgrounds: the sun as a big glow at the top, clouds hanging from the top of the screen, a
+// jagged lightning bolt, blue grey mottled haze for fog, and navy to purple nights. the rain and snow are drawn by the
+// screens' glass every frame instead (precipitation.js)
 const FPS = 30;
 const CROSSFADE = 2;
 // the shader gets the clock wrapped at an hour, since a float32 time that grows all visit makes the streaks step
 // instead of slide after a few hours. the clouds and streaks jump once an hour where it wraps
-const SHADER_PERIOD = 3600;
+export const SHADER_PERIOD = 3600;
 const INTENSITY = { light: 0.35, moderate: 0.65, heavy: 1 };
 // the most line segments a bolt has, its trunk and two branches
 const MAX_BOLT = 24;
@@ -120,31 +122,6 @@ const fragmentShader = `
         return Look(0.0, 1.0, 0.0, 0.0, 1.0);
     }
 
-    // one layer of rain: a thin vertical streak in some columns, looping down the screen
-    float rainLayer(vec2 uv, float cols, float speed, float len, float width, float seed, float density) {
-        float column = floor(uv.x * aspect * cols);
-        if (hash11(column + seed) > density) {
-            return 0.0;
-        }
-        float r = hash11(column + seed + 1.7);
-        float x = fract(uv.x * aspect * cols) - 0.5;
-        float y = fract(uv.y * 0.9 + time * speed * (0.85 + 0.3 * r) + r * 7.0);
-        return smoothstep(0.0, 0.015, y) * (1.0 - smoothstep(0.0, len, y)) * (1.0 - smoothstep(0.0, width, abs(x)));
-    }
-
-    // one layer of snow: a flake in some cells of a grid that falls and sways. soft blurs it, for the near flakes
-    float snowLayer(vec2 uv, float scale, float speed, float seed, float density, float radius, float soft) {
-        vec2 p = vec2(uv.x * aspect, uv.y) * scale;
-        p.y += time * speed;
-        p.x += sin(time * 0.6 + p.y * 0.7 + seed) * 0.3;
-        vec2 cell = floor(p);
-        if (hash21(cell + seed) > density) {
-            return 0.0;
-        }
-        vec2 jitter = vec2(hash21(cell + seed + 3.1), hash21(cell + seed + 7.7)) - 0.5;
-        return 1.0 - smoothstep(radius - soft, radius, length(fract(p) - 0.5 - jitter * 0.5));
-    }
-
     // the bolt: a bright thin core along its segments with a soft glow around it, thinner on the branches
     float boltLight(vec2 p) {
         float core = 0.0;
@@ -170,16 +147,16 @@ const fragmentShader = `
         vec2 p = vec2(uv.x * aspect, uv.y);
 
         // the bare sky, deeper at the top. day is blue, greyer the more overcast, and night is navy at the top to
-        // purple low down. fog is a warm haze instead
+        // purple low down. fog is a blue grey haze instead, lighter by day
         vec3 dayTop = mix(vec3(0.17, 0.42, 0.80), vec3(0.40, 0.45, 0.52), l.overcast);
         vec3 dayLow = mix(vec3(0.47, 0.70, 0.94), vec3(0.56, 0.61, 0.67), l.overcast);
         vec3 nightTop = mix(vec3(0.05, 0.07, 0.20), vec3(0.08, 0.10, 0.17), l.overcast);
         vec3 nightLow = mix(vec3(0.24, 0.18, 0.42), vec3(0.18, 0.19, 0.27), l.overcast);
         if (fog) {
-            dayTop = vec3(0.86, 0.80, 0.72);
-            dayLow = vec3(0.74, 0.72, 0.68);
-            nightTop = vec3(0.17, 0.16, 0.18);
-            nightLow = vec3(0.25, 0.23, 0.24);
+            dayTop = vec3(0.4, 0.45, 0.53);
+            dayLow = vec3(0.42, 0.47, 0.54);
+            nightTop = vec3(0.1, 0.11, 0.14);
+            nightLow = vec3(0.15, 0.16, 0.19);
         }
         vec3 top = mix(nightTop, dayTop, day) * (1.0 - l.dark * 0.35);
         vec3 low = mix(nightLow, dayLow, day) * (1.0 - l.dark * 0.3);
@@ -283,39 +260,24 @@ const fragmentShader = `
             col = mix(col, cloud, dens);
         }
 
-        // fog drifts in faint pale bands
+        // fog is soft mottled haze in two layers drifting at their own speeds, the near one larger and faster, over a
+        // lighter band across the middle of the screen, the way the ios fog background reads
         if (fog) {
-            float bands = fbm(vec2(p.x * 1.2 + time * 0.02, uv.y * 4.0));
-            vec3 pale = mix(vec3(0.30, 0.28, 0.29), vec3(0.93, 0.89, 0.83), day);
-            col = mix(col, pale, smoothstep(0.35, 0.8, bands) * 0.35);
+            // the palest patch stays a little under where the labels' ink turns dark (composite.js), so they stay white
+            vec3 pale = mix(vec3(0.24, 0.25, 0.29), vec3(0.56, 0.59, 0.64), day);
+            float band = smoothstep(0.15, 0.55, uv.y) * (1.0 - smoothstep(0.65, 1.0, uv.y));
+            col = mix(col, pale, band * 0.3);
+            float far = fbm(vec2(p.x * 2.2 + time * 0.006, uv.y * 3.0) + vec2(4.2, 1.3));
+            float near = fbm(vec2(p.x * 1.3 - time * 0.011, uv.y * 2.0) + fbm(p * 2.5 + 6.1) * 0.7);
+            col = mix(col, pale, smoothstep(0.3, 0.7, far) * 0.55);
+            col = mix(col, pale, smoothstep(0.38, 0.75, near) * 0.6);
+            col *= mix(0.84, 1.02, smoothstep(0.2, 0.6, near));
         }
 
         // drizzle by day lets soft shafts of light through
         if (sceneIs(s, 4.0) && day > 0.0) {
             float shafts = pow(noise(vec2(p.x * 6.0 + p.y * 1.5, time * 0.05)), 3.0) * smoothstep(0.1, 0.9, uv.y);
             col += vec3(0.9, 0.92, 0.95) * shafts * 0.18 * day;
-        }
-
-        // rain falls straight down in three depths: far streaks thin and faint, near ones longer and stronger
-        if (sceneIs(s, 4.0) || sceneIs(s, 5.0) || sceneIs(s, 7.0)) {
-            bool fine = sceneIs(s, 4.0);
-            float density = fine ? 0.06 + 0.06 * k : 0.08 + 0.14 * k;
-            float len = fine ? 0.6 : 1.0;
-            float speed = fine ? 1.3 : 1.9;
-            float streaks = rainLayer(uv, 140.0, speed, 0.05 * len, 0.12, 1.0, density) * 0.6
-                + rainLayer(uv, 90.0, speed * 1.15, 0.08 * len, 0.14, 11.0, density) * 0.8
-                + rainLayer(uv, 50.0, speed * 1.35, 0.13 * len, 0.16, 23.0, density * 0.8);
-            vec3 drop = mix(vec3(0.55, 0.58, 0.70), vec3(0.88, 0.91, 0.96), day);
-            col = mix(col, drop, clamp(streaks, 0.0, 1.0) * 0.32);
-        }
-
-        // snow in three depths: far flakes small and sharp, near ones big and blurred
-        if (sceneIs(s, 6.0)) {
-            float density = 0.4 + 0.3 * k;
-            float flakes = snowLayer(uv, 24.0, 1.6, 9.0, density, 0.07, 0.03) * 0.6
-                + snowLayer(uv, 11.0, 1.1, 5.0, density, 0.08, 0.04) * 0.8
-                + snowLayer(uv, 5.0, 0.7, 1.0, density * 0.6, 0.14, 0.11) * 0.4;
-            col = mix(col, vec3(0.97, 0.98, 1.0) * mix(0.75, 1.0, day), clamp(flakes, 0.0, 1.0) * 0.85);
         }
 
         return clamp(col, 0.0, 1.0);
@@ -549,6 +511,15 @@ export const createWallpaper = (renderer, { width, height, scene = "clear", inte
         },
         update,
         drawn: () => lastDraw > -Infinity,
+        still: () => still,
+        // what's falling, for the glass to draw: its kind (precipitation.js), the intensity, how far the crossfade
+        // into this weather has come, and the daylight
+        precipitation: () => ({
+            kind: precipitationKind(uniforms.scene.value),
+            intensity: uniforms.intensity.value,
+            fade: uniforms.mixAmount.value,
+            day: uniforms.day.value
+        }),
         dispose: () => {
             target.dispose();
             probe.dispose();

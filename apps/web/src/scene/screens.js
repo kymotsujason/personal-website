@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PRECIPITATION_GLSL } from "./precipitation.js";
 
 // position of an element inside `root`, from layout offsets, so css transforms on root don't matter
 const offsetIn = (el, root) => {
@@ -459,9 +460,16 @@ const GLASS_TAPS = 16;
 // the most a point blurs, in px, so steep angles still show soft shapes of color instead of one even wash
 const GLASS_MAX_RADIUS = 60;
 
+// shared by both screens' glass: where the body and the eye are, and what's falling (precipitation.js), which the loop
+// sets each frame
 export const glassUniforms = () => ({
     toBody: { value: new THREE.Matrix4() },
-    eye: { value: new THREE.Vector3() }
+    eye: { value: new THREE.Vector3() },
+    precipKind: { value: 0 },
+    precipK: { value: 0 },
+    precipFade: { value: 0 },
+    precipDay: { value: 1 },
+    precipTime: { value: 0 }
 });
 
 export const glassMaterial = (shared, pxPerCm) => {
@@ -485,7 +493,13 @@ uniform vec3 planeOrigin;
 uniform vec3 planeU;
 uniform vec3 planeV;
 uniform vec2 texSize;
+uniform float precipKind;
+uniform float precipK;
+uniform float precipFade;
+uniform float precipDay;
+uniform float precipTime;
 varying vec3 vWorldPos;
+${PRECIPITATION_GLSL}
 void main() {`)
             .replace("#include <map_fragment>", `#ifdef USE_MAP
     vec3 p = ( toBody * vec4( vWorldPos, 1.0 ) ).xyz;
@@ -521,6 +535,15 @@ void main() {`)
 #endif
             float dim = max( 1.0 - ${GLASS_DARKEN.toFixed(4)} * radiusPx, ${(1 - GLASS_MAX_DARKEN).toFixed(3)} );
             sampledDiffuseColor = vec4( sum / ${GLASS_TAPS.toFixed(1)} * dim, 1.0 );
+        }
+    }
+    // the rain or snow, over the bare sky only (the composite keeps how much shows in its alpha), at the screen's
+    // own shape
+    if ( precipKind > 0.5 && precipFade > 0.0 ) {
+        float skyShows = texture2D( map, vMapUv ).a;
+        if ( skyShows > 0.0 ) {
+            vec4 fall = precipitation( vMapUv, texSize.x / texSize.y, precipTime, precipKind, precipK, precipDay );
+            sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, pow( fall.rgb, vec3( 2.2 ) ), fall.a * skyShows * precipFade );
         }
     }
     diffuseColor *= sampledDiffuseColor;
