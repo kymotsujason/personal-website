@@ -18,25 +18,37 @@ export const endFetches = () => fetches.abort();
 export const loadingManager = new THREE.LoadingManager();
 Object.defineProperty(loadingManager, "abortController", { value: fetches });
 
-// a signal that ends with the scene's fetches, or with the one given, whichever is first. a browser without
-// AbortSignal.any gets the same by hand
-export const sceneSignal = (own = null) => {
+// a signal that ends with the scene's fetches, or with the one given, whichever is first. the scene's fetches last the
+// page's life, so nothing is left listening on them: AbortSignal.any doesn't add a listener, and a browser without it
+// gets the same by hand, with a release that takes the listener back off once the fetch has settled
+const joined = (own) => {
     if (!own) {
-        return fetches.signal;
+        return { signal: fetches.signal, release: () => {} };
+    }
+    if (typeof AbortSignal.any === "function") {
+        return { signal: AbortSignal.any([own, fetches.signal]), release: () => {} };
     }
     const both = new AbortController();
-    const end = () => both.abort();
-    [own, fetches.signal].forEach((s) => {
-        if (s.aborted) {
-            end();
-        } else {
-            s.addEventListener("abort", end, { once: true });
-        }
-    });
-    return both.signal;
+    if (own.aborted || fetches.signal.aborted) {
+        both.abort();
+        return { signal: both.signal, release: () => {} };
+    }
+    const release = () => fetches.signal.removeEventListener("abort", end);
+    const end = () => {
+        release();
+        both.abort();
+    };
+    own.addEventListener("abort", end, { once: true });
+    fetches.signal.addEventListener("abort", end, { once: true });
+    return { signal: both.signal, release };
 };
 
-export const sceneFetch = (url, options = {}) => fetch(url, { ...options, signal: sceneSignal(options.signal) });
+export const sceneSignal = (own = null) => joined(own).signal;
+
+export const sceneFetch = (url, options = {}) => {
+    const { signal: both, release } = joined(options.signal);
+    return fetch(url, { ...options, signal: both }).finally(release);
+};
 
 // what a failure calls, set by index.js, so each entry point can hand it what it threw
 let onFail = () => {};
