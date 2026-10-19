@@ -20,6 +20,8 @@ const listeners = new Set();
 let phoneMoving = null;
 let core = null;
 let loading = null;
+// the player's code didn't arrive, which the music reports as unavailable until the next try
+let coreFailed = false;
 
 // youtube loading while the phone moved made 100 to 300 ms frames on an iphone, and a failed scene drops has-3d
 const whenStill = (fn) => {
@@ -141,10 +143,10 @@ const showNow = () => {
   if (!page) {
     return;
   }
-  const { current, playing, unavailable } = music.state();
+  const { current, playing, unavailable, failed } = music.state();
   setText(
     page.querySelector('[data-music="toggle"]'),
-    unavailable ? "Music unavailable" : playing ? "Pause" : "Play",
+    unavailable || failed ? "Music unavailable" : playing ? "Pause" : "Play",
   );
   if (!current) {
     return;
@@ -172,7 +174,16 @@ const onArt = (event) => {
   }
 };
 
+const tellListeners = () => {
+  const state = music.state();
+  listeners.forEach((fn) => fn(state));
+};
+
 const loadCore = () => {
+  if (!loading && coreFailed) {
+    coreFailed = false;
+    tellListeners();
+  }
   loading ??= Promise.all([
     import("../scene/music.js"),
     import("../scene/youtube.js"),
@@ -192,7 +203,9 @@ const loadCore = () => {
     .catch((error) => {
       // the next gesture asks again
       loading = null;
+      coreFailed = true;
       console.warn("the music player didn't load", error);
+      tellListeners();
       throw error;
     });
   return loading;
@@ -252,7 +265,7 @@ const waitingState = () => ({
   volume: null,
   level: waitingLevel,
   failed: false,
-  unavailable: false,
+  unavailable: coreFailed,
 });
 
 // the scene gets this object instead of the music itself, since the music loads on demand

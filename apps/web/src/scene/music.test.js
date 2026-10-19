@@ -459,6 +459,18 @@ test("a player load that fails clears the wait, so the next play asks again and 
     assert.deepEqual(yt.calls.at(-1), ["playVideo"]);
 });
 
+test("a new load after a failed one tells the card and the app the music isn't unavailable anymore", () => {
+    const yt = fakePlayer();
+    const heard = [];
+    const music = make(yt, { onChange: (state) => heard.push(state.unavailable) });
+    music.load();
+    yt.fire("onLoadFailed");
+    assert.deepEqual(heard, [true]);
+    music.load();
+    assert.equal(yt.loads(), 2);
+    assert.deepEqual(heard, [true, false]);
+});
+
 test("a failed load forgets the play and track that were waiting on it", () => {
     const yt = fakePlayer();
     const music = make(yt);

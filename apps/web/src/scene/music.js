@@ -56,7 +56,10 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
             return;
         }
         loading = true;
-        unavailable = false;
+        if (unavailable) {
+            unavailable = false;
+            changed();
+        }
         loadPlayer({ onReady, onStateChange, onError, onAutoplayBlocked, onLoadFailed });
     };
 

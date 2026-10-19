@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import { stubHome } from "../stubHome";
 
 // youtube's iframe api, standing in: one player per page load, which makes an iframe where youtube's would and
@@ -371,6 +371,54 @@ test.describe("keyboard use of the 3D screens", () => {
       .toBe(1);
     await page.clock.runFor(2000);
     expect(await page.evaluate(() => (window as any).__yt.nexts)).toBe(1);
+  });
+
+  test("the music card says the music is unavailable when youtube's api is blocked, and plays once it's back", async ({
+    page,
+  }) => {
+    const apiUrl = "https://www.youtube.com/iframe_api";
+    const refuse = (route: Route) => route.abort();
+    await page.route(apiUrl, refuse);
+    await openHome(page);
+    await page.clock.runFor(1000);
+    const card = () =>
+      page.evaluate(() => {
+        const el = document.querySelector("#css-layer .music-card")!;
+        return {
+          toggle: el
+            .querySelector('[data-control="toggle"]')!
+            .getAttribute("aria-label"),
+          channel: el.querySelector(".m-channel")!.textContent,
+        };
+      });
+    const pressToggle = () =>
+      page.evaluate(() =>
+        document
+          .querySelector<HTMLElement>('#css-layer .ctl[data-control="toggle"]')!
+          .click(),
+      );
+    await pressToggle();
+    await expect
+      .poll(
+        async () => {
+          await page.clock.runFor(200);
+          return card();
+        },
+        { timeout: 15000 },
+      )
+      .toEqual({ toggle: "Music unavailable", channel: "Music unavailable" });
+    await page.unroute(apiUrl, refuse);
+    await pressToggle();
+    await expect
+      .poll(
+        async () => {
+          await page.clock.runFor(200);
+          return (await card()).toggle;
+        },
+        { timeout: 15000 },
+      )
+      .toBe("Pause");
+    expect((await card()).channel).not.toBe("Music unavailable");
   });
 
   test("the progress bar is a slider and the status indicators a button", async ({

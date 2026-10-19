@@ -1,5 +1,5 @@
 // the layout's music in 3d, without webgl, and with the scene chunk blocked, against the capture build
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import TRACKS from "../../src/data/tracks.json" with { type: "json" };
 import { artFor, cleanTitle } from "../../src/scene/music.js";
 import {
@@ -442,6 +442,57 @@ test.describe("the flat music page", () => {
     await expect(toggle).toHaveText("Pause");
     await expect(page.locator("html")).not.toHaveClass(/scene-failed/);
     expect(errors).toEqual([]);
+  });
+
+  test("a player chunk that fails to load says the music is unavailable", async ({
+    page,
+  }) => {
+    await quiet(page);
+    const { errors, blocked } = watchErrors(page);
+    await page.route("**/_astro/music.*.js", (route) => {
+      blocked.add(route.request().url());
+      return route.abort();
+    });
+    await flatMusic(page);
+    await page.goto("/music");
+    await expect(page.locator('#page [data-music="toggle"]')).toHaveText(
+      "Music unavailable",
+    );
+    expect(await youtube(page), "no player without its code").toBeNull();
+    expect(errors).toEqual([]);
+  });
+
+  test("a list where every track fails says the music is unavailable", async ({
+    page,
+  }) => {
+    await quiet(page);
+    // each track youtube's player tries fails, as a removed video does
+    const failing = FAKE_YOUTUBE.replace(
+      "window.__yt.plays += 1;\n      this.setState(1);",
+      "window.__yt.plays += 1;\n      setTimeout(() => this.events.onError({ target: this, data: 150 }), 0);",
+    ).replace(
+      "nextVideo() { window.__yt.nexts += 1; }",
+      "nextVideo() { window.__yt.nexts += 1; setTimeout(() => this.events.onError({ target: this, data: 150 }), 0); }",
+    );
+    expect(failing).toContain("onError({ target: this, data: 150 }), 0); }");
+    expect(failing).not.toContain("this.setState(1);");
+    await page.route("https://www.youtube.com/iframe_api", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: failing,
+      }),
+    );
+    await flatMusic(page);
+    await page.goto("/music");
+    await ready(page);
+    const toggle = page.locator('#page [data-music="toggle"]');
+    await toggle.click();
+    await expect(toggle).toHaveText("Music unavailable");
+    expect(
+      await page.evaluate(() => (window as any).__yt.nexts),
+      "one skip for each track",
+    ).toBe(TRACKS.length);
   });
 
   test("five presses on Next before the player is ready run once", async ({

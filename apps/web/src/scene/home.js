@@ -65,14 +65,16 @@ export const applyStatus = (rootEl) => {
 // the graph opens github, the latest project opens straight to it, and the desk closes the phone to look around
 let contributions = null;
 export const showMusic = () => {
-    const { current, playing } = music.state();
+    const { current, playing, unavailable, failed } = music.state();
     const card = state.screen ? state.screen.homeEl.querySelector(".music-card") : null;
     if (!card) {
         return;
     }
+    // the play button still asks again, as the music page's pill does
+    const down = unavailable || failed;
     const title = (current && cleanTitle(current.title)) || "Music";
-    const channel = (current && current.channel) || "Songs I grew up on";
-    const shown = JSON.stringify([title, channel, playing, current ? current.art : ""]);
+    const channel = down ? "Music unavailable" : (current && current.channel) || "Songs I grew up on";
+    const shown = JSON.stringify([title, channel, playing, down, current ? current.art : ""]);
     // in the spike a redraw for each title made 60 to 110 ms frames on a 4x slowed cpu, so only what shows redraws
     if (card.dataset.shown === shown) {
         return;
@@ -82,7 +84,7 @@ export const showMusic = () => {
     card.querySelector(".m-channel").textContent = channel;
     const toggle = card.querySelector('[data-control="toggle"]');
     toggle.dataset.icon = playing ? "pause" : "play";
-    toggle.setAttribute("aria-label", playing ? "Pause" : "Play");
+    toggle.setAttribute("aria-label", down ? "Music unavailable" : playing ? "Pause" : "Play");
     const art = card.querySelector("img.art");
     if (current && art.dataset.src !== current.art) {
         art.dataset.src = current.art;
