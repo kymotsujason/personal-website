@@ -32,7 +32,7 @@ if (typeof mock.module !== "function") {
     const { state, pose } = await import("./state.js");
     const { cancelAll, runTweens } = await import("./tween.js");
     const { openPhone, closePhone } = await import("./fold.js");
-    const { openFromCover, tapApp, tapFromCover, windowLook, APP_BACKGROUND } = await import("./appWindow.js");
+    const { openFromCover, tapApp, tapFromCover, windowLook, switchCards, APP_BACKGROUND } = await import("./appWindow.js");
     const { setFail } = await import("./lifetime.js");
 
     const REST = { x: 0, y: 0, z: -40, rx: 0, ry: 0, rz: 0 };
@@ -179,5 +179,43 @@ if (typeof mock.module !== "function") {
         assert.equal(windowLook(0, PROJECTS, true, GLASS).opacity, 0);
         const mid = windowLook(0.06, PROJECTS, true, GLASS).opacity;
         assert.ok(mid > 0 && mid < 1, `got ${mid}`);
+    });
+
+    // an app switch's two cards: the leaving one starts as the whole screen and the arriving one waits just past the
+    // page's edge, both shrink most at halfway, mostly in height, and the arriving one ends as the whole screen
+    const SCREEN = { fullW: 1000, fullH: 600, page: { x0: 100, y0: 50, x1: 900, y1: 550 } };
+    const near = (got, want, what) => assert.ok(Math.abs(got - want) < 1e-6, `${what}: got ${got}, want ${want}`);
+    const width = (r) => r.x1 - r.x0;
+    const height = (r) => r.y1 - r.y0;
+
+    test("a switch starts on the whole screen with the next card just past the page, and ends on it", () => {
+        const start = switchCards(0, { ...SCREEN, back: false });
+        assert.deepEqual(start.from, { x0: 0, y0: 0, x1: 1000, y1: 600 });
+        near(start.to.x0 + SCREEN.page.x0, SCREEN.page.x1 + 0.04 * SCREEN.fullW, "the next page's left edge");
+        near(start.round, 0, "the corners");
+        const end = switchCards(1, { ...SCREEN, back: false });
+        for (const key of ["x0", "y0", "x1", "y1"]) {
+            near(end.to[key], { x0: 0, y0: 0, x1: 1000, y1: 600 }[key], `the arriving card's ${key}`);
+        }
+        assert.ok(end.from.x0 + SCREEN.page.x1 < SCREEN.page.x0, "the leaving page is off to the left");
+        near(end.round, 0, "the corners");
+    });
+
+    test("halfway, both cards are smallest, shrunk more in height than width, either side of the page's center", () => {
+        const mid = switchCards(0.5, { ...SCREEN, back: false });
+        near(height(mid.from) / SCREEN.fullH, 0.86, "height");
+        near(width(mid.from) / SCREEN.fullW, 0.94, "width");
+        near(mid.round, 1, "the corners");
+        const center = (SCREEN.page.x0 + SCREEN.page.x1) / 2;
+        const middle = (r) => r.x0 + ((r.x1 - r.x0) * center) / SCREEN.fullW;
+        near(center - middle(mid.from), middle(mid.to) - center, "the two cards' distance from the center");
+        assert.ok(middle(mid.from) < center && middle(mid.to) > center);
+    });
+
+    test("Back runs the row the other way", () => {
+        const ahead = switchCards(0.3, { ...SCREEN, back: false });
+        const back = switchCards(0.3, { ...SCREEN, back: true });
+        assert.ok(back.to.x1 < ahead.to.x0, "the next card comes from the left");
+        near(height(back.to), height(ahead.to), "the same shrink");
     });
 }

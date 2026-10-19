@@ -69,6 +69,10 @@ export const state = {
     openIcon: null,
     // the open app grew out of a widget instead of its icon, so it fades in over it and back into it
     openFromWidget: false,
+    // an app switch in progress, as { to, back, landed, dropped }, and whether it lets the page swap through yet (see
+    // appWindow.js switchTo)
+    switching: null,
+    swapOpen: false,
     // about the widgets' glass color, as a css color, measured with the sky's tint (see tint.js glassColor)
     widgetGlass: null,
     appEl: null,

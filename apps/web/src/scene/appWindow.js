@@ -136,6 +136,7 @@ export const resetAppWindow = () => {
         return;
     }
     state.screen.appHole.visible = false;
+    state.screen.appCard.visible = false;
     state.screen.composite.setHidden(null);
     state.screen.texture.repeat.set(1, 1);
     state.screen.texture.offset.set(0, 0);
@@ -186,6 +187,18 @@ const lerpRect = (a, b, t) => ({
     y1: a.y1 + (b.y1 - a.y1) * t
 });
 
+// the part of a window at rect that #page covers, in the screen's px. #page is laid out at the browser window's size and
+// centered in the app window, which is laid out at the screen's size
+const pageBox = (rect) => {
+    const { appW, appH } = state.poses;
+    const page = state.surfaces.page;
+    const toX = (u) => rect.x0 + (u * (rect.x1 - rect.x0)) / appW;
+    const toY = (v) => rect.y0 + (v * (rect.y1 - rect.y0)) / appH;
+    const offsetX = (appW - page.w) / 2;
+    const offsetY = (appH - page.h) / 2;
+    return { x0: toX(offsetX), y0: toY(offsetY), x1: toX(offsetX + page.w), y1: toY(offsetY + page.h) };
+};
+
 // the app window at k (0 = the icon, 1 = the whole screen), the way ios grows an app out of its icon: the window's
 // rect and corner radius grow, it starts in the icon's color and the app's content fades in as it gets big, and the
 // home screen behind it zooms in a little around the icon and dims
@@ -220,14 +233,7 @@ const placeAppWindow = (rect, radius, look, home, icon, app, crop = 0) => {
     // the way the app window clipped the spike's copy. a css clip-path here made the first frame of a close take 25 s
     // under swiftshader
     const page = state.surfaces.page;
-    const offsetX = (appW - page.w) / 2;
-    const offsetY = (appH - page.h) / 2;
-    const toX = (u) => rect.x0 + (u * (rect.x1 - rect.x0)) / appW;
-    const toY = (v) => rect.y0 + (v * (rect.y1 - rect.y0)) / appH;
-    const px0 = toX(offsetX);
-    const px1 = toX(offsetX + page.w);
-    const py0 = toY(offsetY);
-    const py1 = toY(offsetY + page.h);
+    const { x0: px0, y0: py0, x1: px1, y1: py1 } = pageBox(rect);
     page.corners = [at(px0, py0), at(px1, py0), at(px0, py1), at(px1, py1)];
     page.opacity = String(THREE.MathUtils.clamp((k - 0.35) / 0.4, 0, 1));
     // the window is the whole screen, which runs past a window shaped unlike it, and #page covers only the part the
@@ -356,6 +362,115 @@ export const fadeTo = async (app) => {
     setAppWindow(1, state.openIcon, app);
     if (pageEl.animate) {
         pageEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN_MS, easing: "ease-out" });
+    }
+};
+
+// a link in one app to another, the way ios switches apps: the window shrinks into a card, mostly in height, slides
+// sideways to the next app's card, and grows to fill the screen again, quick enough to be felt more than seen.
+// there's one window, so the card that doesn't hold #page is drawn in the page's sky with nothing on it. the swap is
+// held until the cards are near halfway (see swapOpen), so the old page rides the leaving card and the new one the
+// arriving card, and the motion never waits on the swap
+const SWITCH_MS = 420;
+const SWITCH_SWAP_AT = 0.35;
+const SWITCH_SHRINK_X = 0.06;
+const SWITCH_SHRINK_Y = 0.14;
+const SWITCH_GAP = 0.04;
+
+// the two cards at t (0 to 1) as whole window rects in the screen's px, the leaving one (from) and the arriving one
+// (to), and how round their corners are (0 square, 1 the screen's own radius). they shrink about the page's center,
+// most at halfway, while the row of cards moves one card over: left for a link, right for Back
+export const switchCards = (t, { page, fullW, fullH, back }) => {
+    const p = ease.inOutCubic(t);
+    const hump = Math.sin(Math.PI * t);
+    const sx = 1 - SWITCH_SHRINK_X * hump;
+    const sy = 1 - SWITCH_SHRINK_Y * hump;
+    const cx = (page.x0 + page.x1) / 2;
+    const cy = (page.y0 + page.y1) / 2;
+    const card = { x0: cx - cx * sx, y0: cy - cy * sy, x1: cx + (fullW - cx) * sx, y1: cy + (fullH - cy) * sy };
+    const pitch = ((page.x1 - page.x0) * sx + SWITCH_GAP * fullW) * (back ? -1 : 1);
+    const shifted = (i) => {
+        const dx = (i - p) * pitch;
+        return { x0: card.x0 + dx, y0: card.y0, x1: card.x1 + dx, y1: card.y1 };
+    };
+    return { from: shifted(0), to: shifted(1), round: THREE.MathUtils.smoothstep(hump, 0, 0.35) };
+};
+
+// the page's sky at the top and the bottom, darkened by its dim layer, as the stand in card's colors (see .sky in
+// flat.css)
+const pageSky = () => {
+    const css = getComputedStyle(document.documentElement);
+    const color = (name, dimName) => {
+        const parts = css.getPropertyValue(name).match(/[\d.]+/g);
+        const dim = parseFloat(css.getPropertyValue(dimName)) || 0;
+        const rgb = parts && parts.length >= 3 ? parts.slice(0, 3).map((v) => Number(v) / 255) : [0, 0, 0];
+        return new THREE.Vector3(...rgb.map((v) => v * (1 - dim)));
+    };
+    return { top: color("--sky-top", "--dim-top"), low: color("--sky-low", "--dim-low") };
+};
+
+const placeCard = (rect, radius, sky) => {
+    const card = state.screen.appCard;
+    const box = pageBox(rect);
+    card.visible = true;
+    card.material.uniforms.rect.value.set(box.x0, box.y0, box.x1, box.y1);
+    card.material.uniforms.radius.value = radius;
+    card.material.uniforms.top.value.copy(sky.top);
+    card.material.uniforms.low.value.copy(sky.low);
+};
+
+const SWITCH_SWAP_WAIT_MS = 4000;
+
+export const switchTo = async (app, { back = false, swapped }) => {
+    if (state.busy || !state.zoomed || reducedMotion.matches) {
+        return;
+    }
+    state.busy = true;
+    state.swapOpen = false;
+    const from = state.openApp;
+    const run = { to: app.name, back, landed: false, dropped: false };
+    state.switching = run;
+    swapped.then((done) => {
+        run.landed = Boolean(done);
+        run.dropped = !done;
+    });
+    hideFlat();
+    const sky = pageSky();
+    const { fullW, fullH, radiusPx } = state.screen;
+    const page = pageBox({ x0: 0, y0: 0, x1: fullW, y1: fullH });
+    const place = (t) => {
+        if (t >= SWITCH_SWAP_AT) {
+            state.swapOpen = true;
+        }
+        const cards = switchCards(t, { page, fullW, fullH, back });
+        const radius = radiusPx * cards.round;
+        // #page rides the card of the app it holds, and the other card stands in for the other app. the swap writes
+        // data-app as it goes, a frame before swapped settles
+        const landed = run.landed || pageEl.dataset.app === app.name;
+        placeAppWindow(landed ? cards.to : cards.from, radius, 1, 1, state.openIcon, landed ? app : from, 1);
+        placeCard(landed ? cards.from : cards.to, radius, sky);
+    };
+    place(0);
+    const end = await tween({ to: {}, duration: SWITCH_MS, easing: (t) => t, onUpdate: place });
+    // a swap that hasn't landed yet would put the old page back on the screen, so the arriving card waits for it
+    if (end !== "cancelled" && !run.landed && !run.dropped && pageEl.dataset.app !== app.name) {
+        state.swapOpen = true;
+        await Promise.race([swapped, new Promise((resolve) => setTimeout(resolve, SWITCH_SWAP_WAIT_MS))]);
+    }
+    state.switching = null;
+    state.swapOpen = false;
+    state.screen.appCard.visible = false;
+    if (end === "cancelled") {
+        return;
+    }
+    const shown = run.landed || pageEl.dataset.app === app.name ? app : from;
+    state.openApp = shown;
+    state.openIcon = glyphRect(state.screen.homeEl, shown.name);
+    state.openFromWidget = false;
+    hideOpenIcon();
+    setAppWindow(1, state.openIcon, shown);
+    state.busy = false;
+    if (settings.flatAtFullZoom) {
+        showFlat();
     }
 };
 

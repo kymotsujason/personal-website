@@ -63,7 +63,7 @@ export const sceneNavigation = (scene, given) => {
     // null while the page in flight isn't known yet
     const target = () => {
         if (pending) {
-            return pending.known ? { app: pending.app, swapped: false } : null;
+            return pending.known ? { app: pending.app, swapped: false, nav: pending } : null;
         }
         return { app: pageApp(), swapped: true };
     };
@@ -88,6 +88,13 @@ export const sceneNavigation = (scene, given) => {
             return s.zoomed ? scene.closeApp() : "stop";
         }
         if (!want.swapped) {
+            // another app's page on its way while one is open plays the switch now, which lets the swap through partway
+            // instead of waiting for it. a page the browser already animated to, or a rebuild, jumps instead
+            const nav = want.nav;
+            if (s.zoomed && s.app !== null && s.app !== want.app && nav && !nav.switched && !nav.jumps()) {
+                nav.switched = true;
+                return scene.switchTo(want.app, { back: nav.back, swapped: nav.swapped });
+            }
             return "stop";
         }
         if (!s.zoomed) {
@@ -150,19 +157,20 @@ export const sceneNavigation = (scene, given) => {
         if (s.phone === null || !s.shown) {
             return true;
         }
-        if (s.busy) {
-            return false;
-        }
         const want = target();
+        // a switch to this page lets its swap through once the cards are partway over
+        if (s.busy) {
+            return Boolean(s.swapOpen && want && want.app !== null && want.app === s.switchingTo);
+        }
         return Boolean(want && want.app !== null);
     };
 
-    return async ({ to, uaTransition, page, swapped, signal: dropped }) => {
-        const mine = { known: false, app: null };
-        pending = mine;
-        let swappedYet = false;
+    return async ({ to, direction, uaTransition, page, swapped, signal: dropped }) => {
         // the browser already played its own back animation, or a rebuild is about to set the phone, so it jumps
         const jumps = () => uaTransition || scene.rebuildPending();
+        const mine = { known: false, app: null, back: direction === "back", swapped, jumps, switched: false };
+        pending = mine;
+        let swappedYet = false;
         const learn = (name) => {
             if (pending !== mine) {
                 return;
@@ -191,7 +199,8 @@ export const sceneNavigation = (scene, given) => {
                 return;
             }
             const s = scene.status();
-            stale = s.shown;
+            // a switch running now shows the new page itself as its card arrives
+            stale = s.shown && s.switchingTo === null;
             if (jumps() && s.phone !== null) {
                 scene.showUrl();
                 stale = false;

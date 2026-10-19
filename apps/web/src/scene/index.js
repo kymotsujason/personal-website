@@ -8,7 +8,7 @@ import { initRenderer, renderer, backdrop, MATERIALS, setWeather, applyWeather, 
 import { installQuality, resize } from "./quality.js";
 import { initDevice, loadKeys, handsRig, buildDevice, loadCharger, watchCharger, chargerWanted } from "./device.js";
 import { initHome, stopHome, showContributions, statusBar, dropScrub } from "./home.js";
-import { initAppWindow, installHomeSwipe, dropHomeSwipe, openApp, openFromCover, closeApp, fadeTo, setPageFlatListener } from "./appWindow.js";
+import { initAppWindow, installHomeSwipe, dropHomeSwipe, openApp, openFromCover, closeApp, fadeTo, switchTo, setPageFlatListener } from "./appWindow.js";
 import { arrive, holdIntro, showFromAddress, showHome } from "./intro.js";
 import { installGestures, installKeys, dropGesture } from "./fold.js";
 import { installLook } from "./look.js";
@@ -220,6 +220,12 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
             const app = appNamed(appName);
             return app ? fadeTo(app) : Promise.resolve();
         }),
+        // another app's page on its way while one is open. swapped settles once the page has swapped in (null if the
+        // navigation was dropped)
+        switchTo: entry((appName, opts) => {
+            const app = appNamed(appName);
+            return app ? switchTo(app, opts) : Promise.resolve();
+        }),
         // the end state for the page at once, with no animation
         showUrl: entry(() => {
             if (!showFromAddress()) {
@@ -238,7 +244,9 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
             busy: state.busy,
             zoomed: state.zoomed,
             app: state.openApp ? state.openApp.name : null,
-            shown: state.appVisible || state.pageFlat || state.pageFade !== null
+            shown: state.appVisible || state.pageFlat || state.pageFade !== null,
+            switchingTo: state.switching ? state.switching.to : null,
+            swapOpen: state.swapOpen
         })
     };
 };

@@ -685,3 +685,53 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
     blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     depthWrite: false
 });
+
+// a card drawn over the screen in the same px as the app window's cutout, filled with the page's sky from top to low
+// (srgb, as css gives it). an app switch shows it for the app whose page #page doesn't hold
+export const appCardMaterial = () => new THREE.ShaderMaterial({
+    uniforms: {
+        tl: { value: new THREE.Vector2() },
+        u: { value: new THREE.Vector2(1, 0) },
+        v: { value: new THREE.Vector2(0, 1) },
+        rect: { value: new THREE.Vector4(0, 0, 0, 0) },
+        radius: { value: 0 },
+        top: { value: new THREE.Vector3() },
+        low: { value: new THREE.Vector3() }
+    },
+    vertexShader: `
+        varying vec2 vLocal;
+        void main() {
+            vLocal = position.xy;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec2 tl;
+        uniform vec2 u;
+        uniform vec2 v;
+        uniform vec4 rect;
+        uniform float radius;
+        uniform vec3 top;
+        uniform vec3 low;
+        varying vec2 vLocal;
+        void main() {
+            vec2 d = vLocal - tl;
+            float det = u.x * v.y - u.y * v.x;
+            vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
+            vec2 center = (rect.xy + rect.zw) * 0.5;
+            vec2 halfSize = (rect.zw - rect.xy) * 0.5;
+            float r = min(radius, min(halfSize.x, halfSize.y));
+            vec2 q = abs(px - center) - halfSize + r;
+            float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+            float aa = fwidth(dist);
+            float inside = 1.0 - smoothstep(-aa, 0.0, dist);
+            if (inside <= 0.0) {
+                discard;
+            }
+            float y = clamp((px.y - rect.y) / max(rect.w - rect.y, 1.0), 0.0, 1.0);
+            gl_FragColor = vec4(mix(top, low, y), inside);
+        }
+    `,
+    transparent: true,
+    depthWrite: false
+});

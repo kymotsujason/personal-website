@@ -569,6 +569,95 @@ test.describe("with the clock installed", () => {
     expect(next.outline).toBe("solid");
   });
 
+  // a link from one app to another plays the ios app switch: the window shrinks into a card, the row of cards slides
+  // one over, and the next app grows to fill the screen. this records every switch seen, frame by frame
+  const watchSwitches = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      w.__switches = [];
+      const look = () => {
+        const run = w.spike.state.switching;
+        if (run && !w.__switches.some((seen: any) => seen === run)) {
+          w.__switches.push(run);
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+  const switches = (page: Page) =>
+    page.evaluate(() =>
+      (window as any).__switches.map((run: any) => ({
+        to: run.to,
+        back: run.back,
+        landed: run.landed,
+      })),
+    );
+
+  test("a link to another app switches to it, and Back switches the other way", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await watchSwitches(page);
+    const before = await historyIndex(page);
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    expect(await historyIndex(page)).toBe(before + 1);
+    expect(await switches(page)).toEqual([
+      { to: "Blog", back: false, landed: true },
+    ]);
+    const after = await page.evaluate(() => {
+      const s = (window as any).spike.state;
+      return { card: s.screen.appCard.visible, switching: s.switching };
+    });
+    expect(after).toEqual({ card: false, switching: null });
+    await page.goBack();
+    await settledOn(page, "/about", "About");
+    expect(await switches(page)).toEqual([
+      { to: "Blog", back: false, landed: true },
+      { to: "About", back: true, landed: true },
+    ]);
+  });
+
+  test("another page of the same app fades in place, with no switch", async ({
+    page,
+  }) => {
+    await page.goto("/projects?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects", "Projects");
+    await watchSwitches(page);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLElement>('#page a[href^="/projects/"]')!
+        .click(),
+    );
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toMatch(/^\/projects\/.+/);
+    await expect
+      .poll(() => phone(page))
+      .toMatchObject({ busy: false, zoomed: true, app: "Projects" });
+    expect(await switches(page)).toEqual([]);
+  });
+
+  test("with reduced motion a link to another app crossfades, with no switch", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await watchSwitches(page);
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    expect(await switches(page)).toEqual([]);
+  });
+
   // the screen runs past a window shaped unlike it, so a card cut to the whole screen showed bare strips beside #page
   test("the swipe's card is cut to the page, not the whole screen", async ({
     page,

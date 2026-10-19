@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { UNITS } from "./handsModel.js";
 import { bakePart, applyFinish, cameraSolid } from "./phoneModel.js";
-import { drawHome, iconTexture, mapScreenUV, appWindowMaterial, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
+import { drawHome, iconTexture, mapScreenUV, appWindowMaterial, appCardMaterial, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
 import { createComposite, skyRectFor } from "./composite.js";
 import { createBlur } from "./blur.js";
 import { createWallpaper } from "./wallpaper.js";
@@ -639,10 +639,19 @@ export const buildDevice = () => {
     appHole.material.uniforms.u.value.set((tr.x - tl.x) / fullW, (tr.y - tl.y) / fullW);
     appHole.material.uniforms.v.value.set((bl.x - tl.x) / fullH, (bl.y - tl.y) / fullH);
     body.add(appHole);
+    // the other app's card in an app switch (appWindow.js switchTo), in the same px and drawn with the cutout
+    const appCard = new THREE.Mesh(appHole.geometry, appCardMaterial());
+    appCard.position.z = appHole.position.z;
+    appCard.renderOrder = 2;
+    appCard.visible = false;
+    appCard.material.uniforms.tl.value.copy(appHole.material.uniforms.tl.value);
+    appCard.material.uniforms.u.value.copy(appHole.material.uniforms.u.value);
+    appCard.material.uniforms.v.value.copy(appHole.material.uniforms.v.value);
+    body.add(appCard);
     // the screen's facing in the body, for how far the phone is tilted from looking straight at the camera
     const [nTl, nTr, nBl] = full.corners;
     const normal = new THREE.Vector3().subVectors(nTr, nTl).cross(new THREE.Vector3().subVectors(nBl, nTl)).normalize();
-    state.screen = { material: screenMaterial, texture: homeComposite.texture, icons: homeIcons, composite: homeComposite, appHole, full, fullW, fullH, radiusPx: screenR * PX_PER_CM, homeEl, normal, ink: homeInk };
+    state.screen = { material: screenMaterial, texture: homeComposite.texture, icons: homeIcons, composite: homeComposite, appHole, appCard, full, fullW, fullH, radiusPx: screenR * PX_PER_CM, homeEl, normal, ink: homeInk };
     state.homeLaidOut = false;
     state.cover = { material: coverMaterial, icons: coverIcons, ink: coverInk, composite: coverComposite, el: coverEl, frame: coverFrame };
     setGlassPlane(screenMaterial, full.corners, fullW, fullH);
