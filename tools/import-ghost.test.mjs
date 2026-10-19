@@ -294,6 +294,53 @@ test("only published posts come over, and a bad slug stops the import", async ()
   await assert.rejects(run([post({ slug: "../escape" })]), /slug/);
 });
 
+test("html that could run script on the site stops the import with nothing written", async () => {
+  const active = [
+    "<script>alert(1)</script>",
+    '<p>a</p><script src="https://x.test/a.js"></script>',
+    "<SCRIPT>1</SCRIPT>",
+    "<div><p>a</div><script src=x",
+    '<iframe src="https://www.youtube.com/embed/x"></iframe>',
+    '<figure class="kg-card kg-embed-card"><iframe src="https://x.test"></iframe></figure>',
+    '<object data="x.swf"></object>',
+    '<embed src="x.swf">',
+    '<img src="a.png" onerror="alert(1)">',
+    "<p onclick=alert(1)>hi</p>",
+    "<p>a <b onmouseover='x()'>b</b></p>",
+    '<p><a href="javascript:alert(1)">x</a></p>',
+    '<p><a href=" JaVaScRiPt:alert(1)">x</a></p>',
+    '<p><a href="java&#x09;script:alert(1)">x</a></p>',
+    '<p><a href="&#106;avascript:alert(1)">x</a></p>',
+    '<p><a href="&#106avascript:alert(1)">x</a></p>',
+    '<p><a href="java&Tab;script:alert(1)">x</a></p>',
+    '<svg><a xlink:href="javascript:alert(1)">x</a></svg>',
+    '<form action="vbscript:x"><p>a</p></form>',
+  ];
+  for (const html of active) {
+    assert.throws(() => htmlToMarkdown(html), /could run script/, html);
+  }
+  const exportDir = makeExport([post({ html: active[4] })]);
+  const outDir = mkdtempSync(join(tmpdir(), "ghost-out-"));
+  await assert.rejects(
+    importGhost({ exportDir, outDir }),
+    /"A post" has <iframe>, which could run script/,
+  );
+  assert.equal(existsSync(join(outDir, "blog")), false);
+});
+
+test("text and code that only name script, handlers, or javascript: come through", () => {
+  assert.equal(
+    htmlToMarkdown(
+      "<p>Use &lt;script&gt; tags, onclick= and javascript: here</p>",
+    ),
+    "Use \\<script\\> tags, onclick= and javascript: here",
+  );
+  const code = "<pre><code>&lt;iframe src=x onload=y&gt;</code></pre>";
+  assert.equal(htmlToMarkdown(code), code);
+  const link = '<a href="https://x.test/javascript:a" title="on">x</a>';
+  assert.equal(htmlToMarkdown(`<p>${link}</p>`), link);
+});
+
 test("an image a post uses but the export lacks stops the import with nothing written", async () => {
   const exportDir = makeExport(
     [post({ feature_image: imageUrl("2019/12/missing.png") })],

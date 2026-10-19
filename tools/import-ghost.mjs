@@ -173,6 +173,52 @@ function parseHtml(html) {
   return root;
 }
 
+// tags that run script or load another page, which no post on this site needs. the tag may be cut off, since a block
+// kept as HTML would let the page's own markup after it close the tag
+const activeTag =
+  /<\/?(script|iframe|frame|frameset|object|embed|applet)(?![a-z0-9-])/i;
+const attributePattern =
+  /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>`=]+)))?/g;
+const urlEntities = new Map([
+  ["tab", "\t"],
+  ["newline", "\n"],
+  ["colon", ":"],
+]);
+
+// an attribute value the way a browser reads a url in it: character references decoded, even without their semicolon,
+// and the tabs, newlines, and spaces it skips taken out
+function urlText(value) {
+  return value
+    .replace(
+      /&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));?/gi,
+      (match, hex, decimal, named) => {
+        if (named !== undefined)
+          return urlEntities.get(named.toLowerCase()) ?? match;
+        const code =
+          hex !== undefined ? parseInt(hex, 16) : parseInt(decimal, 10);
+        return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
+      },
+    )
+    .replace(/[\u0000-\u0020]/g, "");
+}
+
+// what in a post's html could run script on the site, or null. the site has no content security policy to stop it
+function activeHtml(html) {
+  const tag = activeTag.exec(html);
+  if (tag) return `<${tag[1].toLowerCase()}>`;
+  for (const match of html.matchAll(tokenPattern)) {
+    if (match[0].startsWith("<!--") || match[1] === "/") continue;
+    const attributes = match[0].slice(match[2].length + 1, -1);
+    for (const [, name, ...values] of attributes.matchAll(attributePattern)) {
+      if (/^on/i.test(name)) return `an ${name.toLowerCase()} handler`;
+      const value = values.find((part) => part !== undefined) ?? "";
+      if (/^(?:javascript|vbscript):/i.test(urlText(value)))
+        return "a script URL";
+    }
+  }
+  return null;
+}
+
 // bare addresses would turn into links in Markdown, which the old page didn't have
 const autolinkPattern = /(?:https?:\/\/|ftp:\/\/|www\.|[\w.+-]+@[\w-]+\.)/i;
 
@@ -317,6 +363,12 @@ function rawBlock(raw) {
 }
 
 export function htmlToMarkdown(html) {
+  const active = activeHtml(html);
+  if (active) {
+    throw new Error(
+      `The HTML has ${active}, which could run script on the site`,
+    );
+  }
   let root;
   try {
     root = parseHtml(html);
@@ -417,6 +469,12 @@ export async function importGhost({ exportDir, outDir }) {
     ) {
       throw new Error(
         `The post "${post.title}" has a slug that can't be a file name: ${post.slug}`,
+      );
+    }
+    const active = activeHtml(post.html ?? "");
+    if (active) {
+      throw new Error(
+        `The post "${post.title}" has ${active}, which could run script on the site`,
       );
     }
     if (slugs.has(post.slug))
