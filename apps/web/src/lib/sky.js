@@ -132,8 +132,6 @@ export const skyVars = ({
     "--moon-x": "50%",
     "--moon-y": "100%",
     "--moon-glow": "transparent",
-    "--dim-top": "0.15",
-    "--dim-low": "0.35",
     "--stars": amount(
       (1 - day) * (1 - look.overcast) * (scene === "fog" ? 0 : 1),
     ),

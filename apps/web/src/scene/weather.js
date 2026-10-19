@@ -106,8 +106,8 @@ export const readWeather = (home) => {
 
 // keeps the weather current on a long visit. refresh asks the route once the last good answer is `every` old, keeps
 // that answer if an ask fails (trying again after `retry`), and lets overlapping refreshes share one ask. onWeather
-// hears each new answer. a load that rejects, or an onWeather that throws, rejects that refresh and the next ask
-// still goes ahead
+// hears each new answer. a load that rejects rejects that refresh and the next ask still goes ahead after `retry`. an
+// onWeather that throws also rejects that refresh, but the answer is kept and the next ask waits `every`
 export const createWeatherFeed = ({ load, every = 30 * 60 * 1000, retry = 5 * 60 * 1000, now = Date.now, onWeather = () => {} } = {}) => {
     let weather = null;
     let nextAt = -Infinity;

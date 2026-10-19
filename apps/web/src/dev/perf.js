@@ -2,7 +2,7 @@
 // gap, script time, fold, and blur, the webgl calls over 2 ms with what they uploaded, the phone's state as it
 // changes, when three makes a shader program or a texture (so a stall can be matched to a first draw), and when
 // youtube's files arrived, then posts it all to the dev or preview server (vite.config.js saves it in perf-logs/).
-// imported first in main.js, so the webgl calls are wrapped before three makes its renderer
+// loaded first by scene/index.js, so the webgl calls are wrapped before three makes its renderer
 const params = new URLSearchParams(location.search);
 const LOG_FOR = 30000;
 

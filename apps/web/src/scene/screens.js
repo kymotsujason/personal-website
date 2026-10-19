@@ -270,7 +270,7 @@ const drawWidgets = (ctx, ink, homeEl) => {
     });
     // the album art is youtube's 4:3 thumbnail with the 16:9 video letterboxed in its middle, so a square is cut from
     // the middle of the video and drawn with rounded corners
-    // until youtube's player loads (main.js, at the first tap) there's no art, so a plain tile with a note stands in
+    // until the thumbnail has loaded (home.js sets its address from the track list) a plain tile with a note stands in
     homeEl.querySelectorAll(".widget img.art").forEach((img) => {
         const box = offsetIn(img, homeEl);
         if (!img.complete || !img.naturalWidth) {

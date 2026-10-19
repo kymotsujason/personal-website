@@ -361,7 +361,7 @@ export const createBackdrop = (renderer, onEnvironment) => {
         }
         return texture;
     };
-    // what waits until the page has shown its first frame (main.js calls loadRest), so it doesn't take bandwidth from
+    // what waits until the page has shown its first frame (intro.js and loop.js call loadRest), so it doesn't take bandwidth from
     // what that frame needs, the phone and hands included
     const afterShown = [];
     let restLoading = false;

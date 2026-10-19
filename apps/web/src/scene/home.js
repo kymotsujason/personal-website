@@ -62,8 +62,6 @@ export const applyStatus = (rootEl) => {
     battery.dataset.charging = s.charging && (!state.charger || state.charger.plugged());
 };
 
-// the widgets on the flap's half of the open screen. each one does something when tapped: the profile opens About,
-// the graph opens github, the latest project opens straight to it, and the desk closes the phone to look around
 let contributions = null;
 export const showMusic = () => {
     const { current, playing, unavailable, failed } = music.state();
@@ -120,6 +118,8 @@ const clock = (seconds) => {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
+// the widgets on the flap's half of the open screen. each one does something when tapped: the profile opens About,
+// the graph opens github, and the latest project opens straight to it. the music card has its own controls
 export const buildWidgets = (homeEl) => {
     const latest = siteData.latestProject;
     const widgets = document.createElement("div");
