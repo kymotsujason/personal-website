@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mock, test } from "node:test";
+import fs, { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bodyScripts, checkDist, injectedCss } from "./html-rules.mjs";
@@ -112,4 +113,39 @@ test("a dist's client chunk is exempt only when nothing refers to it", () => {
     "_astro/client.router.js": react,
   });
   assert.equal(checkDist(imported).length, 1);
+});
+
+test("an image that happens to hold a chunk's name isn't a reference to it", () => {
+  const dist = distWith({
+    "index.html": page("", '<script src="/_astro/site.js"></script>'),
+    "_astro/site.js": "1",
+    "_astro/client.react.js": 'createElement("style")',
+    "_astro/photo.png": Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]),
+      Buffer.from("client.react.js", "latin1"),
+    ]),
+  });
+  assert.deepEqual(checkDist(dist), []);
+});
+
+test("the check reads only the files that can refer to a script as text", (t) => {
+  const dist = distWith({
+    "index.html": page("", '<script src="/_astro/site.js"></script>'),
+    "_astro/site.js": "1",
+    "_astro/model.glb": Buffer.alloc(64),
+    "_astro/photo.jpg": Buffer.alloc(64),
+  });
+  const reads = mock.method(fs, "readFileSync");
+  syncBuiltinESMExports();
+  t.after(() => {
+    reads.mock.restore();
+    syncBuiltinESMExports();
+  });
+  assert.deepEqual(checkDist(dist), []);
+  const read = reads.mock.calls.map((call) => String(call.arguments[0]));
+  assert.ok(
+    read.some((file) => file.endsWith("index.html")),
+    read.join("\n"),
+  );
+  assert.ok(!read.some((file) => /\.(glb|jpg)$/.test(file)), read.join("\n"));
 });

@@ -2,7 +2,7 @@
 // swap leaves the rest of the body alone, and no script adds a stylesheet or a style element, since the swap removes
 // head elements a script added. all css ships in the layout's stylesheets instead
 import { readFileSync, readdirSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const usage = "usage: html-rules.mjs --dist <DIR>";
@@ -35,6 +35,18 @@ const CSS_FILE = /["'`][^"'`\s]+\.css["'`]/;
 // react's client runtime builds link and style elements for its own hoisting. it's named client like astro's own
 // client chunk, so it's exempt only while no page and no other chunk refers to it
 const RUNTIME_CHUNK = /^client\./;
+// the files that can name a script. images, models, and fonts can't, so they're never read
+const TEXT_FILES = new Set([
+  ".html",
+  ".js",
+  ".mjs",
+  ".css",
+  ".json",
+  ".xml",
+  ".txt",
+  ".svg",
+  ".webmanifest",
+]);
 
 // the scripts in a page's body that sit outside the element with id page
 export function bodyScripts(html) {
@@ -100,11 +112,13 @@ function filesUnder(dir) {
 
 export function checkDist(dist) {
   const problems = [];
-  const files = filesUnder(dist).map((file) => ({
-    file,
-    name: relative(dist, file),
-    text: readFileSync(file, "utf8"),
-  }));
+  const files = filesUnder(dist)
+    .filter((file) => TEXT_FILES.has(extname(file).toLowerCase()))
+    .map((file) => ({
+      file,
+      name: relative(dist, file),
+      text: readFileSync(file, "utf8"),
+    }));
   for (const { file, name, text } of files) {
     if (file.endsWith(".html")) {
       for (const tag of bodyScripts(text)) {
@@ -112,9 +126,12 @@ export function checkDist(dist) {
       }
     } else if (file.endsWith(".js")) {
       const chunk = basename(file);
-      const referenced = files.some(
-        (other) => other.file !== file && other.text.includes(chunk),
-      );
+      // only a runtime chunk's exemption turns on whether anything names it, so only that one searches the rest
+      const referenced =
+        !RUNTIME_CHUNK.test(chunk) ||
+        files.some(
+          (other) => other.file !== file && other.text.includes(chunk),
+        );
       for (const way of injectedCss(text, chunk, referenced)) {
         problems.push(`${name} adds css with ${way}`);
       }
