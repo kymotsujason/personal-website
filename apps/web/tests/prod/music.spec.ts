@@ -444,6 +444,44 @@ test.describe("the flat music page", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a Next pressed while the player's load fails is dropped, and a later Next runs once it's back", async ({
+    page,
+  }) => {
+    await quiet(page);
+    const { errors, blocked } = watchErrors(page);
+    const apiUrl = "https://www.youtube.com/iframe_api";
+    blocked.add(apiUrl);
+    let apiAsked = 0;
+    const refuse = (route: Route) => {
+      apiAsked += 1;
+      return route.abort();
+    };
+    await page.route(apiUrl, refuse);
+    await flatMusic(page);
+    await page.goto("/music");
+    const toggle = page.locator('#page [data-music="toggle"]');
+    await expect(toggle).toHaveText("Music unavailable");
+    const next = page.locator('#page [data-music="next"]');
+    await next.click();
+    await expect.poll(() => apiAsked).toBe(2);
+    await expect(toggle).toHaveText("Music unavailable");
+    await page.unroute(apiUrl, refuse);
+    await page.route(apiUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: FAKE_YOUTUBE,
+      }),
+    );
+    await next.click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__yt?.nexts))
+      .toBe(1);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => (window as any).__yt.nexts)).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
   test("a player chunk that fails to load says the music is unavailable", async ({
     page,
   }) => {
