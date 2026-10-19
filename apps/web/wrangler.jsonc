@@ -17,6 +17,7 @@
   "kv_namespaces": [{ "binding": "HOME" }],
   // the daily github fetch
   "triggers": { "crons": ["17 9 * * *"] },
-  // previews get their own namespace and no GITHUB_TOKEN
-  "previews": { "kv_namespaces": [{ "binding": "HOME" }] },
+  // previews get their own namespace, seeded once from github-fixture.json, and no GITHUB_TOKEN. previews bind KV
+  // only by id, so this one can't be left for wrangler to create
+  "previews": { "kv_namespaces": [{ "binding": "HOME", "id": "536be70a170044c1bc198737e3c543cc" }] },
 }
