@@ -1,5 +1,5 @@
 // the page's depth inputs, written to the root since #page's style belongs to the scene and the root survives
-// navigation. --px and --py (-1 to 1) come from the pointer where there's a fine one, and from the scroll otherwise.
+// navigation. --px and --py come from the pointer (-1 to 1) where there's a fine one, and --py from the scroll (0 to 1) otherwise.
 // --scroll and --read come from the page's own scroll, and only on a page with a ring or a hero. the pointer is read at
 // most once a frame, and a value is only written when it changed. the glass highlight is placed on each pane in its
 // own coordinates, since a fixed background inside a transformed pane is measured from the pane and not the window

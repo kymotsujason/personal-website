@@ -45,7 +45,7 @@ const mayRecover = (path, buildId) => {
   return write("session", key, "1");
 };
 
-// the scene chunk didn't load, likely since a deploy removed it, so the page loads again once
+// a chunk (the scene's, or the music player's) didn't load, likely since a deploy removed it, so the page loads again once
 export const recoverFromChunk = () => {
   if (!mayRecover(normalPath(location.pathname), RUNNING_BUILD)) {
     return false;

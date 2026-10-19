@@ -334,7 +334,7 @@ a.widget {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
-/* the glass's fill, and where its rims catch the light (main.js sets the angle from the sky as the day goes) */
+/* the glass's fill, and where its rims catch the light (the scene's renderer sets the angle from the sky as the day goes) */
 :root {
   --glass-fill: rgba(255, 255, 255, 0.08);
   --bar-fill: rgba(30, 30, 36, 0.5);
