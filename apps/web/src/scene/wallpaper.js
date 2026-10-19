@@ -100,7 +100,7 @@ const fragmentShader = `
             return Look(0.45, 0.6, 0.0, 0.0, 1.0);
         }
         if (sceneIs(s, 2.0)) {
-            return Look(0.9, 0.38, 0.3, 0.85, 0.0);
+            return Look(0.85, 0.3, 0.2, 0.55, 0.0);
         }
         if (sceneIs(s, 3.0)) {
             return Look(0.0, 1.0, 0.0, 0.0, 0.5);
@@ -253,22 +253,29 @@ const fragmentShader = `
             col += vec3(0.6, 0.65, 0.8) * exp(-r * 1.6) * 0.14 * (1.0 - day) * (1.0 - k) * 0.5 * moonShow;
         }
 
-        // clouds hang from the top of the screen in a band, puffy and drifting, lit on top and greyer underneath.
-        // lightning lights them from inside around where the bolt starts
+        // clouds hang from the top of the screen in a band, drifting: big warped shapes worn into wisps at their edges
+        // by a finer layer, with gaps where the sky shows. each is lit on top and greyer underneath, found by how much
+        // more cloud sits just above it. at night they catch the moon and the town, so they read a little lighter than
+        // the sky. lightning lights them from inside around where the bolt starts
         if (l.clouds > 0.0) {
-            vec2 q = p * vec2(1.3, 2.4) + vec2(time * 0.008, 0.0);
-            vec2 warp = vec2(fbm(q * 0.8 + 3.1), fbm(q * 0.8 + 7.4));
-            float n = fbm(q + warp * 0.9);
-            float m = fbm(q * 2.1 + warp + vec2(time * 0.012, 1.7));
+            vec2 q = p * vec2(1.1, 2.6) + vec2(time * 0.008, 0.0);
+            vec2 warp = vec2(fbm(q * 0.7 + 3.1), fbm(q * 0.7 + 7.4));
+            vec2 qw = q + warp * 1.1;
+            float n = fbm(qw);
+            float m = fbm(qw * vec2(3.4, 2.2) + vec2(time * 0.015, 1.7));
+            float shape = n * 0.72 + m * 0.28;
+            float above = fbm(qw + vec2(0.0, 0.09)) * 0.72 + m * 0.28;
             float band = smoothstep(l.bandLow - 0.1, l.bandLow + 0.25, uv.y);
-            float threshold = 0.6 - 0.28 * l.clouds;
-            float dens = smoothstep(threshold, threshold + 0.12, n * 0.7 + m * 0.3) * band;
-            vec3 lit = mix(vec3(0.20, 0.21, 0.31), vec3(0.95, 0.96, 0.98), day);
+            float threshold = 0.6 - 0.22 * l.clouds;
+            float dens = smoothstep(threshold, threshold + 0.07, shape) * band;
+            float top = clamp((shape - above) * 6.0 + 0.5, 0.0, 1.0);
+            // by day an overcast cloud is a light grey, which also keeps the home screen's white text readable on it
+            vec3 lit = mix(vec3(0.3, 0.32, 0.43), mix(vec3(0.96, 0.97, 0.99), vec3(0.78, 0.8, 0.84), l.overcast), day);
             lit = mix(lit, vec3(1.0, 0.82, 0.74), warm * 0.35 * (1.0 - l.overcast));
             lit *= 1.0 - l.dark * 0.55;
             // fair weather clouds stay bright white puffs, and only overcast ones go grey underneath
-            float floorShade = mix(0.86, 0.62, l.overcast);
-            float shade = mix(floorShade, 1.0, smoothstep(0.3, 0.75, m)) * mix(mix(0.95, 0.85, l.overcast), 1.0, smoothstep(l.bandLow, 1.0, uv.y));
+            float floorShade = mix(0.84, 0.6, l.overcast);
+            float shade = mix(floorShade, 1.0, smoothstep(0.15, 0.85, top)) * mix(mix(0.95, 0.85, l.overcast), 1.0, smoothstep(l.bandLow, 1.0, uv.y));
             vec3 cloud = lit * shade;
             if (flash > 0.0 && boltCount > 0) {
                 cloud += vec3(0.55, 0.6, 0.78) * flash * exp(-length(p - bolt[0].xy) * 3.5);

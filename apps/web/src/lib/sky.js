@@ -10,7 +10,7 @@ const lookFor = (scene, intensity) => {
     case "partly cloudy":
       return { dark: 0, overcast: 0, sun: 1 };
     case "cloudy":
-      return { dark: 0.3, overcast: 0.85, sun: 0 };
+      return { dark: 0.2, overcast: 0.55, sun: 0 };
     case "fog":
       return { dark: 0, overcast: 0, sun: 0.5 };
     case "drizzle":
@@ -27,6 +27,30 @@ const lookFor = (scene, intensity) => {
 };
 
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+// the shader's cloud cover for each scene. the page's cloud picture was drawn at cloudy's cover, so a scene shows it as
+// much as its own cover against that, and its lit tops are as bright as the shader's cloud color: a light grey by day,
+// greyer the more overcast, and a dim blue grey at night, darker in a storm
+const COVER = {
+  "partly cloudy": 0.45,
+  cloudy: 0.85,
+  drizzle: 0.75,
+  rain: 0.85,
+  snow: 0.7,
+  thunder: 0.95,
+};
+const DRAWN_COVER = 0.85;
+// the most of the picture's alpha anywhere, so the dim can cover its densest cloud
+const CLOUD_ALPHA = 0.92;
+const CLOUD_TOP = [0.96, 0.97, 0.99];
+
+const cloudsFor = (scene, intensity, day) => {
+  const look = lookFor(scene, intensity);
+  const shown = Math.min((COVER[scene] ?? 0) / DRAWN_COVER, 1);
+  const dayLight = 0.97 + (0.8 - 0.97) * look.overcast;
+  const light = (0.33 + (dayLight - 0.33) * day) * (1 - look.dark * 0.55);
+  return { shown, light };
+};
 
 export const skyColors = ({ day, warm, scene, intensity }) => {
   const look = lookFor(scene, intensity);
@@ -50,13 +74,16 @@ export const skyColors = ({ day, warm, scene, intensity }) => {
 // floors are the night and day looks, and the targets are the brightest the dimmed sky may be (relative luminance)
 const FLOOR = { top: [0.15, 0.25], low: [0.35, 0.55] };
 const TARGET = { top: 0.16, low: 0.1 };
-// the sun glow at its strongest, over the sky it sits on, since the dim has to cover it too
-const lit = (c, glow) => (glow ? mix(c, glow.slice(0, 3), glow[3]) : c);
+// the densest cloud and then the sun glow at its strongest, over the sky they sit on, since the dim has to cover both
+const lit = (c, cloud, glow) => {
+  const clouded = cloud ? mix(c, cloud.slice(0, 3), cloud[3]) : c;
+  return glow ? mix(clouded, glow.slice(0, 3), glow[3]) : clouded;
+};
 
-const dimFor = (c, day, end, glow) => {
+const dimFor = (c, day, end, cloud, glow) => {
   const [night, noon] = FLOOR[end];
   const floor = night + (noon - night) * day;
-  const bright = lit(c, glow).map((v) => v * 255);
+  const bright = lit(c, cloud, glow).map((v) => v * 255);
   let lo = floor;
   let hi = 0.95;
   if (luminance(bright.map((v) => v * (1 - lo))) <= TARGET[end]) {
@@ -104,6 +131,13 @@ export const skyVars = ({
       (1 - day) * (1 - look.overcast) * (scene === "fog" ? 0 : 1),
     ),
   };
+  const clouds = cloudsFor(scene, intensity, day);
+  vars["--clouds"] = amount(clouds.shown);
+  vars["--cloud-light"] = amount(clouds.light);
+  const cloud =
+    clouds.shown > 0
+      ? [...CLOUD_TOP.map((v) => v * clouds.light), CLOUD_ALPHA * clouds.shown]
+      : null;
   // the shader fades a body out as it sinks past the bottom edge
   const sunShow =
     sun && sunUp > 0
@@ -129,8 +163,8 @@ export const skyVars = ({
     vars["--moon-y"] = percent(1 - moon[1]);
     vars["--moon-glow"] = `rgba(224, 230, 255, ${amount(0.22 * moonShow)})`;
   }
-  vars["--dim-top"] = amount(dimFor(top, day, "top", glow));
-  vars["--dim-low"] = amount(dimFor(low, day, "low", glow));
+  vars["--dim-top"] = amount(dimFor(top, day, "top", cloud, glow));
+  vars["--dim-low"] = amount(dimFor(low, day, "low", cloud, glow));
   return vars;
 };
 

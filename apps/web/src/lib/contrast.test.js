@@ -49,6 +49,11 @@ const SCENES = [
 const HOURS = { noon: 12, dawn: 7, dusk: 19, night: 23 };
 const SAMPLES = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1];
 const GLOW_REACH = 0.2;
+// the clouds' layer covers the top three quarters of the sky, and its densest cloud and brightest top are taken
+// anywhere in it (flat.css, tools/render-clouds.mjs)
+const CLOUD_REACH = 0.75;
+const CLOUD_ALPHA = 0.92;
+const CLOUD_TOP = [0.96 * 255, 0.97 * 255, 0.99 * 255];
 
 const numbers = (text) => text.match(/[0-9.]+/g).map(Number);
 
@@ -77,8 +82,16 @@ const skies = () => {
       const sunAt = Number.parseFloat(vars["--sun-y"]) / 100;
       const dimTop = Number(vars["--dim-top"]);
       const dimLow = Number(vars["--dim-low"]);
+      const cloudLight = Number(vars["--cloud-light"]);
+      const cloud = [
+        ...CLOUD_TOP.map((v) => v * cloudLight),
+        CLOUD_ALPHA * Number(vars["--clouds"]),
+      ];
       const backs = SAMPLES.map((t) => {
         let color = top.map((v, i) => v + (low[i] - v) * t);
+        if (cloud[3] > 0 && t <= CLOUD_REACH) {
+          color = composite(cloud, color);
+        }
         if (glow && Math.abs(t - sunAt) <= GLOW_REACH) {
           color = composite(glow, color);
         }

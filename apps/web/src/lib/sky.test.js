@@ -46,7 +46,7 @@ test("a cloudy day is greyer and darker", () => {
     scene: "cloudy",
     intensity: "moderate",
   });
-  close(top, [0.3271, 0.3987, 0.503]);
+  close(top, [0.2757, 0.4059, 0.6008]);
 });
 
 test("fog by day uses the haze colors", () => {
@@ -167,4 +167,26 @@ test("the sun glow adds to the dim over it", () => {
   expect(Number(lit["--dim-top"])).toBeGreaterThan(
     Number(without["--dim-top"]),
   );
+});
+
+test("clouds show by their scene's cover, lit by day and dim at night", () => {
+  const at = (scene, day) =>
+    skyVars({
+      day,
+      warm: 0,
+      scene,
+      intensity: "moderate",
+      sun: null,
+      moon: null,
+    });
+  expect(at("clear", 1)["--clouds"]).toBe("0");
+  expect(at("cloudy", 1)["--clouds"]).toBe("1");
+  expect(Number(at("partly cloudy", 1)["--clouds"])).toBeCloseTo(
+    0.45 / 0.85,
+    3,
+  );
+  const noon = Number(at("cloudy", 1)["--cloud-light"]);
+  const night = Number(at("cloudy", 0)["--cloud-light"]);
+  expect(noon).toBeGreaterThan(night * 2);
+  expect(Number(at("thunder", 1)["--cloud-light"])).toBeLessThan(noon);
 });

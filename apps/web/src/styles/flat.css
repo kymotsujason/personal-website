@@ -13,6 +13,8 @@ html {
   --moon-y: 100%;
   --moon-glow: transparent;
   --stars: 1;
+  --clouds: 0;
+  --cloud-light: 1;
   --dim-top: 0.15;
   --dim-low: 0.35;
   --px: 0;
@@ -221,6 +223,16 @@ html {
     401px 647px,
     401px 647px,
     401px 647px;
+}
+
+/* the clouds hang from the top, drawn from the home screen's own cloud noise (tools/render-clouds.mjs). sky.js sets
+   how much of them shows and how lit they are from the scene and the hour, and the dim covers them like the sky */
+#page .sky .clouds {
+  position: absolute;
+  inset: 0 0 25%;
+  opacity: var(--clouds);
+  filter: brightness(var(--cloud-light));
+  background: url("/clouds.webp") center top / cover no-repeat;
 }
 
 #page .sky .dim {
