@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conditionFor, sunHours, moonHours, loadHome, readWeather, createWeatherFeed, SCENES } from "./weather.js";
+import { conditionFor, sunHours, moonHours, loadHome, readWeather, createWeatherFeed, DEFAULT_TIMEOUT, SCENES } from "./weather.js";
+import { UPSTREAM_TIMEOUT } from "../../worker/weather.js";
 
 const TABLE = [
     [[0, 1], "clear", "moderate"],
@@ -105,7 +106,8 @@ test("the default timeout outlasts the worker's own 5 s for open-meteo", async (
     } finally {
         globalThis.setTimeout = realSetTimeout;
     }
-    assert.deepEqual(delays, [6000]);
+    assert.deepEqual(delays, [DEFAULT_TIMEOUT]);
+    assert.ok(DEFAULT_TIMEOUT > UPSTREAM_TIMEOUT);
 });
 
 test("the weather part reads back when it has its numbers", () => {

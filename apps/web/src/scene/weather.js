@@ -68,7 +68,9 @@ const isNumber = (n) => typeof n === "number" && Number.isFinite(n);
 // asks the home route once, and gives its answer, { weather, github }, or null on any failure. it's the one worker
 // request a visit makes, so the github graph reads the same answer. the timeout is longer than the worker's own 5 s
 // for open-meteo, so a slow open-meteo still gets the github part through
-export const loadHome = async ({ fetchImpl = fetch, timeoutMs = 6000 } = {}) => {
+export const DEFAULT_TIMEOUT = 6000;
+
+export const loadHome = async ({ fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT } = {}) => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

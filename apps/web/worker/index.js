@@ -29,7 +29,11 @@ const loadWeather = async (request, url, ctx) => {
     waitUntil: (promise) => ctx.waitUntil(promise),
   });
   const result = await weatherFor(at[0], at[1]);
-  return result.ok ? result.weather : null;
+  if (!result.ok) {
+    console.warn("weather_unavailable", result.reason);
+    return null;
+  }
+  return result.weather;
 };
 
 export default {
@@ -39,7 +43,10 @@ export default {
       return env.ASSETS.fetch(request);
     }
     const [weather, github] = await Promise.all([
-      loadWeather(request, url, ctx).catch(() => null),
+      loadWeather(request, url, ctx).catch((error) => {
+        console.error("weather_rejected", error);
+        return null;
+      }),
       readGithub(env),
     ]);
     return Response.json(

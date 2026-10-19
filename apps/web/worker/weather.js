@@ -5,7 +5,7 @@ export const CELL = 0.5;
 const TTL = 30 * 60;
 const FAIL_TTL = 60;
 // under the client's own 6000 ms, so the client hears the worker's answer instead of giving up first
-const UPSTREAM_TIMEOUT = 5000;
+export const UPSTREAM_TIMEOUT = 5000;
 
 export const roundCell = (lat, lon) => [
   Math.round(lat / CELL) * CELL,
@@ -181,6 +181,9 @@ const moonUps = (daily, today) => {
 export const shapeForecast = (json) => {
   const code = json?.current?.weather_code;
   const today = (json?.current?.time || "").slice(0, 10);
+  if (!today) {
+    return null;
+  }
   const index = Math.max((json?.daily?.time || []).indexOf(today), 0);
   const rise = json?.daily?.sunrise?.[index];
   const set = json?.daily?.sunset?.[index];

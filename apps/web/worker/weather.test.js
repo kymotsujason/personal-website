@@ -107,6 +107,22 @@ test("a forecast becomes the route's answer", () => {
   });
 });
 
+test("a forecast without current.time gives null instead of yesterday's times", () => {
+  const { time: _time, ...current } = FORECAST.current;
+  expect(shapeForecast({ ...FORECAST, current })).toBeNull();
+  const twoDays = {
+    ...FORECAST,
+    current,
+    daily: {
+      time: ["2026-10-13", "2026-10-14"],
+      sunrise: ["2026-10-13T07:30", "2026-10-14T07:32"],
+      sunset: ["2026-10-13T18:25", "2026-10-14T18:23"],
+      moon_phase: [0.4, 0.5],
+    },
+  };
+  expect(shapeForecast(twoDays)).toBeNull();
+});
+
 test("a forecast missing its sunrise, as polar night might, gives null", () => {
   const polar = {
     ...FORECAST,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import worker from "./index.js";
+import { UPSTREAM_TIMEOUT } from "./weather.js";
 
 // the cache api, standing in. entries never expire here, since these tests only ask once
 const fakeCache = () => {
@@ -238,4 +239,85 @@ test("the cron saves github's calendar", async () => {
   await worker.scheduled({}, env, ctx);
   await Promise.all(waiting);
   expect(JSON.parse(env.HOME.items.get("github"))).toEqual(GITHUB);
+});
+
+const VANCOUVER_CF = { latitude: "49.28", longitude: "-123.12" };
+
+test("the home answer is never cached", async () => {
+  vi.stubGlobal("fetch", openMeteo(200, FORECAST));
+  const ok = await call(homeRequest("?tz=America/Vancouver", VANCOUVER_CF), {
+    HOME: fakeKv(),
+  });
+  expect(ok.headers.get("Cache-Control")).toBe("no-store");
+  vi.stubGlobal("fetch", openMeteo(503, {}));
+  const failed = await call(homeRequest("?tz=Asia/Tokyo", {}), {
+    HOME: fakeKv(),
+  });
+  expect(failed.headers.get("Cache-Control")).toBe("no-store");
+});
+
+test("a coordinate out of range, infinite, or not a string falls back to the time zone's city", async () => {
+  const bad = [
+    { latitude: "91", longitude: "-74" },
+    { latitude: "40", longitude: "181" },
+    { latitude: "-90.5", longitude: "10" },
+    { latitude: "Infinity", longitude: "10" },
+    { latitude: "40", longitude: "-Infinity" },
+    { latitude: "NaN", longitude: "10" },
+    { latitude: 40.7, longitude: -74 },
+    { latitude: null, longitude: null },
+  ];
+  for (const cf of bad) {
+    const fetchImpl = openMeteo(200, FORECAST);
+    vi.stubGlobal("fetch", fetchImpl);
+    cache.entries.clear();
+    await call(homeRequest("?tz=America/Vancouver", cf), { HOME: fakeKv() });
+    expect(fetchImpl.mock.calls[0][0], JSON.stringify(cf)).toMatch(
+      /latitude=49\.5&longitude=-123&/,
+    );
+  }
+});
+
+test("a coordinate on the limit is used", async () => {
+  const fetchImpl = openMeteo(200, FORECAST);
+  vi.stubGlobal("fetch", fetchImpl);
+  await call(
+    homeRequest("?tz=America/Vancouver", { latitude: "90", longitude: "-180" }),
+    { HOME: fakeKv() },
+  );
+  expect(fetchImpl.mock.calls[0][0]).toMatch(/latitude=90&longitude=-180&/);
+});
+
+test("weather that rejects still answers 200 with the github data, and logs the error", async () => {
+  const boom = new Error("cache api exploded");
+  vi.stubGlobal("caches", {
+    get default() {
+      throw boom;
+    },
+  });
+  const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+  const response = await call(
+    homeRequest("?tz=America/Vancouver", VANCOUVER_CF),
+    { HOME: fakeKv({ github: JSON.stringify(GITHUB) }) },
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ weather: null, github: GITHUB });
+  expect(warn).toHaveBeenCalledWith("weather_rejected", boom);
+});
+
+test("a failed weather logs its reason under a stable code", async () => {
+  vi.stubGlobal("fetch", openMeteo(503, {}));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  await call(homeRequest("?tz=America/Vancouver", VANCOUVER_CF), {
+    HOME: fakeKv(),
+  });
+  expect(warn).toHaveBeenCalledWith(
+    "weather_unavailable",
+    "open-meteo answered 503",
+  );
+});
+
+test("the upstream timeout stays under the client's own timeout", async () => {
+  const { DEFAULT_TIMEOUT } = await import("../src/scene/weather.js");
+  expect(UPSTREAM_TIMEOUT).toBeLessThan(DEFAULT_TIMEOUT);
 });
