@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { stubHome } from "../stubHome";
+import { stubHome, type Home } from "../stubHome";
 
 // youtube's iframe api, standing in, counting what it's asked to do in window.__yt
 export const FAKE_YOUTUBE = `
@@ -77,8 +77,8 @@ export const stubArt = async (page: Page) => {
 
 // every request the scene makes that leaves the preview is answered here with something the scene reads as nothing,
 // so no test waits on the network and none of them logs a failed load
-export const quiet = async (page: Page) => {
-  await stubHome(page);
+export const quiet = async (page: Page, home?: Home) => {
+  await stubHome(page, home);
   await stubArt(page);
   await page.route("https://www.youtube.com/iframe_api", (route) =>
     route.fulfill({
