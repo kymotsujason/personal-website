@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import sys
 
 # writes a bake from the browser (spike.bake's steps, saved by the playwright mcp's browser_evaluate) as a keys file
@@ -77,6 +78,19 @@ def roundFolds(out):
     return out
 
 
+# the file is written beside its place and moved over it, so a write that fails leaves the old keys as they were
+def writeKeys(out, path):
+    temp = path + ".tmp"
+    try:
+        with open(temp, "w") as file:
+            json.dump(out, file, separators=(",", ":"))
+        os.replace(temp, path)
+    except BaseException:
+        if os.path.exists(temp):
+            os.remove(temp)
+        raise
+
+
 if __name__ == "__main__":
     if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "bake"):
         print("usage: python3 tools/saveKeys.py <BAKE_JSON> <OUT_JSON> [bake]")
@@ -101,5 +115,5 @@ if __name__ == "__main__":
         reversals, bend, swings = shake(out[side])
         print(f"{side}: {len(out[side])} keys, largest step {move:.3f} cm and {turn:.1f} degrees")
         print(f"{side}: shake {reversals} turns back, largest bend {bend:.3f} cm, {swings} joint swings")
-    json.dump(out, open(sys.argv[2], "w"), separators=(",", ":"))
+    writeKeys(out, sys.argv[2])
     print("wrote", sys.argv[2])
