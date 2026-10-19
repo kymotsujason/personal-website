@@ -500,6 +500,69 @@ test.describe("the flat music page", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a player chunk that fails once loads the page again, and the music then works", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await page.route("https://www.youtube.com/iframe_api", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: FAKE_YOUTUBE,
+      }),
+    );
+    const { errors, blocked } = watchErrors(page);
+    let asked = 0;
+    await page.route("**/_astro/music.*.js", (route) => {
+      asked += 1;
+      if (asked === 1) {
+        blocked.add(route.request().url());
+        return route.abort();
+      }
+      return route.continue();
+    });
+    let loads = 0;
+    page.on("load", () => {
+      loads += 1;
+    });
+    await flatMusic(page);
+    await page.goto("/music");
+    await ready(page);
+    await expect(page.locator('#page [data-music="toggle"]')).toHaveText(
+      "Play",
+    );
+    expect(loads, "the page loaded again once").toBe(2);
+    expect(errors).toEqual([]);
+  });
+
+  test("a player chunk that keeps failing loads the page again once, then stays unavailable", async ({
+    page,
+  }) => {
+    await quiet(page);
+    const { errors, blocked } = watchErrors(page);
+    let asked = 0;
+    await page.route("**/_astro/music.*.js", (route) => {
+      asked += 1;
+      blocked.add(route.request().url());
+      return route.abort();
+    });
+    let loads = 0;
+    page.on("load", () => {
+      loads += 1;
+    });
+    await flatMusic(page);
+    await page.goto("/music");
+    const toggle = page.locator('#page [data-music="toggle"]');
+    await expect.poll(() => loads).toBe(2);
+    await expect(toggle).toHaveText("Music unavailable");
+    await toggle.click();
+    await page.waitForTimeout(1000);
+    await expect(toggle).toHaveText("Music unavailable");
+    expect(loads, "no third load").toBe(2);
+    expect(asked, "one ask for each load of the page").toBe(2);
+    expect(errors).toEqual([]);
+  });
+
   test("a list where every track fails says the music is unavailable", async ({
     page,
   }) => {

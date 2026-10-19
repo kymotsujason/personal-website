@@ -6,6 +6,7 @@ import {
   cleanTitle,
   savedLevel,
 } from "../scene/musicInfo.js";
+import { recoverFromChunk } from "./navigation.js";
 import { storageAdapter } from "../lib/storage.js";
 import TRACKS from "../data/tracks.json";
 
@@ -20,7 +21,8 @@ const listeners = new Set();
 let phoneMoving = null;
 let core = null;
 let loading = null;
-// the player's code didn't arrive, which the music reports as unavailable until the next try
+// the player's code didn't arrive. the browser keeps a failed import, so the music reports as unavailable until the
+// page loads again
 let coreFailed = false;
 
 // youtube loading while the phone moved made 100 to 300 ms frames on an iphone, and a failed scene drops has-3d
@@ -180,10 +182,6 @@ const tellListeners = () => {
 };
 
 const loadCore = () => {
-  if (!loading && coreFailed) {
-    coreFailed = false;
-    tellListeners();
-  }
   loading ??= Promise.all([
     import("../scene/music.js"),
     import("../scene/youtube.js"),
@@ -201,11 +199,14 @@ const loadCore = () => {
       return core;
     })
     .catch((error) => {
-      // the next gesture asks again
-      loading = null;
+      // asking again would get the same failed import, so this stays failed. a chunk a deploy removed is the likely
+      // cause, so the page loads again once, and when that's used up or the browser is offline the music stays unavailable
       coreFailed = true;
       console.warn("the music player didn't load", error);
       tellListeners();
+      if (navigator.onLine) {
+        recoverFromChunk();
+      }
       throw error;
     });
   return loading;
