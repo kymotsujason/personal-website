@@ -20,6 +20,7 @@ if (typeof mock.module !== "function") {
         throw broken;
     } } });
     mock.module("./appWindow.js", { namedExports: { closeApp: () => Promise.reject(broken) } });
+    mock.module("./quality.js", { namedExports: { reducedMotion: { matches: false } } });
 
     const { state } = await import("./state.js");
     const { setFail } = await import("./lifetime.js");

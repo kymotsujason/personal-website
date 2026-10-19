@@ -7,6 +7,7 @@ import { closeApp } from "./appWindow.js";
 import { requestHome } from "./navigation.js";
 import { idleDrift } from "./loop.js";
 import { signal, guard, failScene } from "./lifetime.js";
+import { reducedMotion } from "./quality.js";
 
 // closing and opening the phone. a swipe drives the fold directly (the hands follow the fold), and on release it
 // finishes or springs back. keys play the same motion on their own
@@ -145,6 +146,14 @@ export const closePhone = async () => {
     state.busy = true;
     prepareClose();
     settleIdle();
+    // with reduced motion the phone is shut at once, with no fold to watch
+    if (reducedMotion.matches) {
+        Object.assign(pose, closedPose(), { fold: 1 });
+        resumeIdle();
+        state.phone = "closed";
+        state.busy = false;
+        return "done";
+    }
     const g = { action: "close", from: { ...pose }, to: closedPose(), foldFrom: pose.fold, foldTo: 1 };
     if ((await runFold(g, 0, 1, FOLD_TIME.close, ease.inOutSine)) === "cancelled") {
         return "cancelled";
@@ -164,6 +173,13 @@ export const openPhone = async () => {
     state.busy = true;
     settleIdle();
     backdrop.lookAhead();
+    // with reduced motion the phone is open at once, and the hands don't go ahead of an unfold that isn't played
+    if (reducedMotion.matches) {
+        Object.assign(pose, openPose(), { fold: 0 });
+        finishOpen();
+        state.busy = false;
+        return "done";
+    }
     if ((await leadOpen()) === "cancelled") {
         return "cancelled";
     }

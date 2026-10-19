@@ -132,6 +132,68 @@ test.describe("with reduced motion", () => {
     ).toBe(true);
     expect(errors).toEqual([]);
   });
+
+  test("Escape and Enter close and open the phone at once, with no fold played", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    const { errors } = watchErrors(page);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    const first = await pose(page);
+    // the fold in every frame from here on
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__folds = [];
+      const take = () => {
+        w.__folds.push(w.__capture.pose().fold);
+        if (w.__folds.length < 600) {
+          requestAnimationFrame(take);
+        }
+      };
+      requestAnimationFrame(take);
+    });
+    const nextFrame = () =>
+      page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(resolve)),
+      );
+    await page.keyboard.press("Escape");
+    await nextFrame();
+    const closed = await pose(page);
+    expect({
+      phone: closed.phone,
+      busy: closed.busy,
+      fold: closed.fold,
+    }).toEqual({
+      phone: "closed",
+      busy: false,
+      fold: 1,
+    });
+    await page.waitForTimeout(500);
+    await page.keyboard.press("Enter");
+    await nextFrame();
+    const opened = await pose(page);
+    expect({
+      phone: opened.phone,
+      busy: opened.busy,
+      fold: opened.fold,
+    }).toEqual({
+      phone: "open",
+      busy: false,
+      fold: 0,
+    });
+    await page.waitForTimeout(500);
+    const folds: number[] = await page.evaluate(() => (window as any).__folds);
+    expect(
+      folds.filter((f) => f !== 0 && f !== 1),
+      "no frame caught the phone part way through a fold",
+    ).toEqual([]);
+    expect(
+      largestChange(first, await pose(page)),
+      "the phone and the hands are back where they started",
+    ).toBeLessThan(1e-6);
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe("with reduced motion and a home bar swipe", () => {

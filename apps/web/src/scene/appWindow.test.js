@@ -16,11 +16,18 @@ if (typeof mock.module !== "function") {
         assert.equal(run.status, 0, run.stdout + run.stderr);
     });
 } else {
+    // the reduced motion setting each test wants, and how many times the hands were led ahead of an open
+    const reduced = { matches: false };
+    let leads = 0;
     mock.module("./renderer.js", { namedExports: { camera: {}, backdrop: { lookAhead: () => {} } } });
-    mock.module("./device.js", { namedExports: { centerComp: () => 0, setFold: () => {}, leadOpen: () => Promise.resolve(), leadTo: () => Promise.resolve() } });
+    mock.module("./device.js", { namedExports: { centerComp: () => 0, setFold: () => {}, leadOpen: () => {
+        leads++;
+        return Promise.resolve();
+    }, leadTo: () => Promise.resolve() } });
     mock.module("./loop.js", { namedExports: { idleDrift: () => ({ x: 0, y: 0, z: 0 }) } });
     mock.module("./home.js", { namedExports: { music: { loadPlayer: () => {} } } });
-    mock.module("./quality.js", { namedExports: { reducedMotion: { matches: false } } });
+    mock.module("./quality.js", { namedExports: { reducedMotion: reduced } });
+    mock.module("./screens.js", { namedExports: { glyphRect: () => ({ x0: 0, y0: 0, x1: 10, y1: 10, radius: 2 }) } });
 
     const { state, pose } = await import("./state.js");
     const { cancelAll, runTweens } = await import("./tween.js");
@@ -33,7 +40,7 @@ if (typeof mock.module !== "function") {
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     const reset = (phone, fold) => {
         cancelAll();
-        Object.assign(state, { phone, busy: false, zoomed: false, openApp: null, poses: { rest: REST, stage: STAGE } });
+        Object.assign(state, { phone, busy: false, zoomed: false, openApp: null, screen: null, pageFade: null, poses: { rest: REST, stage: STAGE } });
         Object.assign(pose, REST, { fold, idle: 1, blur: 0 });
     };
 
@@ -80,6 +87,42 @@ if (typeof mock.module !== "function") {
         assert.equal(state.openApp, null);
         assert.equal(state.busy, false);
     });
+
+    // with reduced motion the keys and a cover tap land on the end pose at once. the tweens here only move when the test
+    // runs them, so a fold that still plays loses the race to the next macrotask
+    const atOnce = (promise) => Promise.race([promise, settle().then(() => "still moving")]);
+    const withReducedMotion = async (fn) => {
+        reduced.matches = true;
+        leads = 0;
+        try {
+            await fn();
+        } finally {
+            reduced.matches = false;
+            cancelAll();
+        }
+    };
+    const poseNow = () => ({ z: pose.z, fold: pose.fold });
+
+    test("with reduced motion openPhone lands open at once, with no lead for the hands", () => withReducedMotion(async () => {
+        reset("closed", 1);
+        assert.equal(await atOnce(openPhone()), "done");
+        assert.deepEqual({ phone: state.phone, busy: state.busy, leads, ...poseNow() }, { phone: "open", busy: false, leads: 0, z: REST.z, fold: 0 });
+    }));
+
+    test("with reduced motion closePhone lands closed at once", () => withReducedMotion(async () => {
+        reset("open", 0);
+        assert.equal(await atOnce(closePhone()), "done");
+        assert.deepEqual({ phone: state.phone, busy: state.busy, ...poseNow() }, { phone: "closed", busy: false, z: STAGE.z, fold: 1 });
+    }));
+
+    test("with reduced motion a tap on the cover opens the phone at once and goes on to the app's crossfade", () => withReducedMotion(async () => {
+        reset("closed", 1);
+        state.screen = { homeEl: {} };
+        const app = { name: "About", glyph: "A", color: "#3d405b" };
+        openFromCover(app);
+        await settle();
+        assert.deepEqual({ phone: state.phone, app: state.openApp, fade: state.pageFade, leads, ...poseNow() }, { phone: "open", app, fade: 0, leads: 0, z: REST.z, fold: 0 });
+    }));
 
     // with no navigation installed a tap opens the app itself, and an open that throws (here, with no screen built to
     // find the icon on) fails the scene instead of being dropped
