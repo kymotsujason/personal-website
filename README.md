@@ -13,6 +13,10 @@ Run `pnpm -C apps/web test` for the unit tests and `pnpm -C apps/web test:browse
 
 The browser tests need Playwright's Chromium and Firefox (`pnpm -C apps/web exec playwright install chromium firefox`). Firefox runs only the checks for bugs it alone shows. The browser tests run on the GPU, and `PW_GPU=0` runs them on SwiftShader instead. The compare fixtures are tied to the GPU and driver of the machine that recorded them.
 
+## The GitHub token
+
+The Worker's daily cron reads my public contribution graph with a fine-grained GitHub token, stored as the `GITHUB_TOKEN` secret (`pnpm -C apps/web exec wrangler secret put GITHUB_TOKEN`). It has no permissions, so it can only read public data, and it doesn't expire. If it's ever exposed, revoke it on GitHub and store a new one the same way.
+
 ## Licenses
 
 The code, the dev tools, the baked keys, and `hands-rig.json` are under the MIT license (see `LICENSE`).
