@@ -127,7 +127,7 @@ export const buildWidgets = (homeEl) => {
     widgets.innerHTML = `
         <div class="widget small tappable about-card" data-action="about" role="button" tabindex="0"><img class="avatar" src="/ice.png" alt=""><span class="wt w-big">Jason</span><span class="wt w-line fit">Just another developer =P</span></div>
         <div class="widget small tappable" data-action="project" role="button" tabindex="0"><span class="wt w-title">LATEST PROJECT</span><span class="wt w-big wrap"></span></div>
-        <div class="widget wide tappable" data-action="github" role="button" tabindex="0"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></div>
+        <a class="widget wide tappable" data-action="github" href="${GITHUB_URL}" target="_blank" rel="noopener" draggable="false"><div class="w-head"><span class="wt w-title">GITHUB</span><span class="wt w-title gh-total"></span></div><div class="graph"></div></a>
         <div class="widget wide tappable music-card" data-action="music"><img class="art" crossorigin="anonymous" alt=""><div class="m-side"><span class="wt w-line wrap m-title" data-lines="1">Music</span><span class="wt w-line wrap m-channel" data-lines="1">Songs I grew up on</span><span class="m-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-at="0" data-time="0" data-duration="0"></span><div class="m-controls"><span class="ctl" data-control="previous" data-icon="previous" role="button" tabindex="0" aria-label="Previous"></span><span class="ctl" data-control="toggle" data-icon="play" role="button" tabindex="0" aria-label="Play"></span><span class="ctl" data-control="next" data-icon="next" role="button" tabindex="0" aria-label="Next"></span></div></div></div>`;
     widgets.querySelector('[data-action="project"] .w-big').textContent = latest.title;
     widgets.querySelector("img.avatar").addEventListener("load", guard(() => {
@@ -136,18 +136,19 @@ export const buildWidgets = (homeEl) => {
     widgets.querySelector("img.art").addEventListener("load", guard(() => {
         state.screensChanged = true;
     }));
+    // the github widget is a plain link, so the browser opens it, from a key too
     const actions = {
         about: (el) => tapApp(siteData.apps.find((a) => a.name === "About"), { from: elementRect(homeEl, el) }),
-        github: () => window.open(GITHUB_URL, "_blank", "noopener"),
         // the latest project's own page, which the flat home's card links to as well
         project: (el) => tapApp(siteData.apps.find((a) => a.name === "Projects"), { from: elementRect(homeEl, el), path: latest.path }),
         music: (el) => tapApp(siteData.apps.find((a) => a.name === "Music"), { from: elementRect(homeEl, el) })
     };
-    widgets.querySelectorAll("[data-action]").forEach((el) => {
-        el.addEventListener("click", guard(() => actions[el.dataset.action](el)));
-        // the card holds the controls, so only a key pressed on the widget itself opens its app
-        listenForPress(el, (event) => event.target === el);
+    Object.entries(actions).forEach(([name, act]) => {
+        const el = widgets.querySelector(`[data-action="${name}"]`);
+        el.addEventListener("click", guard(() => act(el)));
     });
+    // the music card holds its controls and isn't a button itself, so only a tap opens it
+    widgets.querySelectorAll('[data-action][role="button"]').forEach((el) => listenForPress(el));
     // the card's buttons act on their own, without opening the music app under them
     widgets.querySelectorAll("[data-control]").forEach((el) => {
         listenForPress(el);

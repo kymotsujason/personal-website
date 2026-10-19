@@ -293,6 +293,12 @@ html.scene-failed #page {
   cursor: pointer;
 }
 
+/* the github widget is a link, drawn the same as the other widgets */
+a.widget {
+  color: inherit;
+  text-decoration: none;
+}
+
 .screen .home {
   position: absolute;
   inset: 60px 0 0;

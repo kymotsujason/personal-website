@@ -619,6 +619,61 @@ test.describe("keyboard use of the 3D screens", () => {
     ).toBe(true);
   });
 
+  test("the GitHub widget is a link that opens GitHub in a new tab, from Enter too", async ({
+    page,
+  }) => {
+    await page
+      .context()
+      .route("https://github.com/**", (route) =>
+        route.fulfill({ status: 200, contentType: "text/html", body: "" }),
+      );
+    await openHome(page);
+    const widget = '#css-layer .widget[data-action="github"]';
+    expect(
+      await page.evaluate((s) => {
+        const el = document.querySelector(s)!;
+        return [
+          el.tagName,
+          el.getAttribute("href"),
+          el.getAttribute("target"),
+          el.getAttribute("rel"),
+          el.getAttribute("role"),
+        ];
+      }, widget),
+    ).toEqual([
+      "A",
+      "https://github.com/kymotsujason",
+      "_blank",
+      "noopener",
+      null,
+    ]);
+    await tabTo(page, widget);
+    const popup = page.waitForEvent("popup");
+    await page.keyboard.press("Enter");
+    expect((await popup).url()).toBe("https://github.com/kymotsujason");
+    expect(await phone(page)).toMatchObject({ zoomed: false });
+  });
+
+  test("the music card itself answers no keys, only its controls do", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.evaluate(() =>
+      document
+        .querySelector("#css-layer .music-card")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        ),
+    );
+    await page.clock.runFor(1000);
+    await page.waitForTimeout(500);
+    expect(await phone(page)).toMatchObject({
+      busy: false,
+      zoomed: false,
+      app: null,
+    });
+  });
+
   test("the music card holds its controls without being a button itself", async ({
     page,
   }) => {
