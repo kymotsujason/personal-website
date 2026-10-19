@@ -1499,13 +1499,12 @@ const repeatedInputs = [
   ["<svg/> x200k", "a.astro", "", "<svg/>", 200000, ""],
 ];
 
-// a regression here once grew one node process to about 45 GB, so the input runs in a child under a memory cap
-test("checkFiles stays small and fast on long repeated inputs", (t) => {
-  const probe = spawnSync("systemd-run", ["--user", "--scope", "-q", "true"]);
-  if (probe.status !== 0) {
-    t.skip("needs systemd-run --user for a memory cap");
-    return;
-  }
+// a regression here once grew one node process to about 45 GB, so the input runs in a child under a memory cap. the cap
+// is systemd's where a user manager exists, and node's own heap limit where it doesn't (a CI runner, say), so the check
+// never skips
+const systemdScope = () => spawnSync("systemd-run", ["--user", "--scope", "-q", "true"]).status === 0;
+
+const runRepeatedInputs = (viaSystemd) => {
   const script = `import(${JSON.stringify(join(here, "check.mjs"))}).then(({ checkFiles }) => {
     const cases = ${JSON.stringify(repeatedInputs)};
     for (const [label, path, head, unit, count, tail] of cases) {
@@ -1515,23 +1514,28 @@ test("checkFiles stays small and fast on long repeated inputs", (t) => {
       console.log(JSON.stringify({ label, ms: Math.round(performance.now() - start), rss: process.memoryUsage().rss }));
     }
   });`;
-  const result = spawnSync(
-    "systemd-run",
-    [
-      "--user",
-      "--scope",
-      "-q",
-      "-p",
-      "MemoryMax=1G",
-      "-p",
-      "MemorySwapMax=0",
-      process.execPath,
-      "--max-old-space-size=512",
-      "-e",
-      script,
-    ],
-    { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" },
-  );
+  const node = ["--max-old-space-size=512", "-e", script];
+  const [command, args] = viaSystemd
+    ? [
+        "systemd-run",
+        [
+          "--user",
+          "--scope",
+          "-q",
+          "-p",
+          "MemoryMax=1G",
+          "-p",
+          "MemorySwapMax=0",
+          process.execPath,
+          ...node,
+        ],
+      ]
+    : [process.execPath, node];
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    timeout: 60000,
+    killSignal: "SIGKILL",
+  });
   assert.equal(
     result.status,
     0,
@@ -1546,4 +1550,13 @@ test("checkFiles stays small and fast on long repeated inputs", (t) => {
     assert.ok(rss < 1e9, `${label} reached ${Math.round(rss / 1e6)} MB`);
     assert.ok(ms < 5000, `${label} took ${ms} ms`);
   }
+};
+
+test("checkFiles stays small and fast on long repeated inputs", () => {
+  runRepeatedInputs(systemdScope());
+});
+
+// the path a machine with no user manager takes, run here too so it can't rot unseen
+test("checkFiles stays small and fast on long repeated inputs under node's heap limit alone", () => {
+  runRepeatedInputs(false);
 });
