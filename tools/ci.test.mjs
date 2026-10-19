@@ -32,19 +32,31 @@ test("the workflow on every push runs pnpm check", () => {
 });
 
 test("a failing step can't skip the range scan, the suites, or the build's dist checks", () => {
-  const runs = workflowSteps.filter((step) => /^ {6}- run: /.test(step));
-  assert.match(runs[0], /check\.mjs --range "\$BEFORE" "\$AFTER"/);
+  const scan = workflowSteps.findIndex((step) =>
+    /^ {6}- run: node tools\/privacy\/check\.mjs --range "\$BEFORE" "\$AFTER"$/m.test(
+      step,
+    ),
+  );
+  assert.ok(scan !== -1, workflow);
   for (const pattern of [
     /^ {6}- run: pnpm check$/m,
     /^ {6}- run: pnpm -C apps\/web build$/m,
   ]) {
     assert.ok(
-      runs.some((step) => pattern.test(step)),
+      workflowSteps.slice(scan + 1).some((step) => pattern.test(step)),
       String(pattern),
     );
   }
-  for (const step of runs.slice(1)) {
+  for (const step of workflowSteps.slice(scan + 1)) {
     assert.ok(runsAfterFailure(step), step);
+  }
+  if (runsAfterFailure(workflowSteps[scan])) return;
+  for (const step of workflowSteps.slice(0, scan)) {
+    const checkout = /^ {6}- uses: actions\/checkout@/m.test(step);
+    const plainNode =
+      /^ {6}- uses: actions\/setup-node@/m.test(step) &&
+      !/^ {10}cache:/m.test(step);
+    assert.ok(checkout || plainNode, step);
   }
 });
 
@@ -55,6 +67,7 @@ test("vitest fails when it finds no tests", () => {
     { cwd: site, encoding: "utf8", env: { ...process.env, CI: "1" } },
   );
   assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.match(run.stdout + run.stderr, /No test files found/);
 });
 
 test("every node --test glob in the scripts matches a test file", () => {
