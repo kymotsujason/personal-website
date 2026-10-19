@@ -105,6 +105,11 @@ const dimFor = (c, day, end, cloud, glow) => {
 const rgb = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(", ")})`;
 const percent = (v) => `${Math.round(v * 1000) / 10}%`;
 const amount = (v) => String(Math.round(v * 1000) / 1000);
+// the wallpaper shader's fade as a body sinks past the bottom edge, smoothstep(-0.03, 0.05, y)
+const edgeFade = (y) => {
+  const t = Math.min(Math.max((y + 0.03) / 0.08, 0), 1);
+  return t * t * (3 - 2 * t);
+};
 
 export const skyVars = ({
   day,
@@ -140,11 +145,7 @@ export const skyVars = ({
     clouds.shown > 0
       ? [...CLOUD_TOP.map((v) => v * clouds.light), CLOUD_ALPHA * clouds.shown]
       : null;
-  // the shader fades a body out as it sinks past the bottom edge
-  const sunShow =
-    sun && sunUp > 0
-      ? look.sun * Math.min(Math.max((sun[1] + 0.03) / 0.08, 0), 1)
-      : 0;
+  const sunShow = sun && sunUp > 0 ? look.sun * edgeFade(sun[1]) : 0;
   let glow = null;
   if (sunShow > 0) {
     const color = mix([1, 0.98, 0.94], [1, 0.78, 0.55], warm).map((v) =>
@@ -157,8 +158,7 @@ export const skyVars = ({
   }
   const moonShow =
     moon && moonUp > 0 && scene !== "fog"
-      ? (1 - 0.9 * look.overcast) *
-        Math.min(Math.max((moon[1] + 0.03) / 0.08, 0), 1)
+      ? (1 - 0.9 * look.overcast) * edgeFade(moon[1])
       : 0;
   if (moonShow > 0) {
     vars["--moon-x"] = percent(moon[0]);

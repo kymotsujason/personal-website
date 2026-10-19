@@ -192,3 +192,30 @@ test("clouds show by their scene's cover, lit by day and dim at night", () => {
   expect(noon).toBeGreaterThan(night * 2);
   expect(Number(at("thunder", 1)["--cloud-light"])).toBeLessThan(noon);
 });
+
+const glowAlpha = (glow) => Number(/, ([\d.]+)\)$/.exec(glow)[1]);
+// the wallpaper shader's smoothstep(-0.03, 0.05, y) as a body sinks past the bottom edge (scene/wallpaper.js)
+const shaderFade = (y) => {
+  const t = Math.min(Math.max((y + 0.03) / 0.08, 0), 1);
+  return t * t * (3 - 2 * t);
+};
+
+test("the sun glow fades past the bottom edge on the shader's curve", () => {
+  const sunAt = (y) =>
+    glowAlpha(
+      skyVars({ ...night, day: 1, sunUp: 1, sun: [0.5, y] })["--sun-glow"],
+    );
+  const full = sunAt(0.8);
+  for (const y of [-0.02, -0.01, 0.03]) {
+    expect(sunAt(y) / full).toBeCloseTo(shaderFade(y), 2);
+  }
+});
+
+test("the moon glow fades past the bottom edge on the shader's curve", () => {
+  const moonAt = (y) =>
+    glowAlpha(skyVars({ ...night, moonUp: 1, moon: [0.5, y] })["--moon-glow"]);
+  const full = moonAt(0.8);
+  for (const y of [-0.02, -0.01, 0.03]) {
+    expect(moonAt(y) / full).toBeCloseTo(shaderFade(y), 2);
+  }
+});
