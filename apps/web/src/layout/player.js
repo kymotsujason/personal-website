@@ -354,8 +354,8 @@ const loadOnMusicPage = () => {
 // preference off
 const NOT_GESTURE_KEYS = new Set(["Escape", "Shift", "Control", "Alt", "Meta"]);
 
-// a first press on the card's own buttons, or the music page's, is left to them, so one press doesn't resume and
-// toggle both. a first gesture alone never loads the page again for a missing chunk
+// a first press on the card's own buttons, or on the music page's controls and track rows, is left to them, so one
+// press doesn't resume and toggle or play both. a first gesture alone never loads the page again for a missing chunk
 const onFirstGesture = (event) => {
   if (event.type === "keydown" && NOT_GESTURE_KEYS.has(event.key)) {
     return;
@@ -364,7 +364,9 @@ const onFirstGesture = (event) => {
   removeEventListener("keydown", onFirstGesture, true);
   const target = event.target instanceof Element ? event.target : null;
   const onControl = Boolean(
-    target?.closest(".music-card [data-control], #page [data-music]"),
+    target?.closest(
+      ".music-card [data-control], #page [data-music], #page [data-track]",
+    ),
   );
   withCore((c) => {
     c.load();

@@ -131,3 +131,13 @@ test("player code that throws says the music is unavailable without counting as 
   await settle();
   expect(recoverFromChunk).not.toHaveBeenCalled();
 });
+
+test("a first press on a music page track row plays that track without resuming", async () => {
+  const { core } = await startPlayer({ chunk: "there", app: "Music" });
+  await vi.waitFor(() => expect(core.load).toHaveBeenCalled());
+  const track = document.getElementById("track");
+  press(track);
+  press(track, "click");
+  await vi.waitFor(() => expect(core.playAt).toHaveBeenCalledWith(3));
+  expect(core.resume).not.toHaveBeenCalled();
+});

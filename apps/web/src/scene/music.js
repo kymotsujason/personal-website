@@ -285,6 +285,10 @@ export const createMusic = ({ tracks: list, loadPlayer, storage, volumes = VOLUM
             if (storage.getItem("music") !== "on") {
                 return false;
             }
+            // music started from youtube's own player, whose presses the page never hears, is already on
+            if (playing) {
+                return true;
+            }
             if (player) {
                 start(true);
             } else {
