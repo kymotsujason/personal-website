@@ -1,4 +1,4 @@
-name: Privacy check
+name: Privacy scan, check, and build
 
 on: push
 
@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 jobs:
-  privacy:
+  scan-check-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,11 +18,18 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # the privacy and tools suites, then the web app's format, lint, types, and unit tests
-      - run: pnpm check
+      # a failed step would skip the steps after it, so each check runs whatever the others do. the scan needs only node
+      # and git and goes first, since the next push's range starts where this one ends
       - run: node tools/privacy/check.mjs --range "$BEFORE" "$AFTER"
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
+      - run: pnpm install --frozen-lockfile
+        id: install
+        if: ${{ !cancelled() }}
+      # the privacy and tools suites, then the web app's format, lint, types, and unit tests
+      - run: pnpm check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      # the build ends with the html rules and the privacy check on dist
       - run: pnpm -C apps/web build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
