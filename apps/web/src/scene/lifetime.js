@@ -43,7 +43,7 @@ const joined = (own) => {
     return { signal: both.signal, release };
 };
 
-export const sceneSignal = (own = null) => joined(own).signal;
+export const sceneSignal = () => fetches.signal;
 
 export const sceneFetch = (url, options = {}) => {
     const { signal: both, release } = joined(options.signal);

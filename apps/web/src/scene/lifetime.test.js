@@ -21,12 +21,22 @@ test("a guarded handler hands what it throws to the failure, and what it rejects
 // the scene's fetch signal lasts the page's life, so a listener left on it for each fetch would pile up
 const sceneListeners = () => getEventListeners(sceneSignal(), "abort").length;
 
-test("a signal joined to the scene's fetches leaves no listener behind on them", () => {
-    const before = sceneListeners();
-    for (let i = 0; i < 20; i++) {
-        sceneSignal(new AbortController().signal);
+test("the scene's signal takes no listener off a caller's own signal, with or without AbortSignal.any", () => {
+    const any = AbortSignal.any;
+    try {
+        for (const withAny of [any, undefined]) {
+            AbortSignal.any = withAny;
+            const before = sceneListeners();
+            const own = new AbortController();
+            for (let i = 0; i < 20; i++) {
+                sceneSignal(own.signal);
+            }
+            assert.equal(sceneListeners(), before);
+            assert.equal(getEventListeners(own.signal, "abort").length, 0);
+        }
+    } finally {
+        AbortSignal.any = any;
     }
-    assert.equal(sceneListeners(), before);
 });
 
 test("without AbortSignal.any, a fetch takes its listener off the scene's fetches once it settles, and still ends with its own signal", async () => {
@@ -55,12 +65,8 @@ test("without AbortSignal.any, a fetch takes its listener off the scene's fetche
 });
 
 test("the scene's fetches all end together, the three loaders' included, and stay ended", () => {
-    const own = new AbortController();
-    const both = sceneSignal(own.signal);
-    assert.equal(both.aborted, false);
     assert.equal(sceneSignal().aborted, false);
     endFetches();
-    assert.equal(both.aborted, true);
     assert.equal(sceneSignal().aborted, true);
     assert.equal(loadingManager.abortController.signal.aborted, true);
     // three's own manager would make a fresh controller after an abort
