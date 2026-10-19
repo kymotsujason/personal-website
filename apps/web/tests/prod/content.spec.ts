@@ -79,7 +79,8 @@ test.describe("with javascript off", () => {
     await expect(page.locator("#page h1")).toHaveText("About");
     await expect(
       page.locator("#page .fact", {
-        hasText: "My favorite food is toro sashimi",
+        hasText:
+          "I believe first impressions matter, UI/UX must be intuitive and elegant",
       }),
     ).toBeVisible();
     await expect(
@@ -98,7 +99,7 @@ test.describe("with javascript off", () => {
       const page = await context.newPage();
       await page.goto("/about");
       const facts = page.locator("#page .fact");
-      await expect(facts).toHaveCount(9);
+      await expect(facts).toHaveCount(8);
       for (const fact of await facts.all()) {
         await expect(fact).toBeVisible();
       }
@@ -141,7 +142,9 @@ test.describe("the facts stack", () => {
     await expect(button).toHaveCount(1);
     await expect(page.locator("#page button [data-pos]")).toHaveCount(0);
     await expect(front).toHaveCount(1);
-    await expect(front).toHaveText("My favorite food is toro sashimi");
+    await expect(front).toHaveText(
+      "I believe first impressions matter, UI/UX must be intuitive and elegant",
+    );
     // nothing is announced until the visitor asks for the next fact
     await expect(live).toHaveText("");
     await expect(front).not.toHaveAttribute("aria-hidden", /.*/);
@@ -150,22 +153,26 @@ test.describe("the facts stack", () => {
       "true",
     );
     await expect(page.locator("#page .fact[aria-hidden='true']")).toHaveCount(
-      8,
+      7,
     );
     await button.click();
-    await expect(front).toHaveText("I became a tech enthusiast at 16");
-    await expect(live).toHaveText("I became a tech enthusiast at 16");
+    await expect(front).toHaveText(
+      "Optimizing is a road with no end, but I still enjoy it",
+    );
+    await expect(live).toHaveText(
+      "Optimizing is a road with no end, but I still enjoy it",
+    );
     await expect(front).not.toHaveAttribute("aria-hidden", /.*/);
     await expect(page.locator("#page .fact[aria-hidden='true']")).toHaveCount(
-      8,
+      7,
     );
     await button.focus();
     await page.keyboard.press("Enter");
     await expect(front).toHaveText(
-      "I own a stuffed dolphin that was taller than me",
+      "I would like to travel more to certain eastern countries",
     );
     await page.keyboard.press("Space");
-    await expect(front).toHaveText("My dream is to build Maid-Chan");
+    await expect(front).toHaveText("I'm not a fan of paper");
     await expect(page.locator("#page .fact[data-pos='1']")).toHaveCount(1);
   });
 });

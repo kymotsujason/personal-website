@@ -1,4 +1,4 @@
-# Jason Yue's personal website
+# My personal website
 
 This is the source for my personal site. It's an interactive three.js scene of my desk with a blog and project pages, built with Astro and served from Cloudflare Workers. A small Worker also serves `/api/home`, which feeds the weather and GitHub bits of the scene.
 
@@ -12,10 +12,6 @@ pnpm -C apps/web dev
 Run `pnpm -C apps/web test` for the unit tests and `pnpm -C apps/web test:browser` for the Playwright tests.
 
 The browser tests need Playwright's Chromium and Firefox (`pnpm -C apps/web exec playwright install chromium firefox`). Firefox runs only the checks for bugs it alone shows. The browser tests run on the GPU, and `PW_GPU=0` runs them on SwiftShader instead. The compare fixtures are tied to the GPU and driver of the machine that recorded them.
-
-## The GitHub token
-
-The Worker's daily cron reads my public contribution graph with a fine-grained GitHub token, stored as the `GITHUB_TOKEN` secret (`pnpm -C apps/web exec wrangler secret put GITHUB_TOKEN`). It has no permissions, so it can only read public data, and it doesn't expire. If it's ever exposed, revoke it on GitHub and store a new one the same way.
 
 ## Licenses
 
