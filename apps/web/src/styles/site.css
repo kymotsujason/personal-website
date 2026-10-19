@@ -297,6 +297,7 @@ html.scene-failed #page {
 a.widget {
   color: inherit;
   text-decoration: none;
+  -webkit-touch-callout: none;
 }
 
 .screen .home {
