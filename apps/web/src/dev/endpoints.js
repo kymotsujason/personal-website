@@ -1,6 +1,7 @@
 // the dev server's own routes: /__save writes a key file the pose editor or a bake sends into public/keys, /__perf
 // writes a frame log a phone sends with ?perf (perf.js) into perf-logs/, and /api/home stands in for the worker's
 // route. /__perf also runs beside astro preview when PERF=1, since astro preview doesn't load the site's vite plugins
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -11,20 +12,42 @@ const perfDir = path.resolve(import.meta.dirname, "../../perf-logs");
 const SAVE_MAX_BYTES = 1024 * 1024;
 const PERF_MAX_BYTES = 8 * 1024 * 1024;
 
+const isLoopback = (address) => address === "::1" || /^(?:::ffff:)?127\.\d+\.\d+\.\d+$/.test(address);
+
+// a request with no origin may come from a tool like curl on this machine, but not from another one. the preview's
+// proxy adds the client's address to x-forwarded-for, so every hop has to be this machine too
+const fromThisMachine = (req) => {
+    const forwarded = req.headers["x-forwarded-for"];
+    const hops = forwarded === undefined ? [] : forwarded.split(",").map((hop) => hop.trim());
+    return isLoopback(req.socket.remoteAddress || "") && hops.every(isLoopback);
+};
+
 // any page open while the server runs can send a simple post to it, so a write has to come from the server's own page
-// (or from a tool like curl, which sends no origin)
+// (or from a tool like curl on this machine, which sends no origin)
 const fromOwnPage = (req) => {
     if (req.headers["sec-fetch-site"] === "cross-site") {
         return false;
     }
     const origin = req.headers.origin;
     if (origin === undefined) {
-        return true;
+        return fromThisMachine(req);
     }
     try {
         return new URL(origin).host === req.headers.host;
     } catch {
         return false;
+    }
+};
+
+// a write that fails partway leaves the old file alone, since the new text only takes its name once it's all on disk
+const writeWhole = (file, text) => {
+    const temp = `${file}.${randomUUID()}.tmp`;
+    try {
+        fs.writeFileSync(temp, text);
+        fs.renameSync(temp, file);
+    } catch (error) {
+        fs.rmSync(temp, { force: true });
+        throw error;
     }
 };
 
@@ -62,14 +85,18 @@ const jsonWriter = (dir, maxBytes) => (req, res) => {
             res.end("not json");
             return;
         }
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, `${name}.json`), body);
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            writeWhole(path.join(dir, `${name}.json`), body);
+        } catch (error) {
+            console.error(`couldn't save ${name}.json: ${error.message}`);
+            res.statusCode = 500;
+            res.end("couldn't save");
+            return;
+        }
         res.end("saved");
     });
 };
-
-const saveKeys = jsonWriter(keysDir, SAVE_MAX_BYTES);
-const savePerf = jsonWriter(perfDir, PERF_MAX_BYTES);
 
 const dataDir = path.resolve(import.meta.dirname, "../data");
 
@@ -105,17 +132,19 @@ const homeRoute = () => {
 };
 
 // a vite plugin for the dev server
-export const devEndpoints = () => ({
+export const devEndpoints = ({ keys = keysDir, perf = perfDir } = {}) => ({
     name: "dev-endpoints",
     configureServer(server) {
-        server.middlewares.use("/__save", saveKeys);
-        server.middlewares.use("/__perf", savePerf);
+        server.middlewares.use("/__save", jsonWriter(keys, SAVE_MAX_BYTES));
+        server.middlewares.use("/__perf", jsonWriter(perf, PERF_MAX_BYTES));
         server.middlewares.use("/api/home", homeRoute());
     }
 });
 
 // a small server on a free local port that answers /__perf, for astro preview to proxy to. gives back its address
-export const startPerfServer = async () => {
+// and a way to close it
+export const startPerfServer = async (dir = perfDir) => {
+    const savePerf = jsonWriter(dir, PERF_MAX_BYTES);
     const server = http.createServer((req, res) => {
         if (new URL(req.url, "http://localhost").pathname !== "/__perf") {
             res.statusCode = 404;
@@ -129,5 +158,13 @@ export const startPerfServer = async () => {
         server.listen(0, "127.0.0.1", resolve);
     });
     server.unref();
-    return `http://127.0.0.1:${server.address().port}`;
+    return {
+        url: `http://127.0.0.1:${server.address().port}`,
+        close: () => new Promise((resolve) => server.close(resolve))
+    };
 };
+
+// astro preview's proxy options for /__perf. the host stays the one the phone asked for, so the origin check compares
+// it with the page's origin, and the phone's address goes in x-forwarded-for, since every request reaches the frame log
+// server from this machine
+export const perfProxy = (target) => ({ "/__perf": { target, changeOrigin: false, xfwd: true } });

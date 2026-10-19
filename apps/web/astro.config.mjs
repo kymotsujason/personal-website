@@ -6,7 +6,11 @@ import { satteri } from "@astrojs/markdown-satteri";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
-import { devEndpoints, startPerfServer } from "./src/dev/endpoints.js";
+import {
+  devEndpoints,
+  perfProxy,
+  startPerfServer,
+} from "./src/dev/endpoints.js";
 
 // each build writes its commit into a meta tag, so an open tab can tell a deploy landed. a copy without git (a
 // tarball, say) still builds
@@ -43,8 +47,8 @@ const devTools = () => ({
         );
       }
       if (command === "preview" && process.env.PERF === "1") {
-        const target = await startPerfServer();
-        updateConfig({ vite: { preview: { proxy: { "/__perf": target } } } });
+        const { url } = await startPerfServer();
+        updateConfig({ vite: { preview: { proxy: perfProxy(url) } } });
       }
     },
   },
