@@ -501,11 +501,19 @@ test.describe("the flat music page", () => {
       return route.abort();
     });
     await flatMusic(page);
+    // the failed chunk loads the page again once (recoverFromChunk), and the first load can already say "Music
+    // unavailable" just before that, so the checks wait for the second load
+    let loads = 0;
+    page.on("load", () => {
+      loads += 1;
+    });
     await page.goto("/music");
+    await expect.poll(() => loads).toBe(2);
     await expect(page.locator('#page [data-music="toggle"]')).toHaveText(
       "Music unavailable",
     );
     expect(await youtube(page), "no player without its code").toBeNull();
+    expect(loads, "the page loads again only once").toBe(2);
     expect(errors).toEqual([]);
   });
 
