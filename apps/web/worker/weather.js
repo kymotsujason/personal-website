@@ -185,7 +185,10 @@ export const shapeForecast = (json) => {
   if (!today) {
     return null;
   }
-  const index = Math.max((json?.daily?.time || []).indexOf(today), 0);
+  const index = (json?.daily?.time || []).indexOf(today);
+  if (index < 0) {
+    return null;
+  }
   const rise = json?.daily?.sunrise?.[index];
   const set = json?.daily?.sunset?.[index];
   const sunrise = toHours(rise);

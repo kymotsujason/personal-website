@@ -103,7 +103,8 @@ export const refreshGithub = async (env, fetchImpl = fetch) => {
 export const readGithub = async (env) => {
   try {
     return await env.HOME.get(KEY, "json");
-  } catch {
+  } catch (error) {
+    console.warn("github_unavailable", error);
     return null;
   }
 };

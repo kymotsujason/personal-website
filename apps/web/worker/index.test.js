@@ -317,6 +317,18 @@ test("a failed weather logs its reason under a stable code", async () => {
   );
 });
 
+test("a failure answered from the cache isn't logged again", async () => {
+  vi.stubGlobal("fetch", openMeteo(503, {}));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const env = { HOME: fakeKv() };
+  const request = () => homeRequest("?tz=America/Vancouver", VANCOUVER_CF);
+  await call(request(), env);
+  await call(request(), env);
+  expect(
+    warn.mock.calls.filter(([code]) => code === "weather_unavailable"),
+  ).toHaveLength(1);
+});
+
 test("the upstream timeout stays under the client's own timeout", async () => {
   const { DEFAULT_TIMEOUT } = await import("../src/scene/weather.js");
   expect(UPSTREAM_TIMEOUT).toBeLessThan(DEFAULT_TIMEOUT);

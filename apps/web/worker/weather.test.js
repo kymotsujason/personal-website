@@ -123,6 +123,14 @@ test("a forecast without current.time gives null instead of yesterday's times", 
   expect(shapeForecast(twoDays)).toBeNull();
 });
 
+test("a forecast whose day isn't in the daily list gives null instead of yesterday's times", () => {
+  const nextDay = {
+    ...FORECAST,
+    current: { ...FORECAST.current, time: "2026-10-15T00:05" },
+  };
+  expect(shapeForecast(nextDay)).toBeNull();
+});
+
 test("a forecast missing its sunrise, as polar night might, gives null", () => {
   const polar = {
     ...FORECAST,
@@ -278,6 +286,7 @@ describe("the weather source", () => {
 // 85s (polar day) the sunset is the next day's midnight
 const polarAnswer = (sunrise, sunset) => ({
   ...FORECAST,
+  current: { ...FORECAST.current, time: "2026-10-15T19:15" },
   daily: { time: ["2026-10-15"], sunrise: [sunrise], sunset: [sunset] },
 });
 

@@ -30,7 +30,9 @@ const loadWeather = async (request, url, ctx) => {
   });
   const result = await weatherFor(at[0], at[1]);
   if (!result.ok) {
-    console.warn("weather_unavailable", result.reason);
+    if (!result.cached) {
+      console.warn("weather_unavailable", result.reason);
+    }
     return null;
   }
   return result.weather;

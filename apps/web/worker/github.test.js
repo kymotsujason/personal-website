@@ -168,6 +168,23 @@ test("an error status, a network failure, and a missing token each fail the run 
   expect(logged).toHaveBeenCalledTimes(3);
 });
 
+test("a read that fails is logged and reads as null", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const boom = new Error("kv down");
+  const HOME = {
+    get: async () => {
+      throw boom;
+    },
+  };
+  expect(await readGithub({ HOME })).toBeNull();
+  expect(warn).toHaveBeenCalledWith("github_unavailable", boom);
+  warn.mockClear();
+  expect(
+    await readGithub({ HOME: fakeKv({ github: "{not json" }) }),
+  ).toBeNull();
+  expect(warn).toHaveBeenCalledWith("github_unavailable", expect.anything());
+});
+
 test("the saved data reads back, and nothing saved reads as null", async () => {
   expect(await readGithub({ HOME: fakeKv({ github: SAVED }) })).toEqual(
     JSON.parse(SAVED),
