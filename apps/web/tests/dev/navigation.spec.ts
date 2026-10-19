@@ -506,6 +506,21 @@ test.describe("with the clock installed", () => {
     expect(shapes.card).toBeCloseTo(shapes.window, 1);
   });
 
+  // the sky pauses while an app fills the screen, and a page opened straight into one never drew it, so a swipe home
+  // showed the icons over black
+  test("a page opened straight into an app still draws the home screen's sky", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as any).spike.state.wallpaper.drawn()),
+      )
+      .toBe(true);
+  });
+
   test("the home bar swipe pushes the home screen when the page was opened directly", async ({
     page,
   }) => {

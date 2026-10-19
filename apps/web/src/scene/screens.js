@@ -616,14 +616,28 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
             vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
             vec2 center = (rect.xy + rect.zw) * 0.5;
             vec2 halfSize = (rect.zw - rect.xy) * 0.5;
-            vec2 q = abs(px - center) - halfSize + radius;
-            float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
-            if (dist > 0.0) {
+            // css caps a corner at half the shorter side, so the cutout does too, or a short window's cutout ran past
+            // its top and bottom and showed the page behind the canvas
+            float r = min(radius, min(halfSize.x, halfSize.y));
+            vec2 q = abs(px - center) - halfSize + r;
+            float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+            // the cutout's edge is softened over a pixel and sits a pixel inside the window's, so the window's own
+            // softened edge, which lets the black stage behind it through, stays under the canvas
+            float aa = fwidth(dist);
+            float open = 1.0 - smoothstep(-2.0 * aa, -aa, dist);
+            if (open <= 0.0) {
                 discard;
             }
-            gl_FragColor = vec4(0.0);
+            gl_FragColor = vec4(0.0, 0.0, 0.0, open);
         }
     `,
-    blending: THREE.NoBlending,
+    // what's drawn is kept by how much of the pixel the cutout leaves, color and alpha alike, since the canvas is
+    // premultiplied
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.ZeroFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     depthWrite: false
 });

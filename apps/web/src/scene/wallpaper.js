@@ -548,6 +548,7 @@ export const createWallpaper = (renderer, { width, height, scene = "clear", inte
             rate = fps;
         },
         update,
+        drawn: () => lastDraw > -Infinity,
         dispose: () => {
             target.dispose();
             probe.dispose();

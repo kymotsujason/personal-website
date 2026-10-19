@@ -313,8 +313,10 @@ const frame = (now) => {
     // the sky moves on, then the screens' icons are laid over it, before the frame that maps them. the sky stops
     // while an app fills the screen, since none of it shows then, and while the phone or an app is moving, since each
     // of its frames lays both screens out again with their blur and mipmaps (74 times in an intro and 18 in an app
-    // opening, measured on a pc). it catches up once they're still
-    if (!state.zoomed && !state.busy && state.wallpaper.update(now / 1000)) {
+    // opening, measured on a pc). it catches up once they're still. a page opened straight into an app, or a rebuild
+    // while one is open, makes a sky that was never drawn, so it's drawn once anyway, or a swipe home shows black
+    const skyDue = (!state.zoomed && !state.busy) || !state.wallpaper.drawn();
+    if (skyDue && state.wallpaper.update(now / 1000)) {
         if (state.glassLevel.frosted) {
             state.frost.render();
         }
