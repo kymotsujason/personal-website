@@ -1,0 +1,141 @@
+import { luminance } from "./contrast.js";
+
+// a css copy of the home screen sky: the same colors as sky() in scene/wallpaper.js, as custom properties on the root
+const INTENSITY = { light: 0.35, moderate: 0.65, heavy: 1 };
+
+// from lookFor in the shader: how dark the clouds are, how grey the bare sky is, and how much of the sun shows
+const lookFor = (scene, intensity) => {
+  const k = INTENSITY[intensity] ?? INTENSITY.moderate;
+  switch (scene) {
+    case "partly cloudy":
+      return { dark: 0, overcast: 0, sun: 1 };
+    case "cloudy":
+      return { dark: 0.3, overcast: 0.85, sun: 0 };
+    case "fog":
+      return { dark: 0, overcast: 0, sun: 0.5 };
+    case "drizzle":
+      return { dark: 0.25, overcast: 0.6, sun: 0.35 };
+    case "rain":
+      return { dark: 0.45 + 0.2 * k, overcast: 0.85, sun: 0 };
+    case "snow":
+      return { dark: 0.1, overcast: 0.55, sun: 0 };
+    case "thunder":
+      return { dark: 0.8, overcast: 0.95, sun: 0 };
+    default:
+      return { dark: 0, overcast: 0, sun: 1 };
+  }
+};
+
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+export const skyColors = ({ day, warm, scene, intensity }) => {
+  const look = lookFor(scene, intensity);
+  let dayTop = mix([0.17, 0.42, 0.8], [0.4, 0.45, 0.52], look.overcast);
+  let dayLow = mix([0.47, 0.7, 0.94], [0.56, 0.61, 0.67], look.overcast);
+  let nightTop = mix([0.05, 0.07, 0.2], [0.08, 0.1, 0.17], look.overcast);
+  let nightLow = mix([0.24, 0.18, 0.42], [0.18, 0.19, 0.27], look.overcast);
+  if (scene === "fog") {
+    dayTop = [0.86, 0.8, 0.72];
+    dayLow = [0.74, 0.72, 0.68];
+    nightTop = [0.17, 0.16, 0.18];
+    nightLow = [0.25, 0.23, 0.24];
+  }
+  const top = mix(nightTop, dayTop, day).map((v) => v * (1 - look.dark * 0.35));
+  let low = mix(nightLow, dayLow, day).map((v) => v * (1 - look.dark * 0.3));
+  low = mix(low, [0.92, 0.52, 0.55], warm * (1 - 0.7 * look.overcast) * 0.75);
+  return { top, low };
+};
+
+// the dim is black over the sky, heavier where the sky is bright, so the bare sky stays a backdrop white reads on. the
+// floors are the night and day looks, and the targets are the brightest the dimmed sky may be (relative luminance)
+const FLOOR = { top: [0.15, 0.25], low: [0.35, 0.55] };
+const TARGET = { top: 0.16, low: 0.1 };
+// the sun glow at its strongest, over the sky it sits on, since the dim has to cover it too
+const lit = (c, glow) => (glow ? mix(c, glow.slice(0, 3), glow[3]) : c);
+
+const dimFor = (c, day, end, glow) => {
+  const [night, noon] = FLOOR[end];
+  const floor = night + (noon - night) * day;
+  const bright = lit(c, glow).map((v) => v * 255);
+  let lo = floor;
+  let hi = 0.95;
+  if (luminance(bright.map((v) => v * (1 - lo))) <= TARGET[end]) {
+    return floor;
+  }
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (luminance(bright.map((v) => v * (1 - mid))) <= TARGET[end]) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return hi;
+};
+
+const rgb = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(", ")})`;
+const percent = (v) => `${Math.round(v * 1000) / 10}%`;
+const amount = (v) => String(Math.round(v * 1000) / 1000);
+
+export const skyVars = ({
+  day,
+  warm,
+  scene,
+  intensity,
+  sun,
+  moon,
+  sunUp,
+  moonUp,
+}) => {
+  const { top, low } = skyColors({ day, warm, scene, intensity });
+  const look = lookFor(scene, intensity);
+  const vars = {
+    "--sky-top": rgb(top),
+    "--sky-low": rgb(low),
+    "--sun-x": "50%",
+    "--sun-y": "100%",
+    "--sun-glow": "transparent",
+    "--moon-x": "50%",
+    "--moon-y": "100%",
+    "--moon-glow": "transparent",
+    "--dim-top": "0.15",
+    "--dim-low": "0.35",
+    "--stars": amount(
+      (1 - day) * (1 - look.overcast) * (scene === "fog" ? 0 : 1),
+    ),
+  };
+  // the shader fades a body out as it sinks past the bottom edge
+  const sunShow =
+    sun && sunUp > 0
+      ? look.sun * Math.min(Math.max((sun[1] + 0.03) / 0.08, 0), 1)
+      : 0;
+  let glow = null;
+  if (sunShow > 0) {
+    const color = mix([1, 0.98, 0.94], [1, 0.78, 0.55], warm).map((v) =>
+      Math.round(v * 255),
+    );
+    vars["--sun-x"] = percent(sun[0]);
+    vars["--sun-y"] = percent(1 - sun[1]);
+    vars["--sun-glow"] = `rgba(${color.join(", ")}, ${amount(0.6 * sunShow)})`;
+    glow = [...color.map((v) => v / 255), 0.6 * sunShow];
+  }
+  const moonShow =
+    moon && moonUp > 0 && scene !== "fog"
+      ? (1 - 0.9 * look.overcast) *
+        Math.min(Math.max((moon[1] + 0.03) / 0.08, 0), 1)
+      : 0;
+  if (moonShow > 0) {
+    vars["--moon-x"] = percent(moon[0]);
+    vars["--moon-y"] = percent(1 - moon[1]);
+    vars["--moon-glow"] = `rgba(224, 230, 255, ${amount(0.22 * moonShow)})`;
+  }
+  vars["--dim-top"] = amount(dimFor(top, day, "top", glow));
+  vars["--dim-low"] = amount(dimFor(low, day, "low", glow));
+  return vars;
+};
+
+export const applySky = (root, vars) => {
+  Object.entries(vars).forEach(([name, value]) =>
+    root.style.setProperty(name, value),
+  );
+};

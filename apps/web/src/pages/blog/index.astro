@@ -1,0 +1,59 @@
+---
+import Site from "../../layouts/Site.astro";
+import { postYear, sortedPosts } from "../../lib/blog";
+import { describePost } from "../../lib/describe";
+import { formatDay } from "../../lib/format";
+
+const posts = await sortedPosts();
+const years: { year: string; posts: typeof posts }[] = [];
+for (const post of posts) {
+  const year = postYear(post.data.date);
+  const last = years[years.length - 1];
+  if (last && last.year === year) {
+    last.posts.push(post);
+  } else {
+    years.push({ year, posts: [post] });
+  }
+}
+---
+
+<Site
+  title="Blog"
+  description="Posts from Jason Yue's blog."
+  app="Blog"
+  kind="blog"
+>
+  {years.map(({ year, posts }) => (
+    <section class="year">
+      <h2 class="num">{year}</h2>
+      <div class="rows glass">
+        {posts.map((post) => (
+          <a
+            class="post-row"
+            href={`/blog/${post.data.slug}`}
+            data-post={post.data.slug}
+          >
+            <div class="text">
+              <h3>{post.data.title}</h3>
+              <time class="sub" datetime={post.data.date}>
+                {formatDay(post.data.date)}
+              </time>
+              <span class="excerpt">
+                {describePost(post.body, post.data.title)}
+              </span>
+            </div>
+            {post.data.thumb && (
+              <img
+                class="thumb"
+                src={post.data.thumb}
+                alt=""
+                width="56"
+                height="56"
+              />
+            )}
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+</Site>

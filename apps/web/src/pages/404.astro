@@ -1,0 +1,38 @@
+---
+import Site from "../layouts/Site.astro";
+// this page shows as the flat site, so its links are full page loads that give a visitor with 3d the scene back
+---
+
+<Site
+  title="Page not found"
+  description="There's nothing at this address on Jason Yue's site."
+  notFound
+  ownTitle
+  kind="not-found"
+>
+  <div class="lost">
+    <svg
+      viewBox="0 0 120 90"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="9"
+      stroke-linecap="round"
+      aria-hidden="true"
+    >
+      <path d="M10 34a72 72 0 0 1 100 0"></path>
+      <path d="M28 52a46 46 0 0 1 64 0"></path>
+      <path d="M45 69a22 22 0 0 1 30 0"></path>
+      <circle cx="60" cy="82" r="5" fill="currentColor" stroke="none"></circle>
+    </svg>
+    <h1>No connection to this page</h1>
+    <p>There's nothing at this address.</p>
+    <div class="actions">
+      <a class="pill glass" style="--fill: 0.22" href="/" data-astro-reload>
+        Go home
+      </a>
+      <a class="pill glass" href="/blog" data-astro-reload>
+        Read the blog
+      </a>
+    </div>
+  </div>
+</Site>

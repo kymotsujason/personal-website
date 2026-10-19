@@ -1,0 +1,71 @@
+---
+import { render } from "astro:content";
+import Site from "../../layouts/Site.astro";
+import { describePost } from "../../lib/describe";
+import { formatDay, readingMinutes } from "../../lib/format";
+import { neighbors, sortedPosts } from "../../lib/blog";
+
+export async function getStaticPaths() {
+  const posts = await sortedPosts();
+  return posts.map((post) => ({
+    params: { slug: post.data.slug },
+    props: { post, ...neighbors(posts, post.data.slug) },
+  }));
+}
+
+const { post, older, newer } = Astro.props;
+const { Content } = await render(post);
+const { title, date, feature_image } = post.data;
+const minutes = readingMinutes(post.body ?? "");
+---
+
+<Site
+  title={title}
+  description={describePost(post.body, title)}
+  app="Blog"
+  kind="post"
+  back={{ href: "/blog", label: "Blog" }}
+  type="article"
+  ownTitle
+>
+  <span id="post-top"></span>
+  {feature_image && (
+    <div class="hero">
+      <img class="pic feature-image" src={feature_image} alt="" />
+    </div>
+  )}
+  <article class="sheet">
+    <h1>{title}</h1>
+    <p class="meta">
+      <time datetime={date}>{formatDay(date)}</time>
+      <span>{minutes} min read</span>
+    </p>
+    <div class="post-body">
+      <Content />
+    </div>
+  </article>
+  <Fragment slot="toolbar">
+    <span class="ring" aria-hidden="true"></span>
+    <a class="pill" href="#post-top">
+      Top
+    </a>
+    {older && (
+      <a
+        class="pill"
+        href={`/blog/${older.data.slug}`}
+        aria-label={`Older post: ${older.data.title}`}
+      >
+        Older
+      </a>
+    )}
+    {newer && (
+      <a
+        class="pill"
+        href={`/blog/${newer.data.slug}`}
+        aria-label={`Newer post: ${newer.data.title}`}
+      >
+        Newer
+      </a>
+    )}
+  </Fragment>
+</Site>

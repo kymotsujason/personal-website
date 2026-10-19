@@ -1,0 +1,318 @@
+---
+import { ClientRouter } from "astro:transitions";
+import headSource from "../lib/head.js?raw";
+import { APPS } from "../data/apps.js";
+import { latestProject } from "../lib/projects";
+import "../styles/site.css";
+import "../styles/flat.css";
+
+type Kind =
+  | "home"
+  | "about"
+  | "projects"
+  | "project"
+  | "blog"
+  | "post"
+  | "music"
+  | "not-found";
+
+interface Props {
+  title: string;
+  description: string;
+  app?: string;
+  // an article for a post or a project, and the not found page claims no address of its own
+  type?: "website" | "article";
+  notFound?: boolean;
+  // which page this is, for the styles that belong to one page. the not found page is always "not-found"
+  kind?: Kind;
+  // a detail page's glass pill in the top bar, back to its list
+  back?: { href: string; label: string };
+  // the page draws its own h1, so the layout leaves out the large title
+  ownTitle?: boolean;
+}
+
+const {
+  title,
+  description,
+  app = "home",
+  type = "website",
+  notFound = false,
+  kind = "home",
+  back,
+  ownTitle = false,
+} = Astro.props;
+const pageKind = notFound ? "not-found" : kind;
+// a page can pass the slot conditionally, and Astro still reports the name, so the content decides
+const toolbar = Astro.slots.has("toolbar")
+  ? (await Astro.slots.render("toolbar")).trim()
+  : "";
+const isApp = app !== "home";
+const documentTitle = title === "Jason Yue" ? title : `${title} | Jason Yue`;
+// the data sits in a script element, so no "<" may end it early
+const siteData = JSON.stringify({
+  apps: APPS,
+  latestProject: await latestProject(),
+}).replace(/</g, "\\u003c");
+const buildId = import.meta.env.BUILD_ID;
+const path = Astro.url.pathname.replace(/(.)\/+$/, "$1");
+// the head script reads this, and the not found page is neither the home screen nor an app
+const pageApp = notFound ? "not-found" : app;
+const pageUrl = new URL(path, Astro.site).href;
+const imageUrl = new URL("/og.jpg", Astro.site).href;
+---
+
+<html lang="en" transition:animate="none">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="build-id" content={buildId} />
+    <meta name="page-app" content={pageApp} />
+    <title>{documentTitle}</title>
+    <meta name="description" content={description} />
+    {notFound ? (
+      <meta name="robots" content="noindex" />
+    ) : (
+      <>
+        <link rel="canonical" href={pageUrl} />
+        <meta property="og:url" content={pageUrl} />
+      </>
+    )}
+    <meta property="og:site_name" content="Jason Yue" />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="A foldable phone held open, showing the home screen of Jason Yue's site"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.ico" />
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="Jason Yue"
+      href="/blog/rss.xml"
+    />
+    <script is:inline set:html={headSource}></script>
+    <ClientRouter />
+    <script type="application/json" id="site-data" set:html={siteData}></script>
+    <script>
+      import {
+        goHome,
+        navigate,
+        onNavigate,
+        recoverFromChunk,
+        setScenePageFlat,
+        syncPagePinned,
+      } from "../layout/navigation.js";
+      import "../layout/depth.js";
+      import "../layout/facts.js";
+      import { music } from "../layout/player.js";
+      import { remove, write } from "../lib/storage.js";
+      import { applySky, skyVars } from "../lib/sky.js";
+      import { daylight, hourNow } from "../scene/daylight.js";
+      import { sunPlace } from "../scene/skyPath.js";
+
+      const root = document.documentElement;
+      const page = document.getElementById("page");
+
+      // the bar's small title and the top edge show once the large title has scrolled up under the bar, and the bottom
+      // edge shows while more of the page is below
+      const showNav = () => {
+        const nav = page?.querySelector(":scope > header");
+        const body = page?.querySelector(":scope > .body");
+        if (!(nav instanceof HTMLElement) || !(body instanceof HTMLElement)) {
+          return;
+        }
+        const title = page?.querySelector(".large-title");
+        const under =
+          title instanceof HTMLElement
+            ? title.offsetTop + title.offsetHeight / 2 - nav.offsetHeight
+            : 24;
+        nav.classList.toggle("scrolled", body.scrollTop > under);
+        nav.classList.toggle(
+          "more-below",
+          body.scrollHeight - body.clientHeight - body.scrollTop > 8,
+        );
+      };
+      page?.addEventListener("scroll", showNav, {
+        capture: true,
+        passive: true,
+      });
+      addEventListener("resize", showNav);
+      showNav();
+      document.addEventListener("astro:after-swap", showNav);
+
+      // the 2d and 3d version links are full page loads (data-astro-reload), since the head script picks once per
+      // load. the choice is saved here, before the load starts
+      document.addEventListener("click", (event) => {
+        const link =
+          event.target instanceof Element
+            ? event.target.closest("a[data-version]")
+            : null;
+        if (!(link instanceof HTMLAnchorElement)) {
+          return;
+        }
+        if (link.dataset.version === "2d") {
+          write("local", "2d", "1");
+        } else {
+          remove("local", "2d");
+        }
+      });
+
+      // the flat page from here on. the event tells the layout's own listeners, such as the player's placement, the
+      // same way the head script's watchdog does, and a scene that already failed ignores it
+      const failScene = () => {
+        root.classList.add("scene-failed");
+        root.classList.remove("has-3d", "page-first");
+        syncPagePinned();
+        dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
+      };
+
+      // the sky from the visitor's clock with no weather, the same as the scene without it. it's drawn at load in every
+      // mode, since the scene sets its own only once it has the weather, after its models load. it refreshes only in
+      // the flat site, since the scene keeps its own going
+      const setClockSky = () => {
+        const hour = hourNow();
+        const sun = sunPlace(hour, { sunrise: 7, sunset: 19 });
+        const { day, warm } = daylight(hour);
+        applySky(
+          root,
+          skyVars({
+            day,
+            warm,
+            scene: "clear",
+            intensity: "moderate",
+            sun: [sun.x, sun.y],
+            sunUp: sun.up,
+            moon: null,
+            moonUp: 0,
+          }),
+        );
+      };
+      setClockSky();
+      setInterval(() => {
+        if (!root.classList.contains("has-3d")) {
+          setClockSky();
+        }
+      }, 60000);
+      addEventListener("scene-failed", setClockSky);
+
+      const stageEl = document.getElementById("stage");
+      const dataEl = document.getElementById("site-data");
+      if (
+        root.classList.contains("has-3d") &&
+        !root.classList.contains("scene-failed") &&
+        stageEl &&
+        page &&
+        dataEl
+      ) {
+        import("../scene/index.js")
+          .then(
+            ({ startScene, sceneNavigation }) => {
+              if (root.classList.contains("scene-failed")) {
+                return;
+              }
+              const scene = startScene({
+                stageEl,
+                pageEl: page,
+                siteData: JSON.parse(dataEl.textContent ?? "{}"),
+                onShown: () => {
+                  Object.assign(window, { __sceneShown: true });
+                  // the scene covers the page now, so it is pinned on the phone unless it shows as the flat page
+                  root.classList.remove("page-first");
+                  syncPagePinned();
+                },
+                onFailed: failScene,
+                onPageFlat: setScenePageFlat,
+                music,
+              });
+              onNavigate(sceneNavigation(scene, { navigate, goHome }));
+              // the head script's watchdog gave up, or the navigation met a new build, so a scene still running stops
+              addEventListener("scene-failed", (event) =>
+                scene.fail(
+                  event instanceof CustomEvent && event.detail
+                    ? event.detail
+                    : "watchdog",
+                ),
+              );
+            },
+            (error) => {
+              console.warn("the scene didn't load", error);
+              // a chunk a deploy removed is the likely cause, so the page loads again once. not when the page already
+              // shows flat, when it shows first, or when the browser is offline, since a reload would take the page
+              // the visitor is reading away from them
+              const reading =
+                root.classList.contains("scene-failed") ||
+                root.classList.contains("page-first") ||
+                !navigator.onLine;
+              if (reading || !recoverFromChunk()) {
+                failScene();
+              }
+            },
+          )
+          .catch((error) => {
+            console.warn("the scene didn't start", error);
+            failScene();
+          });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="css-layer"></div>
+      <main id="page" data-app={app} data-page={pageKind}>
+        <div class="sky" aria-hidden="true">
+          <div class="stars"></div>
+          <div class="dim"></div>
+        </div>
+        <slot name="backdrop" />
+        {isApp && (
+          <header>
+            {back ? (
+              <a class="pill glass back" href={back.href}>
+                <span class="chev" aria-hidden="true" />
+                {back.label}
+              </a>
+            ) : (
+              <span />
+            )}
+            <span class="inline-title">{title}</span>
+            <span />
+          </header>
+        )}
+        <div class="body">
+          <div class="column">
+            {isApp && !ownTitle && <h1 class="large-title">{title}</h1>}
+            <slot />
+            <footer class="flat-footer">
+              <a
+                href={notFound ? "/" : path}
+                data-version="3d"
+                data-astro-reload
+              >
+                3D version
+              </a>
+            </footer>
+          </div>
+        </div>
+        {isApp && (
+          <>
+            <div class="edge top" aria-hidden="true" />
+            <div class="edge bottom" aria-hidden="true" />
+          </>
+        )}
+        {toolbar && <div class="toolbar glass" set:html={toolbar} />}
+        {isApp && (
+          <a class="home-bar" href="/" draggable="false" aria-label="Go home" />
+        )}
+      </main>
+      <canvas id="gl-layer"></canvas>
+    </div>
+    <div id="player-host"></div>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+---
+import Site from "../../layouts/Site.astro";
+import { formatDay } from "../../lib/format";
+import { sortedProjects } from "../../lib/projects";
+
+const projects = await sortedProjects();
+---
+
+<Site
+  title="Projects"
+  description="Things Jason Yue has built, with a short summary of each."
+  app="Projects"
+  kind="projects"
+>
+  {projects.map((project, i) => (
+    <a
+      class="project-card glass depth"
+      style="--d:4;--t:1"
+      href={`/projects/${project.id}`}
+      data-project={project.id}
+    >
+      {i === 0 && <span class="kicker">Latest</span>}
+      {project.data.images?.[0] ? (
+        <img class="pic" src={project.data.images[0]} alt="" />
+      ) : (
+        <div class="pic glow" aria-hidden="true" />
+      )}
+      <div class="strip glass">
+        <div>
+          <h2>{project.data.title}</h2>
+          <p class="sub">{project.data.summary}</p>
+          <time datetime={project.data.date}>
+            {formatDay(project.data.date)}
+          </time>
+        </div>
+        <span class="pill get glass" aria-hidden="true">
+          Open
+        </span>
+      </div>
+    </a>
+  ))}
+</Site>

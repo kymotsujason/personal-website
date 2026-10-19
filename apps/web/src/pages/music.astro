@@ -1,0 +1,69 @@
+---
+import Site from "../layouts/Site.astro";
+import TRACKS from "../data/tracks.json";
+import { artFor, cleanTitle } from "../scene/music.js";
+
+const [first] = TRACKS;
+---
+
+<Site
+  title="Music"
+  description="Old Goodies, the songs Jason Yue grew up on, playing right on the page."
+  app="Music"
+  kind="music"
+>
+  <div class="backdrop" slot="backdrop" aria-hidden="true">
+    <img class="front" src={artFor(first.id)} alt="" />
+  </div>
+  <div class="music">
+    <section class="now" aria-label="Now playing">
+      <div class="frame glass">
+        <div class="player-slot"></div>
+      </div>
+      <div class="now-info">
+        <p class="label">Now playing</p>
+        <h2 class="now-title">{cleanTitle(first.title)}</h2>
+        <p class="now-channel">{first.channel}</p>
+        <div class="controls">
+          <button
+            class="pill glass"
+            type="button"
+            data-music="previous"
+            aria-label="Previous track"
+          >
+            Prev
+          </button>
+          <button class="pill glass play" type="button" data-music="toggle">
+            Play
+          </button>
+          <button
+            class="pill glass"
+            type="button"
+            data-music="next"
+            aria-label="Next track"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </section>
+    <p class="note">
+      Old Goodies, songs I grew up on
+      <span class="count">{TRACKS.length} songs</span>
+    </p>
+    <ul class="tracks glass depth" style="--d:3;--t:0">
+      {TRACKS.map((track, i) => (
+        <li data-track={i} class={i === 0 ? "current" : undefined}>
+          <img src={artFor(track.id)} alt="" loading="lazy" />
+          <span class="t">{cleanTitle(track.title)}</span>
+          <span class="c">{track.channel}</span>
+          <span class="eq" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </li>
+      ))}
+    </ul>
+  </div>
+</Site>

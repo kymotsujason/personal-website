@@ -1,0 +1,11 @@
+rules:
+  - id: no-eval
+    languages: [javascript, typescript]
+    message: "Don't execute code with eval()."
+    severity: ERROR
+    pattern: eval(...)
+  - id: no-dangerous-html
+    languages: [javascript, typescript]
+    message: "Don't inject HTML through dangerouslySetInnerHTML."
+    severity: ERROR
+    pattern: <$TAG dangerouslySetInnerHTML={$VALUE} ... />

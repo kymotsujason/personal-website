@@ -1,0 +1,122 @@
+---
+import Site from "../layouts/Site.astro";
+import { APPS } from "../data/apps.js";
+import { formatDay } from "../lib/format";
+import { sortedPosts } from "../lib/blog";
+import { latestProject } from "../lib/projects";
+
+const facts = [
+  "My favorite food is toro sashimi",
+  "I became a tech enthusiast at 16",
+  "I own a stuffed dolphin that was taller than me",
+  "My dream is to build Maid-Chan",
+  "I love playing video games on the PC (Master Race)",
+  "I have longer than average hair",
+  "My favourite social activity involves escape rooms",
+  "I enjoy traveling to various countries",
+  "I'm not a fan of paper",
+];
+
+// the home icon colors, then the palette's sand and violet, with dark ink on the green and sand cards
+const hues = [
+  { fill: "rgba(224, 122, 95, 0.82)" },
+  { fill: "rgba(61, 64, 91, 0.85)" },
+  { fill: "rgba(129, 178, 154, 0.82)", ink: "#1c1c28" },
+  { fill: "rgba(246, 114, 128, 0.82)" },
+  { fill: "rgba(242, 204, 143, 0.8)", ink: "#1c1c28" },
+  { fill: "rgba(110, 98, 170, 0.84)" },
+];
+
+const posts = await sortedPosts();
+const project = await latestProject();
+const [post] = posts;
+const blogColor = APPS.find((app) => app.name === "Blog")?.color;
+---
+
+<Site
+  title="About"
+  description="Jason Yue loves algorithms. A few things about him, and where to find his code."
+  app="About"
+  kind="about"
+>
+  <div class="board">
+    <div class="w profile glass depth" style="--d:3">
+      <img class="avatar depth" style="--d:16;--t:0" src="/ice.png" alt="" />
+      <div>
+        <h2>Jason Yue</h2>
+        <div class="sub">Just another developer =P</div>
+        <p>
+          I absolutely love algorithms. The process from creating to optimizing
+          an algorithmic solution to a problem is what makes me feel alive.
+        </p>
+      </div>
+    </div>
+    <div class="w facts-widget glass depth" style="--d:5;--t:1.5">
+      <span class="label">Things about me</span>
+      <div class="facts" data-facts>
+        <ol>
+          {facts.map((fact, i) => {
+            const hue = hues[i % hues.length];
+            return (
+              <li
+                class="fact"
+                data-pos={i}
+                style={`--hue:${hue.fill}${hue.ink ? `;--ink:${hue.ink}` : ""}`}
+              >
+                {fact}
+              </li>
+            );
+          })}
+        </ol>
+        <button class="facts-next" data-facts-next type="button">
+          <span class="visually-hidden">Next fact</span>
+        </button>
+      </div>
+      <span class="dots" aria-hidden="true">
+        {facts.map((_, i) => (
+          <i class:list={[{ on: i === 0 }]} />
+        ))}
+      </span>
+      <span class="visually-hidden" aria-live="polite" data-facts-live></span>
+    </div>
+    <a
+      class="w link glass depth"
+      style="--d:7;--t:2"
+      href="https://github.com/kymotsujason"
+    >
+      <span class="glyph" style="background:#24292f" aria-hidden="true">
+        G
+      </span>
+      <span>
+        <b>GitHub</b>
+        <span class="sub">kymotsujason</span>
+      </span>
+    </a>
+    {/* more links go here, in the same shape as the GitHub tile */}
+    <a class="w link glass depth" style="--d:7;--t:2" href="/blog">
+      <span class="glyph" style={`background:${blogColor}`} aria-hidden="true">
+        B
+      </span>
+      <span>
+        <b>Blog</b>
+        <span class="sub">
+          {posts.length} {posts.length === 1 ? "post" : "posts"}
+        </span>
+      </span>
+    </a>
+    <div class="w wide latest glass depth" style="--d:6;--t:1.5">
+      <a href={project.path}>
+        <span class="label">Latest project</span>
+        <b>{project.title}</b>
+        <span class="sub">{formatDay(project.date)}</span>
+      </a>
+      {post && (
+        <a href={`/blog/${post.data.slug}`}>
+          <span class="label">Latest post</span>
+          <b>{post.data.title}</b>
+          <span class="sub">{formatDay(post.data.date)}</span>
+        </a>
+      )}
+    </div>
+  </div>
+</Site>

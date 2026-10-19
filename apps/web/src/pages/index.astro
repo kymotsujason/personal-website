@@ -1,0 +1,56 @@
+---
+import Site from "../layouts/Site.astro";
+import { APPS } from "../data/apps.js";
+import { latestProject } from "../lib/projects";
+import TRACKS from "../data/tracks.json";
+import { artFor, cleanTitle } from "../scene/music.js";
+
+const latest = await latestProject();
+const firstTrack = TRACKS[0];
+---
+
+<Site
+  title="Jason Yue"
+  kind="home"
+  description="Jason Yue's personal site. A phone sits open on a desk, and its apps hold his projects, blog, and music."
+>
+  <h1 class="home-title">Jason Yue</h1>
+  <div class="widgets">
+    <a class="glass widget small about-card" href="/about">
+      <img class="avatar" src="/ice.png" alt="" />
+      <span class="wt w-big">Jason</span>
+      <span class="wt w-line">Just another developer =P</span>
+    </a>
+    <a class="glass widget small" href={latest.path}>
+      <span class="wt w-title">LATEST PROJECT</span>
+      <span class="wt w-big wrap">{latest.title}</span>
+    </a>
+    <a class="glass widget wide" href="https://github.com/kymotsujason">
+      <span class="wt w-title">GITHUB</span>
+      <span class="wt w-line">kymotsujason</span>
+    </a>
+    <a class="glass widget wide music-card" href="/music">
+      <img class="art" src={artFor(firstTrack.id)} alt="" />
+      <span class="m-side">
+        <span class="wt w-title">MUSIC</span>
+        <span class="wt w-line m-title">{cleanTitle(firstTrack.title)}</span>
+        <span class="wt w-line m-channel">{firstTrack.channel}</span>
+      </span>
+    </a>
+  </div>
+  <nav class="home" aria-label="Apps">
+    {APPS.map((app) => (
+      <a class="app-icon" href={app.path}>
+        <span class="glyph" style={`background: ${app.color}`}>
+          {app.glyph}
+        </span>
+        <span>{app.name}</span>
+      </a>
+    ))}
+  </nav>
+  <p class="home-links">
+    <a class="credit" href="https://open-meteo.com/">
+      Weather data by Open-Meteo.com
+    </a>
+  </p>
+</Site>

@@ -1,0 +1,1719 @@
+/* the one layout for #page: the flat site, a page-first arrival, and full zoom in 3d all use it, and the scene only adds
+   a transform, a clip, an opacity, and a visibility on top while it pins #page onto the phone. #page is the window's
+   size and doesn't scroll itself, its .body does, so the scene can pin it as one box and its scroll survives */
+
+/* the sky behind the column. these are the clear night colors, for before a script sets the real ones (see lib/sky.js),
+   and --mx and --my put the highlight on the side facing the sky's light until a pointer moves it */
+html {
+  --sky-top: rgb(13, 18, 51);
+  --sky-low: rgb(61, 46, 107);
+  --sun-x: 50%;
+  --sun-y: 100%;
+  --sun-glow: transparent;
+  --moon-x: 50%;
+  --moon-y: 100%;
+  --moon-glow: transparent;
+  --stars: 1;
+  --dim-top: 0.15;
+  --dim-low: 0.35;
+  --px: 0;
+  --py: 0;
+  --scroll: 0;
+  --read: 0;
+  --mx: calc(50vw - sin(var(--rim-angle)) * 40vw);
+  --my: calc(50vh + cos(var(--rim-angle)) * 40vh);
+}
+
+#page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  color: #fff;
+  --accent: #fff;
+  --accent-fill: 0.15;
+  --pill-base: 0.64;
+  --muted: rgba(235, 235, 245, 0.68);
+  --hairline: rgba(255, 255, 255, 0.1);
+}
+
+#page[data-app="About"] {
+  --accent: #aab2e6;
+}
+
+#page[data-app="Projects"] {
+  --accent: #f2a48f;
+}
+
+#page[data-app="Blog"] {
+  --accent: #a8dcc2;
+}
+
+#page[data-app="Music"] {
+  --accent: #ff9aa5;
+}
+
+#page a {
+  color: inherit;
+}
+
+#page :focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+}
+
+/* the sky is the farthest layer, so it drifts the least and the opposite way. the dim keeps text readable over it,
+   heavier at the bottom where long text ends up (sky.js sets how heavy, from the scene and the hour), and the stars
+   are a tiled gradient that daylight fades out */
+#page .sky {
+  position: absolute;
+  inset: -30px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at var(--sun-x) var(--sun-y),
+      var(--sun-glow) 0,
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at var(--moon-x) var(--moon-y),
+      var(--moon-glow) 0,
+      transparent 28%
+    ),
+    linear-gradient(to bottom, var(--sky-top), var(--sky-low));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #page .sky {
+    transform: translate(calc(var(--px) * -9px), calc(var(--py) * -6px));
+  }
+}
+
+#page .sky .stars {
+  position: absolute;
+  inset: 0;
+  opacity: var(--stars);
+  background-image:
+    radial-gradient(
+      1px 1px at 339px 493px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 57px 45px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(1px 1px at 604px 37px, #fff 60%, transparent),
+    radial-gradient(1.5px 1.5px at 96px 230px, #fff 60%, transparent),
+    radial-gradient(1.5px 1.5px at 254px 54px, #fff 60%, transparent),
+    radial-gradient(1px 1px at 587px 71px, #fff 60%, transparent),
+    radial-gradient(1.5px 1.5px at 598px 307px, #fff 60%, transparent),
+    radial-gradient(
+      1px 1px at 121px 55px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 222px 155px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 294px 193px,
+      rgba(255, 255, 255, 0.85) 60%,
+      transparent
+    ),
+    radial-gradient(1px 1px at 198px 107px, #fff 60%, transparent),
+    radial-gradient(
+      1.5px 1.5px at 324px 218px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1.5px 1.5px at 405px 329px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 193px 314px,
+      rgba(255, 255, 255, 0.85) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 723px 132px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 545px 261px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(1px 1px at 302px 319px, #fff 60%, transparent),
+    radial-gradient(
+      1px 1px at 532px 222px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(1.5px 1.5px at 163px 258px, #fff 60%, transparent),
+    radial-gradient(
+      1px 1px at 692px 47px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1.5px 1.5px at 719px 187px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 43px 103px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1px 1px at 364px 74px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1.5px 1.5px at 339px 599px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(1px 1px at 374px 403px, #fff 60%, transparent),
+    radial-gradient(1px 1px at 244px 371px, #fff 60%, transparent),
+    radial-gradient(
+      1px 1px at 260px 68px,
+      rgba(255, 255, 255, 0.7) 60%,
+      transparent
+    ),
+    radial-gradient(
+      1.5px 1.5px at 74px 261px,
+      rgba(255, 255, 255, 0.55) 60%,
+      transparent
+    );
+  background-size:
+    619px 521px,
+    619px 521px,
+    619px 521px,
+    619px 521px,
+    619px 521px,
+    619px 521px,
+    619px 521px,
+    487px 563px,
+    487px 563px,
+    487px 563px,
+    487px 563px,
+    487px 563px,
+    487px 563px,
+    487px 563px,
+    733px 409px,
+    733px 409px,
+    733px 409px,
+    733px 409px,
+    733px 409px,
+    733px 409px,
+    733px 409px,
+    401px 647px,
+    401px 647px,
+    401px 647px,
+    401px 647px,
+    401px 647px,
+    401px 647px,
+    401px 647px;
+}
+
+#page .sky .dim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--dim-top)),
+    rgba(0, 0, 0, var(--dim-low))
+  );
+}
+
+/* the column is as wide as an app's content gets on the phone, and it's transparent so the sky shows around and
+   behind the panes */
+#page .column {
+  max-width: 760px;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 64px 20px 110px;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+/* the page starts under the floating bar, and the bottom padding keeps the last line clear of the home bar. the
+   perspective lets a depth layer tilt */
+#page > .body {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  perspective: 1200px;
+}
+
+/* the bar floats as glass buttons over the column, and the small title shows once the large one scrolls away */
+#page > header {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 44px;
+  pointer-events: none;
+}
+
+#page > header > * {
+  pointer-events: auto;
+}
+
+#page > header .back {
+  justify-self: start;
+}
+
+#page > header .inline-title {
+  max-width: 50vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#page > header.scrolled .inline-title {
+  opacity: 1;
+}
+
+/* the scroll edges: text passing under the floating bar or toolbar blurs and darkens into the edge instead of
+   running into the glass */
+#page .edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 96px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+#page .edge.top {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent);
+  mask-image: linear-gradient(to bottom, #000 40%, transparent);
+}
+
+#page .edge.bottom {
+  bottom: 0;
+  height: 110px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), transparent);
+  -webkit-mask-image: linear-gradient(to top, #000 40%, transparent);
+  mask-image: linear-gradient(to top, #000 40%, transparent);
+}
+
+#page > header.scrolled ~ .edge.top,
+#page > header.more-below ~ .edge.bottom {
+  opacity: 1;
+}
+
+/* a glass button. the back pill gets a faint fill of the app's accent under its white text */
+#page .pill {
+  --r: 999px;
+  --fill: 0.14;
+  --base: rgba(0, 0, 0, var(--pill-base));
+  height: 40px;
+  min-width: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+#page .pill.back {
+  --tint: color-mix(
+    in srgb,
+    var(--accent) calc(var(--accent-fill) * 100%),
+    transparent
+  );
+}
+
+#page .chev {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-left: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: rotate(45deg);
+  margin-left: 3px;
+}
+
+/* the floating bottom capsule, filled by a page's toolbar slot */
+#page .toolbar {
+  --r: 999px;
+  --fill: 0.14;
+  --base: rgba(0, 0, 0, 0.6);
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+}
+
+/* the dark reading surface: long text sits here and never on the sky */
+#page .sheet {
+  position: relative;
+  padding: 34px 34px 40px;
+  border-radius: 30px;
+  background: rgba(12, 12, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.4);
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* each layer sits at its own distance, and the pointer (or the scroll, on touch) moves the near ones further than the
+   far ones. --d is the shift in px at the full pointer and --t the tilt in degrees */
+#page .depth {
+  transform: translate3d(
+      calc(var(--px) * var(--d, 0) * 1px),
+      calc(var(--py) * var(--d, 0) * 1px),
+      0
+    )
+    rotateX(calc(var(--py) * var(--t, 0) * -1deg))
+    rotateY(calc(var(--px) * var(--t, 0) * 1deg));
+  transition: transform 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page .sky,
+  #page .depth {
+    transform: none;
+    transition: none;
+  }
+}
+
+#page .large-title {
+  margin: 8px 0 22px;
+  font-size: 40px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 640px) {
+  #page .large-title {
+    font-size: 34px;
+  }
+}
+
+/* the ios home indicator: drag it up to go home. its box reaches well past the bar, so it's easy to grab */
+#page .home-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  z-index: 3;
+  width: 134px;
+  height: 5px;
+  margin-left: -67px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: #fff;
+  touch-action: none;
+  cursor: grab;
+}
+
+#page .home-bar::before {
+  content: "";
+  position: absolute;
+  inset: -16px -40px -8px;
+}
+
+/* the picture at the top of a post or a project, under the bars. it fades out at its foot and the sheet rides up over
+   it. it scrolls slower than the page and shifts a little with the pointer */
+#page .hero {
+  position: relative;
+  height: 62vh;
+  min-height: 320px;
+  margin: -64px -20px 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+
+#page .hero .pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translate3d(
+      calc(var(--px) * -8px),
+      calc(var(--py) * -6px + var(--scroll, 0) * 0.35px),
+      0
+    )
+    scale(1.06);
+}
+
+#page .hero + .sheet {
+  margin-top: -150px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page .hero .pic {
+    transform: none;
+  }
+}
+
+#page .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* about is a widget board like the home screen's, and its grid switches to two columns by the column's own width, so
+   the flat site and the phone's page lay out the same */
+#page[data-page="about"] .column {
+  container-type: inline-size;
+}
+
+#page[data-page="about"] .board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: minmax(150px, auto);
+  gap: 16px;
+}
+
+#page[data-page="about"] .w {
+  --base: rgba(0, 0, 0, 0.7);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+#page[data-page="about"] .w .label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(235, 235, 245, 0.86);
+}
+
+#page[data-page="about"] .w .sub {
+  display: block;
+  font-size: 13px;
+  color: rgba(235, 235, 245, 0.86);
+}
+
+#page[data-page="about"] .w.profile {
+  grid-column: span 4;
+  grid-row: span 2;
+  justify-content: center;
+  flex-direction: row;
+  align-items: center;
+  gap: 28px;
+  padding: 26px;
+  overflow: visible;
+}
+
+#page[data-page="about"] .w.profile .avatar {
+  flex: none;
+  width: 170px;
+  height: 170px;
+  filter: drop-shadow(0 22px 26px rgba(0, 0, 0, 0.45))
+    drop-shadow(0 0 30px rgba(170, 200, 255, 0.35));
+}
+
+#page[data-page="about"] .w.profile h2 {
+  margin: 0 0 4px;
+  font-size: 34px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+#page[data-page="about"] .w.profile .sub {
+  font-size: 17px;
+}
+
+#page[data-page="about"] .w.profile p {
+  margin: 12px 0 0;
+  font-size: 17px;
+  line-height: 1.5;
+  max-width: 34ch;
+}
+
+#page[data-page="about"] .w.facts-widget {
+  grid-column: span 2;
+  grid-row: span 4;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: visible;
+}
+
+#page[data-page="about"] .facts {
+  position: relative;
+  border-radius: 16px;
+}
+
+#page[data-page="about"] .facts-next {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  cursor: pointer;
+}
+
+#page[data-page="about"] .facts ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#page[data-page="about"] .fact {
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--ink, #fff);
+  background:
+    linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.22),
+        rgba(255, 255, 255, 0) 55%
+      )
+      padding-box,
+    linear-gradient(var(--hue), var(--hue)) padding-box,
+    linear-gradient(
+        var(--rim-angle),
+        rgba(255, 255, 255, 0.7),
+        rgba(255, 255, 255, 0.12) 35%,
+        rgba(255, 255, 255, 0.06) 65%,
+        rgba(255, 255, 255, 0.3)
+      )
+      border-box;
+}
+
+#page[data-page="about"] .dots {
+  display: none;
+}
+
+/* with script the facts become a stack: the front card in full and the ones behind it peeking out above in their own
+   colors with their text hidden. this is keyed on (scripting: enabled), not a class a script adds, so the stack is
+   in place at first paint */
+@media (scripting: enabled) {
+  html #page[data-page="about"] .w.facts-widget {
+    grid-row: span 2;
+    justify-content: space-between;
+    overflow: hidden;
+  }
+
+  html #page[data-page="about"] .facts {
+    flex: 1;
+    margin: 24px 0 8px;
+  }
+
+  html #page[data-page="about"] .facts ol {
+    position: absolute;
+    inset: 0;
+  }
+
+  html #page[data-page="about"] .facts-next {
+    display: block;
+  }
+
+  html #page[data-page="about"] .fact {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    margin: 0;
+    padding: 18px;
+    font-size: 21px;
+    box-shadow: 0 14px 28px -14px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    visibility: hidden;
+    color: transparent;
+    z-index: 0;
+    transition:
+      transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.45s,
+      visibility 0s linear 0.45s;
+  }
+
+  html #page[data-page="about"] .fact[data-pos="0"],
+  html #page[data-page="about"] .fact[data-pos="1"],
+  html #page[data-page="about"] .fact[data-pos="2"] {
+    opacity: 1;
+    visibility: visible;
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    backdrop-filter: blur(16px) saturate(1.6);
+    transition:
+      transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.45s,
+      visibility 0s;
+  }
+
+  html #page[data-page="about"] .fact[data-pos="0"] {
+    color: var(--ink, #fff);
+    z-index: 3;
+    transform: none;
+  }
+
+  html #page[data-page="about"] .fact[data-pos="1"] {
+    z-index: 2;
+    transform: translateY(-12px) scale(0.94);
+  }
+
+  html #page[data-page="about"] .fact[data-pos="2"] {
+    z-index: 1;
+    transform: translateY(-24px) scale(0.88);
+  }
+
+  html #page[data-page="about"] .dots {
+    display: flex;
+    gap: 6px;
+  }
+}
+
+#page[data-page="about"] .dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+#page[data-page="about"] .dots i.on {
+  background: #fff;
+}
+
+html.page-pinned #page[data-page="about"] .fact[data-pos],
+html.glass-simple:not(.scene-failed) #page[data-page="about"] .fact[data-pos] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html #page[data-page="about"] .fact[data-pos] {
+    transition: none;
+  }
+}
+
+#page[data-page="about"] .w.link {
+  align-items: flex-start;
+  justify-content: space-between;
+  text-decoration: none;
+}
+
+#page[data-page="about"] .w.link .glyph {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  font-size: 22px;
+  font-weight: 750;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+}
+
+#page[data-page="about"] .w.link b {
+  display: block;
+  font-size: 17px;
+}
+
+#page[data-page="about"] .w.wide {
+  grid-column: span 2;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#page[data-page="about"] .w.latest {
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+#page[data-page="about"] .w.latest a {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+#page[data-page="about"] .w.latest b {
+  display: block;
+  font-size: 17px;
+}
+
+@container (max-width: 640px) {
+  #page[data-page="about"] .board {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(130px, auto);
+  }
+
+  #page[data-page="about"] .w.profile {
+    grid-column: span 2;
+    grid-row: span 3;
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+
+  #page[data-page="about"] .w.profile .avatar {
+    width: 120px;
+    height: 120px;
+  }
+
+  #page[data-page="about"] .w.facts-widget,
+  #page[data-page="about"] .w.wide {
+    grid-column: span 2;
+  }
+}
+
+#page pre {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6e6e6;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+#page .project-card {
+  display: block;
+  text-decoration: none;
+}
+
+/* the flat footer, faint under the content, with the 3d version link. the 3d site has the 2d link on its home
+   screen instead, and keeps the footer's space so a failure doesn't reflow the page */
+#page .flat-footer {
+  margin-top: 32px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+html.has-3d #page .flat-footer {
+  visibility: hidden;
+}
+
+/* the home screen as a flat page: its widgets, its icons, and the weather credit, in the
+   phone's own styles where they carry over */
+#page .home-title {
+  margin: 0 0 16px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+#page .widgets {
+  position: static;
+  padding: 0;
+  margin-bottom: 28px;
+}
+
+#page .widget {
+  color: inherit;
+  text-decoration: none;
+}
+
+#page .widget .wt {
+  white-space: normal;
+}
+
+#page .home {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 76px);
+  justify-content: center;
+  gap: 26px 22px;
+}
+
+#page .app-icon {
+  text-decoration: none;
+}
+
+#page[data-page="home"] .widget {
+  --fill: 0.12;
+  --base: rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+#page[data-page="home"] .widget .w-title,
+#page[data-page="home"] .widget .w-line {
+  opacity: 0.9;
+}
+
+#page[data-page="not-found"] .lost {
+  min-height: 60vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+#page[data-page="not-found"] .lost svg {
+  width: 120px;
+  height: 90px;
+  margin-bottom: 18px;
+  color: rgba(255, 255, 255, 0.28);
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.4));
+}
+
+#page[data-page="not-found"] .lost h1 {
+  margin: 0 0 8px;
+  font-size: 34px;
+  line-height: 1.15;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+#page[data-page="not-found"] .lost p {
+  margin: 0 0 22px;
+  font-size: 17px;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+
+#page[data-page="not-found"] .lost .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+#page .home-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 40px;
+  font-size: 9px;
+}
+
+#page .home-links a {
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+}
+
+/* music: the playing track's art, blown up, blurred, and darkened, is the whole page's backdrop in place of the sky.
+   the sky only hides once the art has loaded, so art that fails leaves it. a new track's art loads in a second img,
+   which fades in over the old one */
+#page[data-page="music"] > .backdrop {
+  position: absolute;
+  inset: -80px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* the drift follows the pointer only, since on touch --py is the scroll and the art would chase it */
+@media (hover: hover) and (pointer: fine) {
+  #page[data-page="music"] > .backdrop {
+    transform: translate(calc(var(--px) * -11px), calc(var(--py) * -8px));
+    transition: transform 0.25s ease-out;
+  }
+}
+
+#page[data-page="music"] > .backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.5)
+  );
+}
+
+#page[data-page="music"] > .backdrop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.35);
+  filter: blur(70px) saturate(1.6) brightness(0.55);
+}
+
+#page[data-page="music"] > .backdrop img.front {
+  z-index: 1;
+}
+
+#page[data-page="music"] > .backdrop img.wait {
+  opacity: 0;
+}
+
+#page[data-page="music"] > .backdrop img.spent {
+  visibility: hidden;
+}
+
+#page[data-page="music"] > .backdrop img.fade {
+  animation: art-in 0.8s ease-out both;
+}
+
+#page[data-page="music"] > .backdrop.failed {
+  display: none;
+}
+
+html:not(.page-pinned) #page[data-page="music"]:has(> .backdrop.ready) > .sky {
+  visibility: hidden;
+}
+
+/* leaving pinned fades the art in over the sky, which hides once the fade is done. nothing fades going the other way,
+   on a first load, or on a page-first arrival, since none of them change the class */
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.page-pinned) #page[data-page="music"] > .backdrop {
+    transition: opacity 0.4s ease-out;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    html:not(.page-pinned) #page[data-page="music"] > .backdrop {
+      transition:
+        transform 0.25s ease-out,
+        opacity 0.4s ease-out;
+    }
+  }
+
+  html:not(.page-pinned)
+    #page[data-page="music"]:has(> .backdrop.ready)
+    > .sky {
+    transition: visibility 0s 0.4s;
+  }
+}
+
+/* while #page is pinned on the phone the art's blur would run every frame of the open, so the sky shows instead, the
+   way glass drops its backdrop blur there */
+html.page-pinned #page[data-page="music"] > .backdrop {
+  opacity: 0;
+}
+
+html.page-pinned #page[data-page="music"] > .backdrop img {
+  filter: none;
+}
+
+@keyframes art-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page[data-page="music"] > .backdrop {
+    transform: none;
+    transition: none;
+  }
+
+  #page[data-page="music"] > .backdrop img.fade {
+    animation: none;
+  }
+}
+
+/* the top is a now playing area, the player in a glass frame beside the track and its controls. the frame isn't a
+   depth layer, since the player host follows the slot's box and only measures it on a scroll or a resize */
+/* the secondary lines over the art are near white, since the muted grey falls under 4.5:1 over light art */
+#page[data-page="music"] {
+  --on-art: rgba(255, 255, 255, 0.85);
+}
+
+#page[data-page="music"] .column {
+  container-type: inline-size;
+}
+
+/* the frame keeps its top whatever the title's height, since the player host only follows the slot on a scroll or a
+   resize */
+#page[data-page="music"] .now {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  margin: 0 0 26px;
+}
+
+#page[data-page="music"] .frame {
+  --r: 20px;
+  padding: 8px;
+}
+
+#page[data-page="music"] .player-slot {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+#page[data-page="music"] .now-info {
+  align-self: end;
+  min-width: 0;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.4);
+}
+
+#page[data-page="music"] .now .label {
+  margin: 0;
+  font-size: 15px;
+  color: var(--on-art);
+}
+
+#page[data-page="music"] .now-title {
+  margin: 2px 0 0;
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="music"] .now-channel {
+  margin: 4px 0 0;
+  font-size: 17px;
+  color: var(--on-art);
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="music"] .controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+#page[data-page="music"] .controls .pill {
+  font-family: inherit;
+  text-shadow: none;
+}
+
+#page[data-page="music"] .controls .play {
+  min-width: 80px;
+  --tint: color-mix(
+    in srgb,
+    var(--accent) calc(var(--accent-fill) * 100%),
+    transparent
+  );
+}
+
+#page[data-page="music"] .note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+  margin: 0 6px 10px;
+  font-size: 15px;
+  color: var(--on-art);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+}
+
+#page[data-page="music"] .note .count::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* the track list is one glass panel. the playing row has a light fill with an inset rim and a still three bar mark */
+#page[data-page="music"] .tracks {
+  --r: 22px;
+  --base: rgba(0, 0, 0, 0.6);
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+#page[data-page="music"] .tracks li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  column-gap: 14px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+/* 16:9, so a 4:3 thumbnail's letterbox bars fall outside the cover crop */
+#page[data-page="music"] .tracks li img {
+  grid-row: span 2;
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+  filter: saturate(0.6) brightness(0.8);
+}
+
+#page[data-page="music"] .tracks li .t {
+  grid-column: 2;
+  align-self: end;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="music"] .tracks li .c {
+  grid-column: 2;
+  align-self: start;
+  font-size: 13px;
+  color: var(--on-art);
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="music"] .tracks li .eq {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 14px;
+  visibility: hidden;
+}
+
+#page[data-page="music"] .tracks li .eq i {
+  width: 3px;
+  height: 60%;
+  border-radius: 1px;
+  background: #fff;
+}
+
+#page[data-page="music"] .tracks li .eq i:nth-child(2) {
+  height: 100%;
+}
+
+#page[data-page="music"] .tracks li .eq i:nth-child(3) {
+  height: 40%;
+}
+
+#page[data-page="music"] .tracks li.current {
+  background: linear-gradient(
+    color-mix(
+      in srgb,
+      var(--accent) calc(var(--accent-fill) * 100%),
+      rgba(255, 255, 255, 0.12)
+    ),
+    color-mix(
+      in srgb,
+      var(--accent) calc(var(--accent-fill) * 100%),
+      rgba(255, 255, 255, 0.12)
+    )
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+#page[data-page="music"] .tracks li.current img {
+  filter: none;
+}
+
+#page[data-page="music"] .tracks li.current .eq {
+  visibility: visible;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #page[data-page="music"] .tracks li:not(.current):hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+@container (max-width: 640px) {
+  #page[data-page="music"] .now {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  #page[data-page="music"] .now-title {
+    font-size: 26px;
+  }
+}
+
+/* projects: App Store Today cards. the picture fills the card and the words sit on a glass strip across its foot */
+#page[data-page="projects"] .project-card {
+  --r: 28px;
+  position: relative;
+  height: 440px;
+  margin: 0 0 18px;
+  padding: 0;
+  overflow: hidden;
+  color: #fff;
+}
+
+#page[data-page="projects"] .project-card .pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.08)
+    translate3d(calc(var(--px) * -10px), calc(var(--py) * -8px), 0);
+  transition: transform 0.25s ease-out;
+}
+
+#page[data-page="projects"] .project-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 80px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
+}
+
+#page[data-page="projects"] .project-card .pic.glow {
+  background:
+    radial-gradient(
+      circle at 28% 30%,
+      color-mix(in srgb, var(--accent) 55%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      circle at 80% 85%,
+      color-mix(in srgb, var(--accent) 28%, transparent),
+      transparent 60%
+    );
+  transform: none;
+}
+
+#page[data-page="projects"] .project-card .kicker {
+  position: absolute;
+  top: 20px;
+  left: 22px;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.6),
+    0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+#page[data-page="projects"] .project-card .strip {
+  --r: 18px;
+  --base: rgba(0, 0, 0, 0.84);
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#page[data-page="projects"] .project-card .strip h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 750;
+}
+
+#page[data-page="projects"] .project-card .strip p {
+  margin: 2px 0 0;
+  font-size: 15px;
+  opacity: 1;
+  color: rgba(235, 235, 245, 0.68);
+}
+
+#page[data-page="projects"] .project-card .strip time {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  opacity: 1;
+  color: rgba(235, 235, 245, 0.68);
+}
+
+#page[data-page="projects"] .project-card .get {
+  --fill: 0.22;
+  margin-left: auto;
+  flex: none;
+}
+
+/* the card is already a blur, and the strip's base hides what's behind it, so these two nest no more */
+#page[data-page="projects"] .project-card .strip,
+#page[data-page="projects"] .project-card .get {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (max-width: 640px) {
+  #page[data-page="projects"] .project-card {
+    height: 380px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page[data-page="projects"] .project-card .pic {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* a project page follows the post layout: the sheet holds the title, summary, date, and body */
+#page[data-page="project"] .sheet h1 {
+  margin: 0 0 8px;
+  font-size: 38px;
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+#page[data-page="project"] .sheet .summary {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: rgba(235, 235, 245, 0.82);
+}
+
+#page[data-page="project"] .sheet time {
+  display: block;
+  margin-bottom: 26px;
+  font-size: 15px;
+  color: rgba(235, 235, 245, 0.62);
+}
+
+#page[data-page="project"] .sheet a {
+  color: var(--accent);
+}
+
+#page[data-page="project"] .sheet img {
+  display: block;
+  width: 100%;
+  margin: 20px 0;
+  border-radius: 16px;
+}
+
+#page[data-page="project"] .toolbar .pill {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (max-width: 640px) {
+  #page[data-page="project"] .sheet {
+    padding: 26px 20px;
+  }
+
+  #page[data-page="project"] .sheet h1 {
+    font-size: 32px;
+  }
+}
+
+/* the blog list: a big faint year numeral sticks under the top bar while its panel of rows scrolls past */
+#page[data-page="blog"] .year {
+  position: relative;
+  margin: 6px 0 26px;
+}
+
+#page[data-page="blog"] .year .num {
+  position: sticky;
+  top: 60px;
+  margin: 0 0 -18px;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: rgba(255, 255, 255, 0.16);
+}
+
+#page[data-page="blog"] .rows {
+  --r: 22px;
+  --base: rgba(0, 0, 0, 0.72);
+  padding: 4px 0;
+}
+
+#page[data-page="blog"] .post-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  text-decoration: none;
+}
+
+#page[data-page="blog"] .post-row + .post-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#page[data-page="blog"] .post-row .text {
+  flex: 1;
+  min-width: 0;
+}
+
+#page[data-page="blog"] .post-row h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="blog"] .post-row .sub,
+#page[data-page="blog"] .post-row .excerpt {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: rgba(235, 235, 245, 0.82);
+}
+
+#page[data-page="blog"] .post-row .excerpt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page[data-page="blog"] .post-row .thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+/* a post follows the project layout: the hero, then the sheet with the title, the date, and the body in a reading serif */
+#page[data-page="post"] .sheet h1 {
+  margin: 0 0 8px;
+  font-size: 38px;
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="post"] .sheet .meta {
+  display: flex;
+  gap: 0.4em;
+  margin: 0 0 26px;
+  font-size: 15px;
+  color: rgba(235, 235, 245, 0.62);
+}
+
+#page[data-page="post"] .sheet .meta span {
+  color: var(--accent);
+}
+
+#page[data-page="post"] .sheet .meta time::after {
+  content: "\00b7";
+  margin-left: 0.4em;
+}
+
+#page[data-page="post"] .post-body {
+  max-width: 66ch;
+  font-family: ui-serif, "New York", Charter, "Iowan Old Style", Georgia, serif;
+  font-size: 19px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.9);
+  overflow-wrap: break-word;
+}
+
+#page[data-page="post"] .post-body > :first-child {
+  margin-top: 0;
+}
+
+#page[data-page="post"] .post-body p,
+#page[data-page="post"] .post-body ul,
+#page[data-page="post"] .post-body ol {
+  margin: 0 0 1.1em;
+}
+
+#page[data-page="post"] .post-body h2,
+#page[data-page="post"] .post-body h3,
+#page[data-page="post"] .post-body h4 {
+  margin: 1.8em 0 0.4em;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
+}
+
+#page[data-page="post"] .post-body h2 {
+  font-size: 23px;
+}
+
+#page[data-page="post"] .post-body h3 {
+  font-size: 20px;
+}
+
+#page[data-page="post"] .post-body h4 {
+  font-size: 17px;
+}
+
+#page[data-page="post"] .post-body a {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+#page[data-page="post"] .post-body ul,
+#page[data-page="post"] .post-body ol {
+  padding-left: 1.4em;
+}
+
+#page[data-page="post"] .post-body li {
+  margin: 0.3em 0;
+}
+
+#page[data-page="post"] .post-body li::marker {
+  color: var(--accent);
+}
+
+#page[data-page="post"] .post-body blockquote {
+  margin: 1.4em 0;
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid var(--accent);
+  color: rgba(255, 255, 255, 0.78);
+  font-style: italic;
+}
+
+#page[data-page="post"] .post-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+#page[data-page="post"] .post-body code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+#page[data-page="post"] .post-body pre {
+  margin: 1.4em 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#page[data-page="post"] .post-body pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+#page[data-page="post"] .post-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.4em auto;
+  border-radius: 16px;
+}
+
+#page[data-page="post"] .post-body figure {
+  margin: 1.4em 0;
+}
+
+#page[data-page="post"] .post-body figure img {
+  margin: 0 auto;
+}
+
+#page[data-page="post"] .post-body figcaption {
+  margin-top: 8px;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 14px;
+  color: rgba(235, 235, 245, 0.62);
+}
+
+#page[data-page="post"] .post-body hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+#page[data-page="post"] .post-body table {
+  display: block;
+  max-width: 100%;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+#page[data-page="post"] .post-body th,
+#page[data-page="post"] .post-body td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-align: left;
+}
+
+#page[data-page="post"] .post-body th {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#page[data-page="post"] .toolbar .pill {
+  min-width: 0;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#page[data-page="post"] #post-top {
+  display: block;
+  scroll-margin-top: 64px;
+}
+
+/* the progress ring reads --read, which only a script writes, so without one it stays hidden */
+#page[data-page="post"] .ring {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0 8px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--read, 0) * 1turn),
+    rgba(255, 255, 255, 0.2) 0
+  );
+  -webkit-mask: radial-gradient(circle, transparent 9px, #000 10px);
+  mask: radial-gradient(circle, transparent 9px, #000 10px);
+}
+
+@media (scripting: none) {
+  #page[data-page="post"] .ring {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #page[data-page="post"] .sheet {
+    padding: 26px 20px;
+  }
+
+  #page[data-page="post"] .sheet h1 {
+    font-size: 32px;
+  }
+
+  #page[data-page="post"] .post-body {
+    font-size: 18px;
+  }
+}

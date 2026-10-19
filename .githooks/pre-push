@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+top=$(git rev-parse --show-toplevel)
+cd "$top"
+exec node tools/privacy/check.mjs --push "$1"

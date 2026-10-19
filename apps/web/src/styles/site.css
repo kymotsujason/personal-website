@@ -1,0 +1,617 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  background: #000;
+}
+
+/* the stage stacks the css layer the phone's screens are pinned into, then #page, then the canvas on top. the canvas
+   leaves the app window's cutout clear, so #page shows through it, and it never takes a click */
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+#css-layer,
+#gl-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#gl-layer {
+  pointer-events: none;
+}
+
+/* the flat site has no scene layers */
+html:not(.has-3d) #css-layer,
+html:not(.has-3d) #gl-layer {
+  display: none;
+}
+
+/* with 3d the page is black until the desk and the phone have drawn a whole frame, then the layers fade in. the fade is
+   on the two layers only, never on #page or anything holding it */
+html.has-3d #css-layer,
+html.has-3d #gl-layer {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+html.has-3d body.ready #css-layer,
+html.has-3d body.ready #gl-layer {
+  opacity: 1;
+}
+
+/* and #page waits with them, unless the arrival shows it first (a reload of an app page). once the scene shows, it
+   sets #page's visibility itself */
+html.has-3d:not(.page-first) body:not(.ready) #page {
+  visibility: hidden;
+}
+
+/* a failed scene leaves the flat page, whatever the scene had put on #page. the head script's watchdog sets this
+   without the scene, so it can't wait for the scene to clear its own styles */
+html.scene-failed #page {
+  transform: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  will-change: auto !important;
+}
+
+/* the panel keeps one width, since it's pinned to the right edge and a readout growing a digit would otherwise widen
+   it and move its sliders out from under the pointer mid drag */
+#panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 340px;
+  z-index: 10;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(20, 20, 24, 0.78);
+  color: #eee;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 210px;
+}
+
+#panel .row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#panel label {
+  min-width: 48px;
+}
+
+#panel select,
+#panel button {
+  flex: 1;
+  font-size: 12px;
+}
+
+#panel input[type="range"] {
+  flex: 2;
+  min-width: 0;
+}
+
+#battery-read {
+  font-family: ui-monospace, monospace;
+  min-width: 64px;
+  text-align: right;
+}
+
+/* as wide as its longest reading, "23:45 100% pinned", so the button beside it doesn't move */
+#day-read {
+  font-family: ui-monospace, monospace;
+  min-width: 17ch;
+  white-space: nowrap;
+}
+
+#weather-read,
+#stats {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#stats {
+  font-family: ui-monospace, monospace;
+  white-space: pre;
+}
+
+/* screen contents */
+
+.screen {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #2b3a67 0%, #5b4b8a 45%, #e07a5f 100%);
+  color: #fff;
+  user-select: none;
+}
+
+.screen .status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 28px 0;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.status .indicators {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 6px 10px;
+  margin: -6px 0;
+  cursor: pointer;
+}
+
+.status .wifi {
+  width: 17px;
+  height: 12px;
+}
+
+.status .battery {
+  width: 27px;
+  height: 13px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* the open inner screen is two panels: the flap's side with widgets, and the body's side laid out exactly like the
+   cover, since the cover sits over it when closed */
+.screen .panel {
+  position: absolute;
+  overflow: hidden;
+}
+
+.widgets {
+  position: absolute;
+  inset: 0;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 150px;
+  grid-auto-flow: dense;
+  gap: 16px;
+  align-content: center;
+}
+
+/* in portrait the widgets' half is wide and short, and three rows of them ran off its top and bottom, so they sit in two
+   rows across it: each small card with a wide one beside it */
+.widgets.across {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.widgets.across [data-action="about"] {
+  grid-area: 1 / 1;
+}
+
+.widgets.across [data-action="project"] {
+  grid-area: 2 / 1;
+}
+
+.widgets.across [data-action="github"] {
+  grid-area: 1 / 2 / 2 / 4;
+}
+
+.widgets.across [data-action="music"] {
+  grid-area: 2 / 2 / 3 / 4;
+}
+
+.widget {
+  position: relative;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.16);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.widget.wide {
+  grid-column: span 2;
+}
+
+.widget .wt {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.widget .w-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.widget .w-big {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.widget .w-line {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.widget .avatar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 56px;
+  height: 56px;
+}
+
+.widget .wt.wrap {
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.widget.small .w-big {
+  font-size: 18px;
+}
+
+.widget .w-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.widget .graph {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 10px);
+  grid-auto-columns: 10px;
+  gap: 3px;
+}
+
+.widget .graph span {
+  border-radius: 2px;
+}
+
+.widget.tappable {
+  cursor: pointer;
+}
+
+.screen .home {
+  position: absolute;
+  inset: 60px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 76px);
+  justify-content: center;
+  align-content: start;
+  gap: 26px 22px;
+  padding: 20px;
+}
+
+.app-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-icon .glyph {
+  width: 62px;
+  height: 62px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* the glass's fill, and where its rims catch the light (main.js sets the angle from the sky as the day goes) */
+:root {
+  --glass-fill: rgba(255, 255, 255, 0.08);
+  --bar-fill: rgba(30, 30, 36, 0.5);
+  --rim-angle: 180deg;
+}
+
+#css-layer {
+  overflow: hidden;
+}
+
+/* rasterize once and only move the layer: without this, the sway's tiny transform changes redrew the text at a new
+   subpixel offset every frame, so labels flickered between weights */
+#css-layer .screen {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+#css-layer .screen-crop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.screen.cover {
+  background: linear-gradient(170deg, #111318 0%, #2b2f3a 100%);
+}
+
+.lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 22%;
+  gap: 6px;
+}
+
+.lock-time {
+  font-size: 84px;
+  font-weight: 600;
+  letter-spacing: -2px;
+}
+
+.lock-date {
+  font-size: 17px;
+  opacity: 0.8;
+}
+
+.lock-hint {
+  margin-top: auto;
+  margin-bottom: 36px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+/* the html home screen only takes clicks, the visible one is the texture on the 3d screen */
+#css-layer .screen.hit {
+  opacity: 0;
+}
+
+.app-splash {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* a glass pane: a frosted fill, a rim that's bright on the side facing the sky's light (--rim-angle, set from where
+   the sun or moon is) and faint on the far side, and a soft highlight that follows the pointer across it. the fill is
+   translucent, so the rim gradient behind it tints the whole pane faintly. --fill and --r are the knobs, and --tint
+   puts a color over the fill. under a fine pointer the highlight's gradient is fixed to the window, so it needs no
+   measuring per pane, and otherwise it sits at the rim's side of each pane */
+.glass {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: var(--r, 22px);
+  --hl-x: calc(50% - sin(var(--rim-angle)) * 40%);
+  --hl-y: calc(50% + cos(var(--rim-angle)) * 40%);
+  background:
+    radial-gradient(
+        260px circle at var(--hl-x) var(--hl-y),
+        rgba(255, 255, 255, var(--hl, 0.14)),
+        transparent 70%
+      )
+      padding-box,
+    linear-gradient(var(--tint, transparent), var(--tint, transparent))
+      padding-box,
+    linear-gradient(var(--base, transparent), var(--base, transparent))
+      padding-box,
+    linear-gradient(
+        rgba(255, 255, 255, var(--fill, 0.1)),
+        rgba(255, 255, 255, var(--fill, 0.1))
+      )
+      padding-box,
+    linear-gradient(
+        var(--rim-angle),
+        rgba(255, 255, 255, 0.6),
+        rgba(255, 255, 255, 0.1) 35%,
+        rgba(255, 255, 255, 0.05) 65%,
+        rgba(255, 255, 255, 0.25)
+      )
+      border-box;
+  -webkit-backdrop-filter: blur(22px) saturate(1.7);
+  backdrop-filter: blur(22px) saturate(1.7);
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.55);
+}
+
+/* with a fine pointer the highlight follows it. fixed to the window it needs no measuring per pane. iOS Safari draws
+   a fixed background as a scrolling one, but it never matches there */
+@media (hover: hover) and (pointer: fine) {
+  .glass {
+    --hl-x: var(--mx);
+    --hl-y: var(--my);
+    background-attachment: fixed, scroll, scroll, scroll, scroll;
+  }
+}
+
+/* no backdrop blur while #page is pinned on the phone (small, and fading in or out) or once the quality ladder has
+   stepped down to plain glass, which a failed scene's flat site doesn't keep. the fill and the lit rim stay */
+html.page-pinned #page .glass,
+html.page-pinned #page .sheet,
+html.page-pinned #page .edge,
+html.glass-simple:not(.scene-failed) #page .glass,
+html.glass-simple:not(.scene-failed) #page .sheet,
+html.glass-simple:not(.scene-failed) #page .edge {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.page-pinned #page .glass {
+  --hl: 0;
+}
+
+/* with the phone closed the desk can be dragged around */
+body.closed {
+  cursor: grab;
+}
+
+body.looking {
+  cursor: grabbing;
+}
+
+body.closed.over-phone {
+  cursor: default;
+}
+
+/* over one of the phone's volume buttons, which take a press */
+body.over-volume,
+body.closed.over-volume {
+  cursor: pointer;
+}
+
+/* the weather data's credit and the 2d version link, faint along the bottom edge of each home screen */
+.screen .credits {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.screen .credit {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+}
+
+/* the music card, the shape of ios's medium music widget: the art fills the left, and the track, a bar to drag, and
+   the buttons go down the right */
+.music-card .art {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 118px;
+  height: 118px;
+  border-radius: 12px;
+}
+
+.music-card .m-side {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  left: 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.music-card .m-title {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.music-card .m-channel {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* the bar's box is taller than the bar it draws, and it reaches further still past its box (over the times under
+   it), so a finger on a phone, where the screen is drawn at about half size, still finds it */
+.music-card .m-progress {
+  position: relative;
+  display: block;
+  height: 18px;
+  margin-top: 8px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.music-card .m-progress::before {
+  content: "";
+  position: absolute;
+  inset: -12px -8px -14px;
+}
+
+.music-card .m-controls {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: auto;
+}
+
+.music-card .ctl {
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+/* youtube's player, waiting off screen until the music app's slot shows */
+#player-host {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 320px;
+  height: 180px;
+  z-index: 6;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+#player-host iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+#panel {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+
+#pose-editor summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+#pose-editor .pose-group {
+  margin-top: 6px;
+  opacity: 0.7;
+}
+
+#pose-editor .pose-value {
+  font-family: ui-monospace, monospace;
+  min-width: 6ch;
+  text-align: right;
+}
+
+#pose-editor .pose-read,
+#pose-editor .pose-status {
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+  margin: 4px 0;
+}

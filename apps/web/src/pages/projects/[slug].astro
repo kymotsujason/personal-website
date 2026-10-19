@@ -1,0 +1,51 @@
+---
+import { getCollection, render } from "astro:content";
+import Site from "../../layouts/Site.astro";
+import { formatDay } from "../../lib/format";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  return projects.map((project) => ({
+    params: { slug: project.id },
+    props: { project },
+  }));
+}
+
+const { project } = Astro.props;
+const { Content } = await render(project);
+const { title, date, summary, links = [], images = [] } = project.data;
+---
+
+<Site
+  title={title}
+  description={summary}
+  app="Projects"
+  kind="project"
+  back={{ href: "/projects", label: "Projects" }}
+  type="article"
+  ownTitle
+>
+  {images[0] && (
+    <div class="hero">
+      <img class="pic" src={images[0]} alt="" />
+    </div>
+  )}
+  <article class="sheet">
+    <h1>{title}</h1>
+    <p class="summary">{summary}</p>
+    <time datetime={date}>{formatDay(date)}</time>
+    <Content />
+    {images.slice(1).map((src) => (
+      <img src={src} alt="" />
+    ))}
+  </article>
+  {links.length > 0 && (
+    <Fragment slot="toolbar">
+      {links.map((link) => (
+        <a class="pill" href={link.url} rel="noopener">
+          {link.label}
+        </a>
+      ))}
+    </Fragment>
+  )}
+</Site>

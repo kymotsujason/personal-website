@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-capture/
+.astro/
+playwright-report/
+test-results/
+src/scene/
+src/dev/
+public/keys/
+public/models/
+src/data/*.json
+tests/fixtures/
+tools/REBAKE.md
