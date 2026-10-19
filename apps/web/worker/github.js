@@ -28,6 +28,13 @@ const LEVELS = {
   FOURTH_QUARTILE: 4,
 };
 
+// a yyyy-mm-dd day, which the widget reads at noon to find the last column's weekday
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isDay = (date) =>
+  typeof date === "string" &&
+  ISO_DAY.test(date) &&
+  !Number.isNaN(Date.parse(`${date}T12:00:00`));
+
 // github's answer as { days: [{ date, level }], total }, or null when any part of it isn't in the expected shape, so
 // a strange answer can't replace a saved graph with an empty or all zero one
 export const shapeCalendar = (json) => {
@@ -42,9 +49,7 @@ export const shapeCalendar = (json) => {
   }
   const found = calendar.weeks.flatMap((week) => week.contributionDays);
   const valid = found.every(
-    (day) =>
-      typeof day?.date === "string" &&
-      Object.hasOwn(LEVELS, day.contributionLevel),
+    (day) => isDay(day?.date) && Object.hasOwn(LEVELS, day.contributionLevel),
   );
   if (!valid || found.length === 0) {
     return null;

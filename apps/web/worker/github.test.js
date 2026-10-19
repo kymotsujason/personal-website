@@ -194,3 +194,26 @@ test("the saved data reads back, and nothing saved reads as null", async () => {
     await readGithub({ HOME: fakeKv({ github: "{not json" }) }),
   ).toBeNull();
 });
+
+test("a day whose date isn't a real yyyy-mm-dd day gives null and leaves the saved data alone", async () => {
+  for (const date of [
+    "Oct 15, 2026",
+    "2026-10-15T00:00:00Z",
+    "2026-13-45",
+    "",
+  ]) {
+    expect(
+      shapeCalendar(
+        calendar([
+          WEEKS[0],
+          { contributionDays: [{ date, contributionLevel: "NONE" }] },
+        ]),
+      ),
+      date,
+    ).toBeNull();
+  }
+  await keepsSaved([
+    WEEKS[0],
+    { contributionDays: [{ date: "Oct 15", contributionLevel: "NONE" }] },
+  ]);
+});
