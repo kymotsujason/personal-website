@@ -71,7 +71,7 @@ test("every thumb is stripped, on the allowlist, and named in its post", (t) => 
   }
 });
 
-test("a failure on a later post leaves no written thumb off the allowlist", (t) => {
+test("a failure on a later post writes nothing and leaves the allowlist and posts alone", (t) => {
   const site = makeSite(t, ["a", "b"]);
   const encode = (source) => {
     if (source.endsWith("b.jpg")) {
@@ -80,15 +80,15 @@ test("a failure on a later post leaves no written thumb off the allowlist", (t) 
     return exifJpeg;
   };
   assert.throws(() => makeThumbs({ site, encode }), /vips failed on b/);
-  const allowlist = allowlistOf(site);
+  assert.deepEqual(allowlistOf(site), {});
   for (const slug of ["a", "b"]) {
-    const file = thumbPath(site, slug);
-    if (existsSync(file)) {
-      assert.equal(
-        allowlist[`apps/web/public/blog/thumbs/${slug}.jpg`],
-        sha256(readFileSync(file)),
-        `${slug}.jpg was written but isn't on the allowlist`,
-      );
-    }
+    assert.equal(existsSync(thumbPath(site, slug)), false, `${slug}.jpg`);
+    assert.doesNotMatch(
+      readFileSync(
+        join(site, "apps/web/src/content/blog", `${slug}.md`),
+        "utf8",
+      ),
+      /^thumb:/m,
+    );
   }
 });
