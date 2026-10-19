@@ -743,10 +743,15 @@ test.describe("keyboard use of the 3D screens", () => {
     // the first key press loads the player, which has no length until then
     await page.keyboard.press("ArrowLeft");
     await page.clock.runFor(1000);
+    // from the middle of the track, so ArrowDown lands somewhere Home and PageDown don't
+    await page.evaluate(() => {
+      (window as any).__yt.time = 100;
+      (window as any).__yt.seeks.length = 0;
+    });
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("ArrowDown");
     expect(await page.evaluate(() => (window as any).__yt.seeks)).toEqual([
-      5, 0,
+      105, 95,
     ]);
   });
 
