@@ -8,50 +8,48 @@ import { cityFor, createWeatherSource } from "../../worker/weather.js";
 
 const keysDir = path.resolve(import.meta.dirname, "../../public/keys");
 const perfDir = path.resolve(import.meta.dirname, "../../perf-logs");
+const SAVE_MAX_BYTES = 1024 * 1024;
 const PERF_MAX_BYTES = 8 * 1024 * 1024;
 
-const saveKeys = (req, res) => {
+// any page open while the server runs can send a simple post to it, so a write has to come from the server's own page
+// (or from a tool like curl, which sends no origin)
+const fromOwnPage = (req) => {
+    if (req.headers["sec-fetch-site"] === "cross-site") {
+        return false;
+    }
+    const origin = req.headers.origin;
+    if (origin === undefined) {
+        return true;
+    }
+    try {
+        return new URL(origin).host === req.headers.host;
+    } catch {
+        return false;
+    }
+};
+
+const jsonWriter = (dir, maxBytes) => (req, res) => {
     const name = new URL(req.url, "http://localhost").searchParams.get("name") || "";
     if (req.method !== "POST" || !/^[a-z0-9-]+$/.test(name)) {
         res.statusCode = 400;
         res.end("bad request");
         return;
     }
-    let body = "";
-    req.on("data", (chunk) => {
-        body += chunk;
-    });
-    req.on("end", () => {
-        try {
-            JSON.parse(body);
-        } catch {
-            res.statusCode = 400;
-            res.end("not json");
-            return;
-        }
-        fs.mkdirSync(keysDir, { recursive: true });
-        fs.writeFileSync(path.join(keysDir, `${name}.json`), body);
-        res.end("saved");
-    });
-};
-
-const savePerf = (req, res) => {
-    const name = new URL(req.url, "http://localhost").searchParams.get("name") || "";
-    if (req.method !== "POST" || !/^[a-z0-9-]+$/.test(name)) {
-        res.statusCode = 400;
-        res.end("bad request");
+    if (!fromOwnPage(req)) {
+        res.statusCode = 403;
+        res.end("forbidden");
         return;
     }
     const chunks = [];
     let size = 0;
     req.on("data", (chunk) => {
         size += chunk.length;
-        if (size <= PERF_MAX_BYTES) {
+        if (size <= maxBytes) {
             chunks.push(chunk);
         }
     });
     req.on("end", () => {
-        if (size > PERF_MAX_BYTES) {
+        if (size > maxBytes) {
             res.statusCode = 413;
             res.end("too large");
             return;
@@ -64,11 +62,14 @@ const savePerf = (req, res) => {
             res.end("not json");
             return;
         }
-        fs.mkdirSync(perfDir, { recursive: true });
-        fs.writeFileSync(path.join(perfDir, `${name}.json`), body);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, `${name}.json`), body);
         res.end("saved");
     });
 };
+
+const saveKeys = jsonWriter(keysDir, SAVE_MAX_BYTES);
+const savePerf = jsonWriter(perfDir, PERF_MAX_BYTES);
 
 const dataDir = path.resolve(import.meta.dirname, "../data");
 
