@@ -11,6 +11,7 @@ const writeKeys = (path: string, data: string) =>
     "python3",
     [
       "-I",
+      "-B",
       "-c",
       `import sys; sys.path.insert(0, sys.argv[1]); import saveKeys; saveKeys.writeKeys(${data}, sys.argv[2])`,
       tools,
