@@ -145,6 +145,8 @@ export const buildWidgets = (homeEl) => {
         }));
     });
     const bar = widgets.querySelector(".m-progress");
+    // the new bar starts blank, so the next read draws it even when the music hasn't moved
+    shownPosition = "";
     // the bar seeks by dragging along it, and a tap on it seeks too without opening the music app under it. the
     // pointer is mapped back through the screen's perspective to the spot on the bar it's over
     const atPointer = (event) => {
@@ -196,6 +198,10 @@ export const buildWidgets = (homeEl) => {
 // is drawn on the screen's live layer with the status bar, so it only repaints when it moves a pixel or a second
 let scrub = null;
 let shownPosition = "";
+// a rebuild drops a scrub in progress, since the bar it drags is gone and its release never reaches it
+export const dropScrub = () => {
+    scrub = null;
+};
 const showPosition = () => {
     const bar = state.screen ? state.screen.homeEl.querySelector(".m-progress") : null;
     if (!bar) {

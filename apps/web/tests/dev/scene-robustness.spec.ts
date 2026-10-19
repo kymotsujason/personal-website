@@ -322,6 +322,65 @@ test("a fold swipe that's cancelled springs back instead of finishing", async ({
   expect(after).toEqual({ phone: "open", busy: false, fold: 0 });
 });
 
+test("a music bar scrub held through a rebuild is dropped, and the new bar follows the music", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  // a track a quarter of the way through, so the bar takes a drag
+  await page.evaluate(async (path) => {
+    const { music } = await import(path);
+    music.position = () => ({ time: 50, duration: 200, at: 0.25 });
+  }, "/src/layout/player.js");
+  const bar = () =>
+    page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>("#css-layer .m-progress")!;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.x + r.width * 0.75,
+        y: r.y + r.height / 2,
+        at: Number(el.dataset.at),
+        dragging: el.dataset.dragging,
+      };
+    });
+  const start = await bar();
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 2, start.y);
+  const held = await bar();
+  expect(held.dragging, "the bar took the drag").toBe("true");
+  expect(held.at).toBeGreaterThan(0.5);
+  await rebuildAt(page, { width: 1100, height: 700 }, false);
+  await page.mouse.up();
+  // the bar reads the music each half second
+  await page.waitForTimeout(1200);
+  const after = await bar();
+  expect({ at: after.at, dragging: after.dragging }).toEqual({
+    at: 0.25,
+    dragging: "false",
+  });
+});
+
+test("a rebuild draws the music's place on the new bar while the music holds still", async ({
+  page,
+}) => {
+  await openAt(page, "/", false);
+  await page.evaluate(async (path) => {
+    const { music } = await import(path);
+    music.position = () => ({ time: 50, duration: 200, at: 0.25 });
+  }, "/src/layout/player.js");
+  const shownAt = () =>
+    page.evaluate(() =>
+      Number(
+        document.querySelector<HTMLElement>("#css-layer .m-progress")!.dataset
+          .at,
+      ),
+    );
+  await expect.poll(shownAt).toBe(0.25);
+  await rebuildAt(page, { width: 1100, height: 700 }, false);
+  await page.waitForTimeout(1200);
+  expect(await shownAt()).toBe(0.25);
+});
+
 test("a rebuild frees the old phone's geometry and textures", async ({
   page,
 }) => {

@@ -7,7 +7,7 @@ import { cancelAll } from "./tween.js";
 import { initRenderer, renderer, backdrop, MATERIALS, setWeather, applyWeather, applyDaylight } from "./renderer.js";
 import { installQuality, resize } from "./quality.js";
 import { initDevice, loadKeys, handsRig, buildDevice, loadCharger, watchCharger, chargerWanted } from "./device.js";
-import { initHome, stopHome, showContributions, statusBar } from "./home.js";
+import { initHome, stopHome, showContributions, statusBar, dropScrub } from "./home.js";
 import { initAppWindow, installHomeSwipe, dropHomeSwipe, openApp, openFromCover, closeApp, fadeTo, setPageFlatListener } from "./appWindow.js";
 import { arrive, holdIntro, showFromAddress, showHome } from "./intro.js";
 import { installGestures, installKeys, dropGesture } from "./fold.js";
@@ -26,13 +26,14 @@ export const sceneStarted = new Promise((resolve) => {
 
 // a resize or a rotation builds the phone again, in the state the page asks for (the page a navigation in flight is
 // going to, or else #page's). while the page is still black that's the intro's start, and the intro opens the page's
-// app once it has played. #page and its scroll are left alone, and a swipe held through it is dropped
+// app once it has played. #page and its scroll are left alone, and a swipe or a scrub held through it is dropped
 const rebuild = () => {
     resize();
     state.pageFlat = false;
     cancelAll();
     dropGesture();
     dropHomeSwipe();
+    dropScrub();
     state.busy = false;
     state.zoomed = false;
     Object.assign(pose, { blur: 0, idle: 1, fold: 0 });
