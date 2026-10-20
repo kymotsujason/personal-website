@@ -11,6 +11,7 @@ import { centerComp, setFold, keyOptions, handKeys } from "../scene/device.js";
 import { music, statusBar, siteData, refreshStatus } from "../scene/home.js";
 import { openApp, closeApp } from "../scene/appWindow.js";
 import { cardBox } from "../scene/switcher.js";
+import { snapshotSurfaces } from "../scene/snapshotCards.js";
 import { moveAt, foldStartTime, moveTotal, MOVE } from "../scene/intro.js";
 import { closePhone, openPhone, phoneEdges, gestureFor } from "../scene/fold.js";
 import { idleDrift } from "../scene/loop.js";
@@ -77,6 +78,15 @@ const blockedByDevice = (point) => {
 
 const spike = {
     state,
+    // what each of the switcher's kept page copies shows, read from the elements the scene holds, since the copies sit in
+    // closed shadow roots the tests can't look into
+    snapshotCards: () =>
+        snapshotSurfaces.map((s) => ({
+            app: s.app,
+            show: s.show,
+            title: s.page.querySelector("h1")?.textContent?.trim() ?? null,
+            scroll: s.page.querySelector(":scope > .body")?.scrollTop ?? null
+        })),
     // the middle of the app switcher's card i in the window's px, through the phone's perspective, for the tests to
     // tap and drag. null while the switcher isn't showing
     switcherCard: (i) => {

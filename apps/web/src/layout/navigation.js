@@ -4,6 +4,7 @@
 import { navigate, swapFunctions } from "astro:transitions/client";
 import { customSwap } from "./swap.js";
 import { read, write } from "../lib/storage.js";
+import { captureSnapshot } from "../lib/snapshots.js";
 
 const HANDLER_CAP_MS = 4000;
 
@@ -251,7 +252,17 @@ const rootState = () => {
 
 let lastSwap = null;
 
+// the app switcher shows each app where it was left, so the page an app is on is kept just before a swap replaces it
+// or the tab goes (see lib/snapshots.js). the flat site has no switcher
+const keepPage = () => {
+  if (root.classList.contains("has-3d")) {
+    captureSnapshot(document.getElementById("page"));
+  }
+};
+addEventListener("pagehide", keepPage);
+
 document.addEventListener("astro:before-swap", (event) => {
+  keepPage();
   // a navigation that starts before this one's transition is ready skips it, and the browser rejects ready, which
   // Astro leaves unhandled, so it showed as an uncaught error after a quick Back
   event.viewTransition?.ready?.catch(() => {});

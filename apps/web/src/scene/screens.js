@@ -629,6 +629,7 @@ export const mapScreenUV = (mesh, rootInverse, surface) => {
 
 // punches an ios style app window (a rounded rect in the home screen's own px) through the screen, so the html app
 // behind the canvas shows there. tl, u, v map screen px to the mesh's local plane
+export const EXTRA_HOLES = 3;
 export const appWindowMaterial = () => new THREE.ShaderMaterial({
     uniforms: {
         tl: { value: new THREE.Vector2() },
@@ -636,7 +637,11 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
         v: { value: new THREE.Vector2(0, 1) },
         rect: { value: new THREE.Vector4(0, 0, 0, 0) },
         radius: { value: 0 },
-        opacity: { value: 1 }
+        opacity: { value: 1 },
+        // the app switcher's kept pages (see snapshotCards.js), each through a hole of its own with its own opacity
+        extras: { value: Array.from({ length: EXTRA_HOLES }, () => new THREE.Vector4()) },
+        extraOpacity: { value: new Array(EXTRA_HOLES).fill(0) },
+        extraRadius: { value: 0 }
     },
     vertexShader: `
         varying vec2 vLocal;
@@ -652,23 +657,37 @@ export const appWindowMaterial = () => new THREE.ShaderMaterial({
         uniform vec4 rect;
         uniform float radius;
         uniform float opacity;
+        uniform vec4 extras[${EXTRA_HOLES}];
+        uniform float extraOpacity[${EXTRA_HOLES}];
+        uniform float extraRadius;
         varying vec2 vLocal;
-        void main() {
-            vec2 d = vLocal - tl;
-            float det = u.x * v.y - u.y * v.x;
-            vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
-            vec2 center = (rect.xy + rect.zw) * 0.5;
-            vec2 halfSize = (rect.zw - rect.xy) * 0.5;
+
+        // how open the cutout of a rounded rect is at px
+        float hole(vec2 px, vec4 box, float corner) {
+            vec2 center = (box.xy + box.zw) * 0.5;
+            vec2 halfSize = (box.zw - box.xy) * 0.5;
             // css caps a corner at half the shorter side, so the cutout does too, or a short window's cutout ran past
             // its top and bottom and showed the page behind the canvas
-            float r = min(radius, min(halfSize.x, halfSize.y));
+            float r = min(corner, min(halfSize.x, halfSize.y));
             vec2 q = abs(px - center) - halfSize + r;
             float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
             // the cutout's edge is softened over a pixel and sits a pixel inside the window's, so the window's own
             // softened edge, which lets the black stage behind it through, stays under the canvas
             float aa = fwidth(dist);
+            return 1.0 - smoothstep(-2.0 * aa, -aa, dist);
+        }
+
+        void main() {
+            vec2 d = vLocal - tl;
+            float det = u.x * v.y - u.y * v.x;
+            vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
             // opacity lets the window fade in over a widget it grows out of, instead of covering it at once
-            float open = (1.0 - smoothstep(-2.0 * aa, -aa, dist)) * opacity;
+            float open = hole(px, rect, radius) * opacity;
+            for (int i = 0; i < ${EXTRA_HOLES}; i++) {
+                if (extraOpacity[i] > 0.0) {
+                    open = max(open, hole(px, extras[i], extraRadius) * extraOpacity[i]);
+                }
+            }
             if (open <= 0.0) {
                 discard;
             }
@@ -699,6 +718,9 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
         bodies: { value: Array.from({ length: CARD_SLOTS }, () => new THREE.Vector4()) },
         labels: { value: Array.from({ length: CARD_SLOTS }, () => new THREE.Vector4()) },
         kinds: { value: new Array(CARD_SLOTS).fill(0) },
+        // each card's own opacity, so one being opened stays solid while the rest fade (fade takes the labels and the
+        // backdrop)
+        alphas: { value: new Array(CARD_SLOTS).fill(1) },
         slots: { value: new Array(CARD_SLOTS).fill(0) },
         radius: { value: 0 },
         top: { value: new THREE.Vector3() },
@@ -724,6 +746,7 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
         uniform vec4 bodies[${CARD_SLOTS}];
         uniform vec4 labels[${CARD_SLOTS}];
         uniform float kinds[${CARD_SLOTS}];
+        uniform float alphas[${CARD_SLOTS}];
         uniform float slots[${CARD_SLOTS}];
         uniform float radius;
         uniform vec3 top;
@@ -747,7 +770,7 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
             float det = u.x * v.y - u.y * v.x;
             vec2 px = vec2((d.x * v.y - d.y * v.x) / det, (u.x * d.y - u.y * d.x) / det);
             float sy = clamp((px.y - span.x) / max(span.y - span.x, 1.0), 0.0, 1.0);
-            vec4 color = vec4(mix(top, low, sy) * 0.55, backdrop);
+            vec4 color = vec4(mix(top, low, sy) * 0.55, backdrop * fade);
             for (int i = 0; i < ${CARD_SLOTS}; i++) {
                 float kind = kinds[i];
                 if (kind < 0.5) {
@@ -761,7 +784,7 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
                 }
                 if (kind > 1.5) {
                     float dist = roundedDistance(px, body);
-                    float inside = 1.0 - smoothstep(-fwidth(dist), 0.0, dist);
+                    float inside = (1.0 - smoothstep(-fwidth(dist), 0.0, dist)) * alphas[i];
                     if (inside > 0.0) {
                         float y = clamp((px.y - body.y) / max(body.w - body.y, 1.0), 0.0, 1.0);
                         vec3 c = mix(top, low, y);
@@ -781,11 +804,10 @@ export const appCardMaterial = () => new THREE.ShaderMaterial({
                     vec2 q = (px - label.xy) / (label.zw - label.xy);
                     if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
                         vec4 t = texture2D(atlas, vec2((slots[i] * 256.0 + q.x * 256.0) / 1024.0, (q.y * 64.0) / 256.0));
-                        color = vec4(mix(color.rgb, t.rgb, t.a), max(color.a, t.a));
+                        color = vec4(mix(color.rgb, t.rgb, t.a * fade), max(color.a, t.a * fade));
                     }
                 }
             }
-            color.a *= fade;
             if (color.a <= 0.0) {
                 discard;
             }

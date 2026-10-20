@@ -27,7 +27,7 @@ if (typeof mock.module !== "function") {
     mock.module("./loop.js", { namedExports: { idleDrift: () => ({ x: 0, y: 0, z: 0 }) } });
     mock.module("./home.js", { namedExports: { music: { loadPlayer: () => {} }, siteData: { apps: [] } } });
     mock.module("./quality.js", { namedExports: { reducedMotion: reduced } });
-    mock.module("./screens.js", { namedExports: { glyphRect: () => ({ x0: 0, y0: 0, x1: 10, y1: 10, radius: 2 }), CARD_SLOTS: 4 } });
+    mock.module("./screens.js", { namedExports: { glyphRect: () => ({ x0: 0, y0: 0, x1: 10, y1: 10, radius: 2 }), CARD_SLOTS: 4, EXTRA_HOLES: 3 } });
 
     const { state, pose } = await import("./state.js");
     const { cancelAll, runTweens } = await import("./tween.js");

@@ -450,11 +450,28 @@ test.describe("with the clock installed", () => {
     expect(await historyIndex(page)).toBe(before + 1);
   });
 
-  const swipeHome = async (page: Page) => {
+  // the home bar's middle once it's what a press there lands on. the scene reports the page flat a frame before the
+  // canvas drops under it, and a view transition still finishing takes presses on the root, so a press made the moment
+  // the phone settles can miss the bar
+  const homeBarPoint = async (page: Page) => {
     const bar = await page.locator("#page .home-bar").boundingBox();
     expect(bar).not.toBeNull();
     const x = bar!.x + bar!.width / 2;
     const y = bar!.y + bar!.height / 2;
+    await expect
+      .poll(() =>
+        page.evaluate(
+          ({ x, y }) =>
+            Boolean(document.elementFromPoint(x, y)?.closest(".home-bar")),
+          { x, y },
+        ),
+      )
+      .toBe(true);
+    return { x, y };
+  };
+
+  const swipeHome = async (page: Page) => {
+    const { x, y } = await homeBarPoint(page);
     await page.mouse.move(x, y);
     await page.mouse.down();
     for (let i = 1; i <= 12; i++) {
@@ -811,9 +828,7 @@ test.describe("with the clock installed", () => {
 
   // a swipe up from the home bar that rests a moment opens the app switcher, the way ios does
   const openSwitcher = async (page: Page) => {
-    const bar = await page.locator("#page .home-bar").boundingBox();
-    const x = bar!.x + bar!.width / 2;
-    const y = bar!.y + bar!.height / 2;
+    const { x, y } = await homeBarPoint(page);
     await page.mouse.move(x, y);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) {
@@ -995,10 +1010,8 @@ test.describe("with the clock installed", () => {
 
   // the swipe up, across, and down that ios uses to jump to the app before
   const swipeAcross = async (page: Page, share: number) => {
-    const bar = await page.locator("#page .home-bar").boundingBox();
     const size = page.viewportSize()!;
-    const x = bar!.x + bar!.width / 2;
-    const y = bar!.y + bar!.height / 2;
+    const { x, y } = await homeBarPoint(page);
     await page.mouse.move(x, y);
     await page.mouse.down();
     await page.mouse.move(x, y - 80, { steps: 5 });
@@ -1043,6 +1056,49 @@ test.describe("with the clock installed", () => {
         () => (window as any).spike.state.screen.appCard.visible,
       ),
     ).toBe(false);
+  });
+
+  // the switcher shows each app where it was left, the way ios shows an app's last screen, and opening it from there
+  // goes back to that page and scroll
+  test("the switcher shows the app before where it was left, and opening it goes back to that scroll", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 600 });
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    const scroll = await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>("#page > .body")!;
+      body.scrollTop = 150;
+      return body.scrollTop;
+    });
+    expect(scroll).toBeGreaterThan(0);
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    await openSwitcher(page);
+    const cards = await page.evaluate(() =>
+      (window as any).spike.snapshotCards(),
+    );
+    expect(cards).toContainEqual({
+      app: "About",
+      show: true,
+      title: "About",
+      scroll,
+    });
+    const about = await cardAt(page, (await row(page)).indexOf("About"));
+    await page.mouse.click(about.x, about.y);
+    await settledOn(page, "/about", "About");
+    expect(
+      await page.evaluate(
+        () => document.querySelector<HTMLElement>("#page > .body")!.scrollTop,
+      ),
+    ).toBe(scroll);
+    const after = await page.evaluate(() =>
+      (window as any).spike.snapshotCards().filter((c: any) => c.show),
+    );
+    expect(after).toEqual([]);
   });
 
   test("Back while the switcher shows puts the open app back and goes back", async ({

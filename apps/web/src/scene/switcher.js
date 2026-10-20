@@ -7,8 +7,9 @@ import { siteData } from "./home.js";
 import { glyphRect } from "./screens.js";
 import { blockNextClick } from "./fold.js";
 import { noteOpened, openedSoFar, recentOrder } from "./recents.js";
+import { prepareSnapshots, showSnapshots, keptPath, keptScroll } from "./snapshotCards.js";
 import { requestApp, requestHome } from "./navigation.js";
-import { pageEl, placeAppWindow, pageBox, toScreenPx, showCards, hideCards, pageSky, setAppWindow, hideOpenIcon, showFlat, closeApp, lerpRect, rubberBand } from "./appWindow.js";
+import { pageEl, placeAppWindow, pageBox, toScreenPx, showCards, hideCards, pageSky, setAppWindow, hideOpenIcon, showFlat, closeApp, lerpRect, rubberBand, screenCorners } from "./appWindow.js";
 
 // the app switcher, the way ios shows it after a swipe up from the home bar that rests a moment: every app as a card
 // in a row that scrolls sideways, the open app on the right and the ones opened before it to its left (see recents.js). the open app's card is its live window and the others
@@ -85,7 +86,18 @@ const layoutAround = (box) => {
 // atlas, which is in the home screen's order
 export const switcherRow = () => {
     const apps = recentOrder(siteData.apps, [...openedSoFar().filter((n) => n !== state.openApp.name), state.openApp.name]);
+    prepareSnapshots(apps);
     return { apps, live: apps.findIndex((a) => a.name === state.openApp.name), slots: apps.map((a) => siteData.apps.indexOf(a)), sky: pageSky() };
+};
+
+// the cards (from showCards' list) whose app has a kept page show it in place of a stand in, each at its own opacity.
+// the open app's card is its live window and isn't among them
+const withSnapshots = (cards, apps, radius, opacityOf) => {
+    const shown = showSnapshots(
+        cards.map((c, i) => (c && c.kind === 2 ? { app: apps[i].name, box: c.body, corners: screenCorners(c.body), opacity: opacityOf(i) } : null)).filter(Boolean),
+        radius
+    );
+    return cards.map((c, i) => (c && c.kind === 2 && shown.has(apps[i].name) ? { ...c, kind: 1 } : c));
 };
 
 // card i's box at the row's scroll (a card index, so the scroll's card sits in the middle), pushed up by lift px
@@ -128,16 +140,19 @@ const draw = () => {
         }
         return { body, label: sw.labels ? labelBox(layout, body) : null, kind: i === sw.holder ? 1 : 2, slot: sw.slots[i] };
     });
-    // a card being opened grows with no label, as #page's card once it holds that app's page and a stand in before
+    // a card being opened grows with no label, solid, as #page's card once it holds that app's page and its kept page
+    // or a stand in before
     if (sw.grow) {
         cards[sw.grow.i].body = sw.grow.box;
         cards[sw.grow.i].label = null;
+        cards[sw.grow.i].alpha = 1;
     }
     const holderBox = sw.grow && sw.holder === sw.grow.i ? sw.grow.box : sw.grow ? cards[sw.holder].body : lerpRect(sw.from, cards[sw.holder].body, sw.enter);
     // the home screen behind darkens as the switcher comes in and lightens back as a card fills the screen
     const home = sw.grow ? THREE.MathUtils.lerp(1, sw.homeAt, sw.fade) : THREE.MathUtils.lerp(sw.homeFrom, sw.homeAt, sw.enter);
     placeAppWindow(windowFor(layout, holderBox), radius, 1, home, state.openIcon, sw.apps[sw.holder], 1);
-    showCards(cards, radius, sw.sky, sw.fade, sw.backdrop);
+    const faced = withSnapshots(cards, sw.apps, radius, (i) => (sw.grow && sw.grow.i === i ? 1 : sw.fade));
+    showCards(faced, radius, sw.sky, sw.fade, sw.backdrop);
 };
 
 export const switcherOpen = () => Boolean(state.switcher);
@@ -150,10 +165,15 @@ const PEEK_TO = 0.14;
 export const peekShare = (pulled) => THREE.MathUtils.smoothstep(pulled, PEEK_FROM, PEEK_TO);
 export const drawPeek = (rect, pulled, row) => {
     const layout = layoutAround(pageBox(rect));
-    const cards = [row.live - 1, row.live + 1]
-        .filter((i) => i >= 0 && i < row.apps.length)
-        .map((i) => ({ body: cardBox(layout, i, row.live), label: null, kind: 2, slot: row.slots[i] }));
-    showCards(cards, state.screen.radiusPx, row.sky, peekShare(pulled));
+    const share = peekShare(pulled);
+    const sides = [row.live - 1, row.live + 1].filter((i) => i >= 0 && i < row.apps.length);
+    const cards = withSnapshots(
+        sides.map((i) => ({ body: cardBox(layout, i, row.live), label: null, kind: 2, slot: row.slots[i] })),
+        sides.map((i) => row.apps[i]),
+        state.screen.radiusPx,
+        () => share
+    );
+    showCards(cards, state.screen.radiusPx, row.sky, share);
 };
 
 // the way ios orders them: the open app on the right and the ones before it to its left, newest to oldest
@@ -329,8 +349,21 @@ const openOther = async (sw, i) => {
     sw.grow = { i, box: start };
     state.switching = { to: app.name, back: false, landed: false, dropped: false };
     state.swapOpen = true;
-    requestApp(app, { path: lastPath.get(app.name) || app.path });
+    const path = keptPath(app.name) || lastPath.get(app.name) || app.path;
+    requestApp(app, { path });
     const landed = () => pageEl.dataset.app === app.name;
+    // the app's page comes back scrolled to where it was left, as soon as it's in #page
+    let scrolled = false;
+    const restoreScroll = () => {
+        if (scrolled || !landed()) {
+            return;
+        }
+        scrolled = true;
+        const body = pageEl.querySelector(":scope > .body");
+        if (body && location.pathname === keptPath(app.name)) {
+            body.scrollTop = keptScroll(app.name);
+        }
+    };
     const step = (t) => {
         if (state.switcher !== sw) {
             return;
@@ -339,9 +372,12 @@ const openOther = async (sw, i) => {
         sw.scroll = scroll0 + (i - scroll0) * t;
         sw.fade = 1 - t;
         // #page rides the growing card once it holds the app's page, and the card it left stands in until it's gone
+        // once the page lands, the app it replaced has just been kept (see layout/navigation.js), so its card shows that
         if (landed() && sw.holder !== i) {
             sw.holder = i;
+            prepareSnapshots(sw.apps);
         }
+        restoreScroll();
         draw();
     };
     const end = reducedMotion.matches ? "done" : await tween({ to: {}, duration: OPEN_MS, easing: ease.outCubic, onUpdate: step });
@@ -357,6 +393,7 @@ const openOther = async (sw, i) => {
             return;
         }
     }
+    restoreScroll();
     finish(landed() ? app : state.openApp);
 };
 
@@ -368,10 +405,10 @@ const goHome = (sw) => {
     if (!reducedMotion.matches) {
         const fadeFrom = sw.fade;
         tween({ to: {}, duration: HOME_FADE_MS, easing: ease.outCubic, onUpdate: (t) => {
-            const cards = sw.apps
-                .map((_, i) => ({ body: cardBox(layout, i, sw.scroll), label: null, kind: 2, slot: sw.slots[i] }))
-                .filter((_, i) => i !== sw.live);
-            showCards(cards, state.screen.radiusPx * CARD_SCALE, sw.sky, fadeFrom * (1 - t), BACKDROP);
+            const f = fadeFrom * (1 - t);
+            const cards = sw.apps.map((_, i) => (i === sw.live ? null : { body: cardBox(layout, i, sw.scroll), label: null, kind: 2, slot: sw.slots[i] }));
+            const faced = withSnapshots(cards, sw.apps, state.screen.radiusPx * CARD_SCALE, () => f).filter(Boolean);
+            showCards(faced, state.screen.radiusPx * CARD_SCALE, sw.sky, f, BACKDROP);
         } }).then(hideCards);
     } else {
         hideCards();

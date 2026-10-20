@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { snapshotSurfaces } from "./snapshotCards.js";
 import { cornerPin, facing } from "./pin.js";
 import { state, pose, TAP_FOLD, FOV } from "./state.js";
 import { runTweens } from "./tween.js";
@@ -414,6 +415,9 @@ const frame = (now) => {
     pin(s.home, pose.fold < TAP_FOLD && !state.appVisible);
     pin(s.app, state.appVisible || state.pageFlat);
     placePage();
+    for (const snapshot of snapshotSurfaces) {
+        pin(snapshot, snapshot.show);
+    }
     // the app only takes clicks while it's open and still. while it opens, is dragged, springs back, or closes, a click
     // would land on a page that's moving, and the home screen's own taps wait for the close to end (state.busy)
     const appLive = state.zoomed && !state.busy;

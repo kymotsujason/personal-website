@@ -11,6 +11,7 @@ import { reducedMotion } from "./quality.js";
 import { requestApp, requestHome } from "./navigation.js";
 import { read, write } from "../lib/storage.js";
 import { noteOpened } from "./recents.js";
+import { hideSnapshots } from "./snapshotCards.js";
 import { enterSwitcher, switcherDrag, switcherDragEnd, switcherRow, drawPeek, quickSwitch } from "./switcher.js";
 
 // the apps' background, ios's dark appearance. flat.css's #page column colors go with it
@@ -139,6 +140,7 @@ export const resetAppWindow = () => {
     }
     state.screen.appHole.visible = false;
     state.screen.appCard.visible = false;
+    hideSnapshots();
     state.switcher = null;
     state.screen.composite.setHidden(null);
     state.screen.texture.repeat.set(1, 1);
@@ -189,6 +191,19 @@ export const lerpRect = (a, b, t) => ({
     x1: a.x1 + (b.x1 - a.x1) * t,
     y1: a.y1 + (b.y1 - a.y1) * t
 });
+
+// a box in the screen's px as its four corners on the phone (top left, top right, bottom left, bottom right), for pinning
+// html onto it
+export const screenCorners = (box) => {
+    const { full, fullW, fullH } = state.screen;
+    const [tl, tr, bl] = full.corners;
+    const at = (x, y) => new THREE.Vector3(
+        tl.x + ((tr.x - tl.x) * x) / fullW + ((bl.x - tl.x) * y) / fullH,
+        tl.y + ((tr.y - tl.y) * x) / fullW + ((bl.y - tl.y) * y) / fullH,
+        tl.z
+    );
+    return [at(box.x0, box.y0), at(box.x1, box.y0), at(box.x0, box.y1), at(box.x1, box.y1)];
+};
 
 // the part of a window at rect that #page covers, in the screen's px. #page is laid out at the browser window's size and
 // centered in the app window, which is laid out at the screen's size
@@ -424,6 +439,7 @@ export const showCards = (cards, radius, sky, fade = 1, backdrop = 0) => {
         u.slots.value[i] = c ? c.slot : 0;
         u.bodies.value[i].set(...(c ? [c.body.x0, c.body.y0, c.body.x1, c.body.y1] : [0, 0, 0, 0]));
         u.labels.value[i].set(...(c && c.label ? [c.label.x0, c.label.y0, c.label.x1, c.label.y1] : [0, 0, 0, 0]));
+        u.alphas.value[i] = c && c.alpha !== undefined ? c.alpha : fade;
     }
     u.radius.value = radius;
     u.top.value.copy(sky.top);
@@ -440,6 +456,7 @@ export const showCards = (cards, radius, sky, fade = 1, backdrop = 0) => {
 
 export const hideCards = () => {
     state.screen.appCard.visible = false;
+    hideSnapshots();
 };
 
 const placeCard = (rect, radius, sky) => {
