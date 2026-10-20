@@ -961,6 +961,90 @@ test.describe("with the clock installed", () => {
     expect(await row(page)).toEqual(["Projects", "Music", "Blog", "About"]);
   });
 
+  // a resting finger drifts, and the old rule started its wait again on every few px of drift, so the switcher took a
+  // long hold. it reads the swipe's speed now, so a slow drift opens it before the finger has even stopped
+  test("a swipe that slows to a drift opens the switcher while still drifting", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    const bar = await page.locator("#page .home-bar").boundingBox();
+    const x = bar!.x + bar!.width / 2;
+    let y = bar!.y + bar!.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      y -= 22;
+      await page.mouse.move(x, y);
+      await page.waitForTimeout(16);
+    }
+    const opened = () =>
+      page.evaluate(() => Boolean((window as any).spike.state.switcher));
+    let during = false;
+    for (let i = 0; i < 40 && !during; i++) {
+      y -= 3;
+      await page.mouse.move(x, y);
+      await page.waitForTimeout(30);
+      during = await opened();
+    }
+    expect(during).toBe(true);
+    await page.mouse.up();
+    expect(await phone(page)).toMatchObject({ busy: true, path: "/about" });
+  });
+
+  // the swipe up, across, and down that ios uses to jump to the app before
+  const swipeAcross = async (page: Page, share: number) => {
+    const bar = await page.locator("#page .home-bar").boundingBox();
+    const size = page.viewportSize()!;
+    const x = bar!.x + bar!.width / 2;
+    const y = bar!.y + bar!.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 80, { steps: 5 });
+    await page.mouse.move(x + size.width * share, y - 60, { steps: 10 });
+    await page.mouse.move(x + size.width * share, y - 20, { steps: 4 });
+    await page.mouse.up();
+  };
+
+  test("a swipe let go sideways switches straight to the app before", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    const before = await historyIndex(page);
+    await swipeAcross(page, 0.4);
+    await settledOn(page, "/about", "About");
+    expect(await historyIndex(page)).toBe(before + 1);
+    expect(await switcher(page)).toEqual({ open: false });
+    const after = await page.evaluate(() => {
+      const s = (window as any).spike.state;
+      return { card: s.screen.appCard.visible, switching: s.switching };
+    });
+    expect(after).toEqual({ card: false, switching: null });
+  });
+
+  test("a swipe let go toward a side with no app springs back", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    // About is the newest, so nothing is to its right
+    await swipeAcross(page, -0.4);
+    await settledOn(page, "/about", "About");
+    expect(
+      await page.evaluate(
+        () => (window as any).spike.state.screen.appCard.visible,
+      ),
+    ).toBe(false);
+  });
+
   test("Back while the switcher shows puts the open app back and goes back", async ({
     page,
   }) => {

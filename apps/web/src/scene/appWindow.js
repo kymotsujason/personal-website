@@ -11,7 +11,7 @@ import { reducedMotion } from "./quality.js";
 import { requestApp, requestHome } from "./navigation.js";
 import { read, write } from "../lib/storage.js";
 import { noteOpened } from "./recents.js";
-import { enterSwitcher, switcherDrag, switcherDragEnd } from "./switcher.js";
+import { enterSwitcher, switcherDrag, switcherDragEnd, switcherRow, drawPeek, quickSwitch } from "./switcher.js";
 
 // the apps' background, ios's dark appearance. flat.css's #page column colors go with it
 export const APP_BACKGROUND = "#000000";
@@ -564,57 +564,43 @@ export const dropHomeSwipe = () => {
         homeSwipe.dropped = true;
     }
 };
-// a swipe that rests this long, once it's pulled this far (a share of the screen's height), opens the app switcher
-// the way ios does, and a move of more than this many px starts the wait again
-const SWITCHER_HOLD_MS = 150;
-const SWITCHER_PULL = 0.05;
-const SWITCHER_STILL = 6;
-// a finger slows before it rests, so a wait that ends while the last move was this fast (px per ms) was a stall
-// between moves, and it waits once more instead
-const SWITCHER_REST_SPEED = 0.3;
+// a swipe that slows and rests opens the app switcher the way ios does. it's read from the finger's speed, not from
+// it holding perfectly still, since a resting finger drifts: once the swipe is pulled up this far (a share of the
+// screen's height) and its speed (px per ms, smoothed) stays under this for this long, the switcher opens. no move
+// fires while the finger rests, so the speed fades with the time since the last one, and a fast swipe that stops dead
+// still waits a little longer than one that slowed down first
+const SWITCHER_PULL = 0.06;
+const SWITCHER_SLOW = 0.25;
+const SWITCHER_REST_MS = 90;
+const SPEED_FADE_MS = 60;
+// a release mostly sideways, this far along the page, switches straight to the app on that side
+const QUICK_SHARE = 0.2;
 const startHomeSwipe = (event) => {
     if (state.busy || !state.zoomed || homeSwipe) {
         return;
     }
-    homeSwipe = { id: event.pointerId, x0: event.clientX, y0: event.clientY, armed: false, lastX: event.clientX, lastY: event.clientY, lastT: performance.now(), speed: 0, hold: null, holdAt: null, inSwitcher: false };
+    homeSwipe = { id: event.pointerId, x0: event.clientX, y0: event.clientY, armed: false, lastX: event.clientX, lastY: event.clientY, lastT: performance.now(), speed: 0, smooth: 0, slowSince: null, inSwitcher: false };
 };
-// pointer events stop while the finger rests, so a timer that each real move starts again does the waiting
-const waitForRest = (swipe, event) => {
-    if (swipe.inSwitcher) {
-        return;
-    }
-    const moved = swipe.holdAt ? Math.hypot(event.clientX - swipe.holdAt.x, event.clientY - swipe.holdAt.y) : Infinity;
-    if (swipe.pulled < SWITCHER_PULL) {
-        clearTimeout(swipe.hold);
-        swipe.hold = null;
-        swipe.holdAt = null;
-        return;
-    }
-    if (swipe.hold && moved <= SWITCHER_STILL) {
-        return;
-    }
-    clearTimeout(swipe.hold);
-    swipe.holdAt = { x: event.clientX, y: event.clientY };
-    swipe.slowed = false;
-    armRest(swipe);
-};
-const armRest = (swipe) => {
-    const holdAt = swipe.holdAt;
-    swipe.hold = setTimeout(guard(() => {
-        swipe.hold = null;
-        // a frame later, so moves queued behind a busy frame are heard first and can start the wait again
-        requestAnimationFrame(guard(() => {
-            if (homeSwipe !== swipe || swipe.dropped || !swipe.rect || swipe.inSwitcher || swipe.hold || swipe.holdAt !== holdAt) {
+// each frame of an armed swipe, whether it has rested long enough for the switcher
+const watchRest = (swipe) => {
+    const tick = guard(() => {
+        if (homeSwipe !== swipe || swipe.dropped || swipe.inSwitcher) {
+            return;
+        }
+        const now = performance.now();
+        const speed = swipe.smooth * Math.exp(-(now - swipe.lastT) / SPEED_FADE_MS);
+        if (swipe.rect && swipe.pulled >= SWITCHER_PULL && speed < SWITCHER_SLOW) {
+            swipe.slowSince ??= now;
+            if (now - swipe.slowSince >= SWITCHER_REST_MS) {
+                swipe.inSwitcher = enterSwitcher(swipe.rect, swipe.home, swipe.lastX, swipe.row);
                 return;
             }
-            if (!swipe.slowed && Math.abs(swipe.speed) > SWITCHER_REST_SPEED) {
-                swipe.slowed = true;
-                armRest(swipe);
-                return;
-            }
-            swipe.inSwitcher = enterSwitcher(swipe.rect, swipe.home, swipe.lastX);
-        }));
-    }), SWITCHER_HOLD_MS);
+        } else {
+            swipe.slowSince = null;
+        }
+        requestAnimationFrame(tick);
+    });
+    requestAnimationFrame(tick);
 };
 export const installHomeSwipe = () => {
     addEventListener("pointermove", guard((event) => {
@@ -643,9 +629,14 @@ export const installHomeSwipe = () => {
             homeSwipe.grab = toScreenPx(homeSwipe.x0, homeSwipe.y0);
             homeSwipe.shown = shownScreenRect();
             homeSwipe.frame = homeFrame(homeSwipe.shown);
+            homeSwipe.row = switcherRow();
+            homeSwipe.startBox = pageBox({ x0: 0, y0: 0, x1: state.screen.fullW, y1: state.screen.fullH });
+            watchRest(homeSwipe);
         }
         const now = performance.now();
-        homeSwipe.speed = (homeSwipe.lastY - event.clientY) / Math.max(now - homeSwipe.lastT, 1);
+        const dt = Math.max(now - homeSwipe.lastT, 1);
+        homeSwipe.speed = (homeSwipe.lastY - event.clientY) / dt;
+        homeSwipe.smooth = homeSwipe.smooth * 0.6 + (Math.hypot(event.clientX - homeSwipe.lastX, event.clientY - homeSwipe.lastY) / dt) * 0.4;
         homeSwipe.lastX = event.clientX;
         homeSwipe.lastY = event.clientY;
         homeSwipe.lastT = now;
@@ -666,7 +657,10 @@ export const installHomeSwipe = () => {
         const spotX = frame.x0 + grab.x * frame.f + (at.x - grab.x);
         const spotY = frame.y0 + grab.y * frame.f - rubberBand(raw, fullH * frame.f * HOME_LIFT);
         const edge = HOME_EDGE * fullH;
-        const x0 = softBetween(spotX - grab.x * scale, shown.x0, shown.x1 - w, edge);
+        // sideways the card can go half off either side, the way ios lets it ride along the home bar toward the app
+        // beside it, and up and down it stays on the screen
+        const x0 = softBetween(spotX - grab.x * scale, shown.x0 - w / 2, shown.x1 - w / 2, edge);
+        homeSwipe.across = at.x - grab.x;
         const y0 = softBetween(spotY - grab.y * scale, shown.y0, shown.y1 - h, edge);
         // it starts as the whole screen, which may run past the window, and blends into that motion over the first part of
         // the pull, a little faster at first so it answers the finger at once, and easing into the motion with no corner
@@ -675,7 +669,7 @@ export const installHomeSwipe = () => {
         homeSwipe.rect = lerpRect({ x0: 0, y0: 0, x1: fullW, y1: fullH }, { x0, y0, x1: x0 + w, y1: y0 + h }, blend);
         homeSwipe.home = 1 - pulled;
         placeAppWindow(homeSwipe.rect, radiusPx, 1, homeSwipe.home, state.openIcon, state.openApp, 1);
-        waitForRest(homeSwipe, event);
+        drawPeek(homeSwipe.rect, pulled, homeSwipe.row);
         event.preventDefault();
     }), { capture: true, passive: false, signal });
     addEventListener("pointerup", endHomeSwipe, { capture: true, signal });
@@ -687,7 +681,6 @@ const endHomeSwipe = guard(async (event) => {
     }
     const swipe = homeSwipe;
     homeSwipe = null;
-    clearTimeout(swipe.hold);
     if (!swipe.armed) {
         return;
     }
@@ -700,10 +693,24 @@ const endHomeSwipe = guard(async (event) => {
         switcherDragEnd();
         return;
     }
+    // let go mostly sideways, which switches straight to the app on that side if there is one
+    if (swipe.rect && event.type === "pointerup") {
+        const box = pageBox(swipe.rect);
+        const start = swipe.startBox;
+        // the finger's own travel across, since the card slows near the sides while the finger doesn't
+        const dx = swipe.across;
+        const lift = (start.y0 + start.y1) / 2 - (box.y0 + box.y1) / 2;
+        const target = swipe.row.live + (dx > 0 ? -1 : 1);
+        if (Math.abs(dx) > QUICK_SHARE * (start.x1 - start.x0) && Math.abs(dx) > lift && target >= 0 && target < swipe.row.apps.length) {
+            quickSwitch(swipe.rect, swipe.home, target, swipe.row, swipe.pulled);
+            return;
+        }
+    }
     state.busy = false;
     const { fullW, fullH, radiusPx } = state.screen;
     if (swipe.rect && event.type === "pointerup" && (swipe.pulled > HOME_DISTANCE || swipe.speed > HOME_FLICK)) {
         // the close carries on from where the window was let go, and the navigation home waits for it
+        hideCards();
         closeApp({ rect: swipe.rect, radius: radiusPx, home: swipe.home, crop: 1 }).catch(failScene);
         requestHome();
         return;
@@ -711,10 +718,17 @@ const endHomeSwipe = guard(async (event) => {
     state.busy = true;
     // with reduced motion only the drag moves the window, so a release that doesn't go home fills the screen at once
     if (swipe.rect && reducedMotion.matches) {
+        hideCards();
         placeAppWindow({ x0: 0, y0: 0, x1: fullW, y1: fullH }, radiusPx, 1, 1, state.openIcon, state.openApp, 0);
     } else if (swipe.rect) {
         const full = { x0: 0, y0: 0, x1: fullW, y1: fullH };
-        const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => placeAppWindow(lerpRect(swipe.rect, full, t), radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp, 1 - t) });
+        // the neighbours that peeked in fade back out with it
+        const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => {
+            const rect = lerpRect(swipe.rect, full, t);
+            placeAppWindow(rect, radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp, 1 - t);
+            drawPeek(rect, swipe.pulled * (1 - t), swipe.row);
+        } });
+        hideCards();
         if (end === "cancelled") {
             return;
         }

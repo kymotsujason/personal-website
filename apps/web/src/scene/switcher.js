@@ -69,7 +69,23 @@ const layoutOf = () => {
     const ph = page.y1 - page.y0;
     const cw = pw * CARD_SCALE;
     const ch = ph * CARD_SCALE;
-    return { page, pw, ph, cw, ch, cx: (page.x0 + page.x1) / 2, cy: (page.y0 + page.y1) / 2 - ph * CARD_RISE, pitch: cw + pw * CARD_GAP };
+    return { page, pw, ph, cw, ch, cx: (page.x0 + page.x1) / 2, cy: (page.y0 + page.y1) / 2 - ph * CARD_RISE, pitch: cw * (1 + CARD_GAP / CARD_SCALE) };
+};
+
+// the same row lined up on a card at box (the #page part of a window a swipe is carrying), its size and gaps scaled
+// with it, so the swipe's neighbours and a quick switch start right where that card is
+const layoutAround = (box) => {
+    const base = layoutOf();
+    const cw = box.x1 - box.x0;
+    const ch = box.y1 - box.y0;
+    return { ...base, cw, ch, cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, pitch: cw * (1 + CARD_GAP / CARD_SCALE) };
+};
+
+// the row in the switcher's order (see recents.js), where the open app is in it, and each app's column in the icons'
+// atlas, which is in the home screen's order
+export const switcherRow = () => {
+    const apps = recentOrder(siteData.apps, [...openedSoFar().filter((n) => n !== state.openApp.name), state.openApp.name]);
+    return { apps, live: apps.findIndex((a) => a.name === state.openApp.name), slots: apps.map((a) => siteData.apps.indexOf(a)), sky: pageSky() };
 };
 
 // card i's box at the row's scroll (a card index, so the scroll's card sits in the middle), pushed up by lift px
@@ -110,7 +126,7 @@ const draw = () => {
             // the stand ins come in from a little further out
             body = offset(body, (1 - sw.enter) * Math.sign(i - sw.live) * layout.pitch * 0.5);
         }
-        return { body, label: labelBox(layout, body), kind: i === sw.holder ? 1 : 2, slot: sw.slots[i] };
+        return { body, label: sw.labels ? labelBox(layout, body) : null, kind: i === sw.holder ? 1 : 2, slot: sw.slots[i] };
     });
     // a card being opened grows with no label, as #page's card once it holds that app's page and a stand in before
     if (sw.grow) {
@@ -119,23 +135,33 @@ const draw = () => {
     }
     const holderBox = sw.grow && sw.holder === sw.grow.i ? sw.grow.box : sw.grow ? cards[sw.holder].body : lerpRect(sw.from, cards[sw.holder].body, sw.enter);
     // the home screen behind darkens as the switcher comes in and lightens back as a card fills the screen
-    const home = sw.grow ? THREE.MathUtils.lerp(1, BACKDROP_HOME, sw.fade) : THREE.MathUtils.lerp(sw.homeFrom, BACKDROP_HOME, sw.enter);
+    const home = sw.grow ? THREE.MathUtils.lerp(1, sw.homeAt, sw.fade) : THREE.MathUtils.lerp(sw.homeFrom, sw.homeAt, sw.enter);
     placeAppWindow(windowFor(layout, holderBox), radius, 1, home, state.openIcon, sw.apps[sw.holder], 1);
-    showCards(cards, radius, sw.sky, sw.fade, BACKDROP);
+    showCards(cards, radius, sw.sky, sw.fade, sw.backdrop);
 };
 
 export const switcherOpen = () => Boolean(state.switcher);
 
 // from a home bar swipe that rested, with the window at rect (the whole window, as the swipe placed it)
-export const enterSwitcher = (rect, home, clientX) => {
-    // the way ios orders them: the open app on the right and the ones before it to its left, newest to oldest
-    const apps = recentOrder(siteData.apps, [...openedSoFar().filter((n) => n !== state.openApp.name), state.openApp.name]);
-    const live = apps.findIndex((a) => a.name === state.openApp.name);
+// the swipe's neighbours on either side of the card it carries (the window at rect), fading in as the swipe pulls up
+// the way ios lets the app before peek in, so the switcher and a quick switch are already in view
+const PEEK_FROM = 0.03;
+const PEEK_TO = 0.14;
+export const peekShare = (pulled) => THREE.MathUtils.smoothstep(pulled, PEEK_FROM, PEEK_TO);
+export const drawPeek = (rect, pulled, row) => {
+    const layout = layoutAround(pageBox(rect));
+    const cards = [row.live - 1, row.live + 1]
+        .filter((i) => i >= 0 && i < row.apps.length)
+        .map((i) => ({ body: cardBox(layout, i, row.live), label: null, kind: 2, slot: row.slots[i] }));
+    showCards(cards, state.screen.radiusPx, row.sky, peekShare(pulled));
+};
+
+// the way ios orders them: the open app on the right and the ones before it to its left, newest to oldest
+export const enterSwitcher = (rect, home, clientX, row = switcherRow()) => {
+    const { apps, live, slots } = row;
     if (live < 0) {
         return false;
     }
-    // each app's column in the icons' atlas, which is in the home screen's order
-    const slots = apps.map((a) => siteData.apps.indexOf(a));
     lastPath.set(state.openApp.name, location.pathname);
     const layout = layoutOf();
     state.switcher = {
@@ -149,7 +175,10 @@ export const enterSwitcher = (rect, home, clientX) => {
         fade: 0,
         from: pageBox(rect),
         homeFrom: home,
-        sky: pageSky(),
+        homeAt: BACKDROP_HOME,
+        backdrop: BACKDROP,
+        labels: true,
+        sky: row.sky,
         lift: null,
         grow: null,
         anim: true,
@@ -377,6 +406,36 @@ const settleLift = (sw) => {
             draw();
         }
     });
+};
+
+// a swipe let go mostly sideways opens the app on that side (i in the row), the way ios switches apps along the home
+// bar: its card, peeking beside the one the swipe carries (the window at rect), grows to fill the screen while that
+// one slides out. it starts from the swipe's own look, with no backdrop, since the switcher never showed
+export const quickSwitch = (rect, home, i, row, pulled) => {
+    lastPath.set(state.openApp.name, location.pathname);
+    const box = pageBox(rect);
+    state.switcher = {
+        apps: row.apps,
+        slots: row.slots,
+        live: row.live,
+        holder: row.live,
+        layout: layoutAround(box),
+        scroll: row.live,
+        enter: 1,
+        fade: peekShare(pulled),
+        from: box,
+        homeFrom: home,
+        homeAt: home,
+        backdrop: 0,
+        labels: false,
+        sky: row.sky,
+        lift: null,
+        grow: null,
+        anim: true,
+        press: null,
+        drag: null
+    };
+    openOther(state.switcher, i).catch(failScene);
 };
 
 // a browser navigation (Back, Forward) while the switcher shows puts the open app back at once, so it can go ahead
