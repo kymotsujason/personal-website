@@ -3,9 +3,7 @@ import { defineConfig } from "astro/config";
 
 import { execSync } from "node:child_process";
 import { satteri } from "@astrojs/markdown-satteri";
-import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
-import tailwindcss from "@tailwindcss/vite";
 import {
   devEndpoints,
   perfProxy,
@@ -60,7 +58,6 @@ export default defineConfig({
   // the imported posts keep their straight quotes, dashes, and three periods
   markdown: { processor: satteri({ features: { smartPunctuation: false } }) },
   integrations: [
-    react(),
     // the links have no trailing slash anywhere else, so the sitemap's urls match them
     sitemap({
       serialize: (item) =>
@@ -74,7 +71,6 @@ export default defineConfig({
   devToolbar: { enabled: false },
 
   vite: {
-    plugins: [tailwindcss()],
     // the privacy check refuses an inline image, so the build never inlines an asset as a data: URI
     build: { assetsInlineLimit: 0 },
     // CAPTURE=1 builds in window.__capture (src/scene/capture.js) for the tests, and PERF=1 marks a build for the

@@ -98,16 +98,6 @@ if [ "$stack" = site ]; then
 else
     printf 'P2 site-only SKIPPED\nP2b site-only SKIPPED\n'
 fi
-applyBroken probes/broken/App.tsx apps/web/src/Probe.tsx
-runProbe P3 restyle-outside-ui fail pnpm -C apps/web lint
-if [ "$stack" = site ]; then
-    applyBroken probes/broken/index-restyle.astro apps/web/src/pages/index.astro
-    runProbe P3b site-restyle-in-template fail pnpm -C apps/web lint
-else
-    printf 'P3b site-only SKIPPED\n'
-fi
-applyBroken probes/broken/button.tsx apps/web/src/components/ui/button.tsx
-runProbe P3c restyle-inside-ui pass pnpm -C apps/web lint
 applyBroken probes/broken/failing.test.ts apps/web/src/lib/utils.test.ts
 runProbe P4 failing-test fail pnpm -C apps/web test
 for id in P5a P5b; do

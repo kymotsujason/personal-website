@@ -1,4 +1,3 @@
-import { plugin as shadcn } from "@shadcn/lint";
 import tsParser from "@typescript-eslint/parser";
 import * as astroParser from "astro-eslint-parser";
 import astro from "eslint-plugin-astro";
@@ -31,16 +30,6 @@ export default defineConfig([
     languageOptions: {
       parser: astroParser,
       parserOptions: { parser: tsParser },
-    },
-  },
-  {
-    files: ["**/*.{ts,tsx}", "**/*.astro"],
-    ignores: ["src/components/ui/**"],
-    plugins: { shadcn },
-    rules: {
-      "shadcn/no-restyle": ["error", { allow: ["layout"] }],
-      "shadcn/no-raw-colors": "error",
-      "shadcn/no-arbitrary-values": "error",
     },
   },
 ]);
