@@ -841,6 +841,10 @@ test.describe("with the clock installed", () => {
     });
   const cardAt = (page: Page, i: number) =>
     page.evaluate((i) => (window as any).spike.switcherCard(i), i);
+  const row = (page: Page) =>
+    page.evaluate(() =>
+      (window as any).spike.state.switcher.apps.map((a: any) => a.name),
+    ) as Promise<string[]>;
 
   test("a swipe up that rests opens the switcher and stays, and Escape puts the app back", async ({
     page,
@@ -849,7 +853,9 @@ test.describe("with the clock installed", () => {
     await page.waitForFunction(() => Boolean((window as any).spike));
     await settledOn(page, "/about", "About");
     await openSwitcher(page);
-    expect(await switcher(page)).toMatchObject({ open: true, scroll: 0 });
+    // the open app is on the right, with the apps not opened yet to its left
+    expect(await row(page)).toEqual(["Projects", "Blog", "Music", "About"]);
+    expect(await switcher(page)).toMatchObject({ open: true, scroll: 3 });
     expect(await phone(page)).toMatchObject({ busy: true, path: "/about" });
     await page.keyboard.press("Escape");
     await expect.poll(() => switcher(page)).toEqual({ open: false });
@@ -867,7 +873,7 @@ test.describe("with the clock installed", () => {
     await settledOn(page, "/about", "About");
     const before = await historyIndex(page);
     await openSwitcher(page);
-    const card = await cardAt(page, 1);
+    const card = await cardAt(page, (await row(page)).indexOf("Projects"));
     await page.mouse.click(card.x, card.y);
     await settledOn(page, "/projects", "Projects");
     expect(await historyIndex(page)).toBe(before + 1);
@@ -897,16 +903,17 @@ test.describe("with the clock installed", () => {
     await page.waitForFunction(() => Boolean((window as any).spike));
     await settledOn(page, "/about", "About");
     await openSwitcher(page);
-    const live = await cardAt(page, 0);
-    const next = await cardAt(page, 1);
+    // the open app is the last card, so the drag goes right, back to the one before it
+    const live = await cardAt(page, 3);
+    const before = await cardAt(page, 2);
     await page.mouse.move(live.x, live.y);
     await page.mouse.down();
-    await page.mouse.move(live.x - (next.x - live.x), live.y, { steps: 12 });
+    await page.mouse.move(live.x + (live.x - before.x), live.y, { steps: 12 });
     await page.waitForTimeout(120);
     await page.mouse.up();
     await expect
       .poll(() => switcher(page))
-      .toMatchObject({ open: true, scroll: 1 });
+      .toMatchObject({ open: true, scroll: 2 });
   });
 
   test("a card pushed up in the switcher gives a little and springs back, since apps can't be closed", async ({
@@ -916,7 +923,7 @@ test.describe("with the clock installed", () => {
     await page.waitForFunction(() => Boolean((window as any).spike));
     await settledOn(page, "/about", "About");
     await openSwitcher(page);
-    const live = await cardAt(page, 0);
+    const live = await cardAt(page, 3);
     await page.mouse.move(live.x, live.y);
     await page.mouse.down();
     await page.mouse.move(live.x, live.y - 300, { steps: 12 });
@@ -929,8 +936,29 @@ test.describe("with the clock installed", () => {
     await page.mouse.up();
     await expect
       .poll(() => switcher(page))
-      .toEqual({ open: true, scroll: 0, lift: 0 });
+      .toEqual({ open: true, scroll: 3, lift: 0 });
     expect(await page.evaluate(() => location.pathname)).toBe("/about");
+  });
+
+  test("the switcher's row is newest on the right, so the app before the open one is beside it", async ({
+    page,
+  }) => {
+    await page.goto("/about?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/about", "About");
+    await page.evaluate(() =>
+      document.querySelector<HTMLElement>('#page a[href="/blog"]')!.click(),
+    );
+    await settledOn(page, "/blog", "Blog");
+    await openSwitcher(page);
+    expect(await row(page)).toEqual(["Projects", "Music", "About", "Blog"]);
+    expect(await switcher(page)).toMatchObject({ open: true, scroll: 3 });
+    // opening About from its card makes it the newest again
+    const about = await cardAt(page, 2);
+    await page.mouse.click(about.x, about.y);
+    await settledOn(page, "/about", "About");
+    await openSwitcher(page);
+    expect(await row(page)).toEqual(["Projects", "Music", "Blog", "About"]);
   });
 
   test("Back while the switcher shows puts the open app back and goes back", async ({

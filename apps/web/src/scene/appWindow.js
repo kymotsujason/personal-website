@@ -10,6 +10,7 @@ import { signal, guard, failScene } from "./lifetime.js";
 import { reducedMotion } from "./quality.js";
 import { requestApp, requestHome } from "./navigation.js";
 import { read, write } from "../lib/storage.js";
+import { noteOpened } from "./recents.js";
 import { enterSwitcher, switcherDrag, switcherDragEnd } from "./switcher.js";
 
 // the apps' background, ios's dark appearance. flat.css's #page column colors go with it
@@ -299,6 +300,7 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
         tween({ to: { fold: 0 }, duration: 160, easing: ease.outCubic });
     }
     state.openApp = app;
+    noteOpened(app.name);
     // the music app shows the player, so it loads even for an app opened from the address, with no tap first
     if (app.name === "Music") {
         music.loadPlayer();
@@ -358,6 +360,7 @@ export const fadeTo = async (app) => {
         return;
     }
     state.openApp = app;
+    noteOpened(app.name);
     state.openIcon = glyphRect(state.screen.homeEl, app.name);
     state.openFromWidget = false;
     hideOpenIcon();
@@ -489,6 +492,7 @@ export const switchTo = async (app, { back = false, swapped }) => {
     }
     const shown = run.landed || pageEl.dataset.app === app.name ? app : from;
     state.openApp = shown;
+    noteOpened(shown.name);
     state.openIcon = glyphRect(state.screen.homeEl, shown.name);
     state.openFromWidget = false;
     hideOpenIcon();

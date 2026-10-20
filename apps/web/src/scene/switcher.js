@@ -6,11 +6,12 @@ import { reducedMotion } from "./quality.js";
 import { siteData } from "./home.js";
 import { glyphRect } from "./screens.js";
 import { blockNextClick } from "./fold.js";
+import { noteOpened, openedSoFar, recentOrder } from "./recents.js";
 import { requestApp, requestHome } from "./navigation.js";
 import { pageEl, placeAppWindow, pageBox, toScreenPx, showCards, hideCards, pageSky, setAppWindow, hideOpenIcon, showFlat, closeApp, lerpRect, rubberBand } from "./appWindow.js";
 
 // the app switcher, the way ios shows it after a swipe up from the home bar that rests a moment: every app as a card
-// in a row, in the home screen's order, that scrolls sideways. the open app's card is its live window and the others
+// in a row that scrolls sideways, the open app on the right and the ones opened before it to its left (see recents.js). the open app's card is its live window and the others
 // stand in with their icon, since only one page is ever loaded. a tap on a card opens that app, and a tap anywhere
 // else or a swipe up from outside the cards goes home. apps can't be closed, so a card pushed up stretches a little
 // and springs back
@@ -109,7 +110,7 @@ const draw = () => {
             // the stand ins come in from a little further out
             body = offset(body, (1 - sw.enter) * Math.sign(i - sw.live) * layout.pitch * 0.5);
         }
-        return { body, label: labelBox(layout, body), kind: i === sw.holder ? 1 : 2, slot: i };
+        return { body, label: labelBox(layout, body), kind: i === sw.holder ? 1 : 2, slot: sw.slots[i] };
     });
     // a card being opened grows with no label, as #page's card once it holds that app's page and a stand in before
     if (sw.grow) {
@@ -127,15 +128,19 @@ export const switcherOpen = () => Boolean(state.switcher);
 
 // from a home bar swipe that rested, with the window at rect (the whole window, as the swipe placed it)
 export const enterSwitcher = (rect, home, clientX) => {
-    const apps = siteData.apps;
+    // the way ios orders them: the open app on the right and the ones before it to its left, newest to oldest
+    const apps = recentOrder(siteData.apps, [...openedSoFar().filter((n) => n !== state.openApp.name), state.openApp.name]);
     const live = apps.findIndex((a) => a.name === state.openApp.name);
     if (live < 0) {
         return false;
     }
+    // each app's column in the icons' atlas, which is in the home screen's order
+    const slots = apps.map((a) => siteData.apps.indexOf(a));
     lastPath.set(state.openApp.name, location.pathname);
     const layout = layoutOf();
     state.switcher = {
         apps,
+        slots,
         live,
         holder: live,
         layout,
@@ -273,6 +278,7 @@ const finish = (app) => {
     state.swapOpen = false;
     hideCards();
     state.openApp = app;
+    noteOpened(app.name);
     state.openIcon = glyphRect(state.screen.homeEl, app.name);
     state.openFromWidget = false;
     hideOpenIcon();
@@ -334,7 +340,7 @@ const goHome = (sw) => {
         const fadeFrom = sw.fade;
         tween({ to: {}, duration: HOME_FADE_MS, easing: ease.outCubic, onUpdate: (t) => {
             const cards = sw.apps
-                .map((_, i) => ({ body: cardBox(layout, i, sw.scroll), label: null, kind: 2, slot: i }))
+                .map((_, i) => ({ body: cardBox(layout, i, sw.scroll), label: null, kind: 2, slot: sw.slots[i] }))
                 .filter((_, i) => i !== sw.live);
             showCards(cards, state.screen.radiusPx * CARD_SCALE, sw.sky, fadeFrom * (1 - t), BACKDROP);
         } }).then(hideCards);
