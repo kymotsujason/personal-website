@@ -84,6 +84,7 @@ const spike = {
         snapshotSurfaces.map((s) => ({
             app: s.app,
             show: s.show,
+            displayed: getComputedStyle(s.el).display !== "none",
             title: s.page.querySelector("h1")?.textContent?.trim() ?? null,
             scroll: s.page.querySelector(":scope > .body")?.scrollTop ?? null
         })),

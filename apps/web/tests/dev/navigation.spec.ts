@@ -1084,6 +1084,7 @@ test.describe("with the clock installed", () => {
     expect(cards).toContainEqual({
       app: "About",
       show: true,
+      displayed: true,
       title: "About",
       scroll,
     });
@@ -1099,6 +1100,32 @@ test.describe("with the clock installed", () => {
       (window as any).spike.snapshotCards().filter((c: any) => c.show),
     );
     expect(after).toEqual([]);
+  });
+
+  // a kept page's copy was only hidden with visibility, which About's front fact cards override, so after a swipe home
+  // had shown About's copy peeking in, its cards drew over the next app the visitor opened
+  test("a kept page's copy that isn't showing draws nothing over the next app", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await tapIcon(page, "About");
+    await settledOn(page, "/about", "About");
+    await swipeHome(page);
+    await settledOn(page, "/", null);
+    await tapIcon(page, "Blog");
+    await settledOn(page, "/blog", "Blog");
+    // the swipe home peeks About's kept page in beside Blog
+    await swipeHome(page);
+    await settledOn(page, "/", null);
+    await tapIcon(page, "Music");
+    await settledOn(page, "/music", "Music");
+    const copies = await page.evaluate(() =>
+      (window as any).spike.snapshotCards(),
+    );
+    expect(copies.length).toBeGreaterThan(0);
+    for (const copy of copies) {
+      expect(copy).toMatchObject({ show: false, displayed: false });
+    }
   });
 
   test("Back while the switcher shows puts the open app back and goes back", async ({

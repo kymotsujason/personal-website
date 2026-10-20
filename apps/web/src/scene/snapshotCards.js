@@ -48,9 +48,27 @@ const makeHost = () => {
     shadow.append(page);
     const real = document.getElementById("page");
     real.parentElement.insertBefore(el, real.nextSibling);
-    const surface = { el, page, w: 0, h: 0, owner: null, corners: null, show: false, shown: undefined, pinned: null, app: null };
+    el.hidden = true;
+    const surface = { el, page, w: 0, h: 0, owner: null, corners: null, show: false, shown: undefined, pinned: null, app: null, scroll: 0 };
     snapshotSurfaces.push(surface);
     return surface;
+};
+
+// a copy not showing is taken out of the page entirely, since visibility alone isn't enough: About's front fact cards
+// set their own visibility, and drew over the next app the visitor opened. a copy coming back takes its scroll then,
+// since a box that isn't displayed can't be scrolled
+const setShowing = (surface, show) => {
+    surface.show = show;
+    if (surface.el.hidden !== show) {
+        return;
+    }
+    surface.el.hidden = !show;
+    if (show) {
+        const body = surface.page.querySelector(":scope > .body");
+        if (body) {
+            body.scrollTop = surface.scroll;
+        }
+    }
 };
 
 // the root's own custom properties (the sky's colors, the glass tint), which the scripts set inline on it. the copy's
@@ -105,16 +123,15 @@ export const showSnapshots = (cards, radius) => {
             surface.page.dataset.app = card.app;
             surface.page.dataset.page = shot.page;
             surface.page.replaceChildren(snapshotNodes(shot.html));
-            const body = surface.page.querySelector(":scope > .body");
-            if (body) {
-                body.scrollTop = shot.scroll;
-            }
+            surface.scroll = shot.scroll;
+            // a copy already showing takes the new page's scroll now, and one that isn't takes it as it comes back
+            surface.el.hidden = true;
         }
         surface.el.className = document.documentElement.className;
         takeRootProps(surface);
         surface.owner = page.owner;
         surface.corners = card.corners;
-        surface.show = card.opacity > 0;
+        setShowing(surface, card.opacity > 0);
         const i = shown.size;
         uniforms.extras.value[i].set(card.box.x0, card.box.y0, card.box.x1, card.box.y1);
         uniforms.extraOpacity.value[i] = card.opacity;
@@ -126,7 +143,7 @@ export const showSnapshots = (cards, radius) => {
     uniforms.extraRadius.value = radius;
     for (const surface of snapshotSurfaces) {
         if (!used.has(surface)) {
-            surface.show = false;
+            setShowing(surface, false);
         }
     }
     return shown;
@@ -134,7 +151,7 @@ export const showSnapshots = (cards, radius) => {
 
 export const hideSnapshots = () => {
     for (const surface of snapshotSurfaces) {
-        surface.show = false;
+        setShowing(surface, false);
     }
     if (state.screen) {
         state.screen.appHole.material.uniforms.extraOpacity.value.fill(0);
