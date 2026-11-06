@@ -314,8 +314,9 @@ export const goHome = () => {
   navigate("/");
 };
 
-// an inner page's way back to its list (the edge swipe): Back when the list is the entry before, so history stays as
-// the visitor made it, and otherwise the list as a new entry that still slides in the way Back does
+// an inner page's way back to its list (the bar's Back pill and the edge swipe): Back when the list is the entry
+// before, so history stays as the visitor made it, and otherwise the list as a new entry that still slides in the way
+// Back does
 export const goBackTo = (href) => {
   const path = new URL(href, location.href).pathname;
   if (history.state?.prev === path) {
@@ -325,6 +326,30 @@ export const goBackTo = (href) => {
   root.classList.add("slide-back");
   navigate(href);
 };
+
+// the Back pill is a link to the list, which Astro takes as a new page that slides in from the right. it's caught
+// before Astro's own click listener, which leaves a click that's already handled alone. a click meant for a new tab
+// or window stays a plain link
+document.addEventListener(
+  "click",
+  (event) => {
+    const back = event.target.closest?.("#page > header a.back");
+    if (
+      !back ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    goBackTo(back.getAttribute("href"));
+  },
+  { capture: true },
+);
 
 export { navigate };
 

@@ -802,6 +802,55 @@ test.describe("with the clock installed", () => {
     await expect(page.locator("html")).not.toHaveClass(/slide-back/);
   });
 
+  // the Back pill in the bar is a link to the list, which Astro took as a new page and slid in from the right
+  test("the Back pill on a page opened by its list goes Back to the list, sliding the way Back does", async ({
+    page,
+  }) => {
+    await page.goto("/projects?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects", "Projects");
+    const list = await historyIndex(page);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLElement>('#page a[href^="/projects/"]')!
+        .click(),
+    );
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toMatch(/^\/projects\/.+/);
+    await expect(page.locator("html")).not.toHaveClass(/page-slide/);
+    await watchAnimations(page);
+    await page.locator("#page > header a.back").click();
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+    expect(await historyIndex(page)).toBe(list);
+    await expect
+      .poll(() => page.evaluate(() => [...(window as any).__names]))
+      .toEqual(expect.arrayContaining(["page-back-in", "page-out-right"]));
+    expect((await seenAnimations(page)).names).not.toContain("page-in-right");
+  });
+
+  test("the Back pill on a page opened directly goes to its list, sliding the way Back does", async ({
+    page,
+  }) => {
+    await page.goto("/projects/device-intro?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/device-intro", "Projects");
+    const before = await historyIndex(page);
+    await watchAnimations(page);
+    await page.locator("#page > header a.back").click();
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+    expect(await historyIndex(page)).toBe(before + 1);
+    await expect
+      .poll(() => page.evaluate(() => [...(window as any).__names]))
+      .toEqual(expect.arrayContaining(["page-back-in", "page-out-right"]));
+    expect((await seenAnimations(page)).names).not.toContain("page-in-right");
+    await expect(page.locator("html")).not.toHaveClass(/slide-back/);
+  });
+
   test("a short edge swipe springs back and stays on the page", async ({
     page,
   }) => {
