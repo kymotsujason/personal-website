@@ -4,7 +4,7 @@ import { z } from "astro/zod";
 import { ISO_DATE, ISO_DAY, isRealDay } from "./lib/format";
 
 const SITE_PATH = z.string().regex(/^\/[^\s]+$/);
-const HTTPS_URL = z.string().url().startsWith("https://");
+const HTTPS_URL = z.url().startsWith("https://");
 
 const projects = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
