@@ -5,8 +5,8 @@ kicker: Machine learning
 rank: 2
 date: "2026-03-29"
 stats:
-  - value: "0.882"
-    label: AUC predicting who wins a game
+  - value: "0.875"
+    label: AUC on 144,234 held out games
   - value: "1,795"
     label: backend tests
   - value: "2.7M"
@@ -42,7 +42,7 @@ pickban.gg is match preparation for osu! tournaments. A team pastes in its mappo
 
 ## How it works
 
-Every prediction starts from player and map data in PostgreSQL, about 2.7 million player scores in all. A ported tournament rating engine supplies the ratings, and a CatBoost model turns two lineups and a map into the chance that each side wins it. The deployed model scores an AUC of 0.882, and each map carries a 95% interval so a close call looks like one.
+Every prediction starts from player and map data in PostgreSQL, about 2.7 million player scores in all. A ported tournament rating engine supplies the ratings, and a CatBoost model turns two lineups and a map into the chance that each side wins it. On 144,234 games held out from training, the tuned model scores an AUC of 0.875, and each map carries a 95% interval so a close call looks like one.
 
 <figure><img src="/projects/pickban-gg/fig-login.webp" alt="The pickban.gg sign in page, with the name, a short description, a notice that the site is invite only in closed beta, and a button to authorize with osu!" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
 

@@ -5,12 +5,12 @@ kicker: Web and 3D
 rank: 4
 date: "2026-10-14"
 stats:
-  - value: "60 fps"
-    label: on an iPhone Air while opening apps
   - value: "8"
     label: weather skies behind the home screen
   - value: "550+"
     label: tests
+  - value: "4"
+    label: apps on the phone, each a real web page
 links:
   - label: GitHub
     url: https://github.com/kymotsujason/personal-website
@@ -26,8 +26,8 @@ highlights:
     text: Every page on the phone is an ordinary HTML page that also reads fine with JavaScript off and with WebGL off, so the 3D scene adds to the site and never gates it.
   - title: A sky that follows the visitor
     text: The wallpaper picks one of eight skies from the visitor's local weather and blends day into night with their real sunrise and sunset. The location comes from the request, so nobody sees a permission prompt.
-  - title: Measured on a real phone
-    text: Frame rates were logged on an iPhone Air in Safari, and in the runs I kept no second of play fell under 30 frames a second.
+  - title: Steps down on slow phones
+    text: A quality ladder lowers the pixel ratio, slows the sky, and simplifies the glass when a device falls behind, and it never switches to the flat site on its own.
 stack:
   - Astro
   - Three.js
@@ -47,4 +47,4 @@ The phone, the hands, and the desk behind them are three.js and Blender work, an
 
 <figure><img src="/projects/jasonyue-ca/hero.webp" alt="The open phone held in two hands, with the home screen showing a profile card, a latest project tile, a GitHub activity grid, a music player, and icons for About, Projects, Blog, and Music" loading="lazy"><figcaption>The home screen on the unfolded phone, with the weather sky behind it.</figcaption></figure>
 
-Speed was a requirement from the start, since a 3D scene is easy to make heavy. I logged frames on an iPhone Air in Safari while opening apps and scrolling, and the runs I kept averaged 58 to 66 frames a second with no second under 30. The weather sky is one shader for all eight scenes, picked by uniforms, so a change of weather doesn't compile anything.
+Speed was a requirement from the start, since a 3D scene is easy to make heavy, so a quality ladder watches the frame rate and steps the scene down on a slow phone. The weather sky is one shader for all eight scenes, picked by uniforms, so a change of weather doesn't compile anything.

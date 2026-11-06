@@ -9,8 +9,8 @@ stats:
     label: hostile requests, no server errors
   - value: "7,000+"
     label: tests
-  - value: "4,800"
-    label: tracks across three games, about
+  - value: "4,600"
+    label: playable tracks across three games, about
 links:
   - label: battlebgm.com
     url: https://battlebgm.com
@@ -48,4 +48,4 @@ The browser plays short clips and sends a guess, and the server does everything 
 
 Lobbies are the part that has to keep working while people come and go. A lobby has one writer, so two players acting at once can't corrupt its state, and the state sits in Redis so a restart doesn't end a game. A route fuzzer's recorded run sent 7,859 hostile requests and got no server errors back.
 
-Behind the game is a catalog of about 4,800 tracks across the three games, which a Python tool prepares as short clips. The site has been live since September 8, 2026, and the source is private.
+Behind the game is a catalog of about 4,600 playable tracks across the three games, which a Python tool prepares as short clips. The site has been live since September 8, 2026, and the source is private.
