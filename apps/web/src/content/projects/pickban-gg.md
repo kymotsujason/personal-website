@@ -27,9 +27,9 @@ highlights:
   - title: Calibrated probabilities
     text: A CatBoost model tuned with Optuna predicts each game. Isotonic calibration then adjusts its probabilities to match how often each side actually won, and testing measured a calibration error of 0.0054, where 0 is perfect. Every map gets a win probability with a range that held the real result 90% of the time in testing.
   - title: Profiled before it was sped up
-    text: Profiling a full prediction showed the model took a small share of the time and feature assembly took 96 to 99 percent of each map. The work went where the time was.
+    text: Profiling a full prediction showed the model took a small share of the time, and preparing the model's input data took 96 to 99 percent of the time spent predicting each map. The work went where the time was.
   - title: Picks and bans as a game
-    text: A lineup optimizer ranks every lineup by the worst result it can face against any counter, so the advice comes from the worst case and not from a hopeful guess.
+    text: The optimizer ranks each lineup by its worst predicted result against every lineup the other team could field, so the advice plans for the worst case. On maps where players choose their own modifiers, it only tries each lineup's three best fitting combinations.
 stack:
   - Python
   - FastAPI
@@ -47,8 +47,8 @@ pickban.gg is match preparation for osu! tournaments. A team pastes in its mappo
 
 Every prediction starts from player and map data in PostgreSQL, which holds about 2.7 million player scores in the training data. The o!TR dump supplies the games and o!TR's processor turns them into ratings. A CatBoost model then turns two lineups and a map into the chance that each side wins it. On 144,234 games held out from training, the tuned model scores an AUC of 0.875. AUC is a score for how well a model tells winners from losers, where 0.5 is a coin flip and 1 is perfect. Each map carries a range that held the real result 90% of the time in testing, so a close call looks like one.
 
-<figure><img src="/projects/pickban-gg/fig-login.webp" width="1200" height="750" alt="The pickban.gg sign in page, with the name, a short description, a notice that the site is invite only in closed beta, and a button to authorize with osu!" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
+<figure><img src="/projects/pickban-gg/fig-login.webp" width="1200" height="750" alt="The pickban.gg sign in page, saying the site is invite only while it's in closed beta" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
 
 On top of the predictions sit the tools a team uses in the lobby. A live simulator lets a coach drag maps into pick, ban, and protect zones and watch the probabilities move as games finish. Head-to-Head compares two players on patterns, form, and every game they've played against each other. Every prediction is saved, so an analysis can be forked, rerun against the current model, or shared as a read only link.
 
-The lineup optimizer treats a lineup choice as a game. For a team of four picked from eight players, it builds a table of every lineup against every counter and ranks each lineup by the worst result it can face.
+The lineup optimizer treats a lineup choice as a game. For a team of four picked from eight players, it scores all 70 lineups against all 70 of the other team's, 4,900 matchups, and ranks each lineup by its worst predicted result. On maps where players choose their own modifiers, each lineup keeps only its three best fitting combinations.
