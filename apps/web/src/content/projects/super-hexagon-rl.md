@@ -6,11 +6,11 @@ rank: 1
 date: "2026-10-19"
 stats:
   - value: "120/120"
-    label: lockstep runs of the real game last the full 10 minutes
+    label: runs of the real game lasted all 10 minutes, paused between decisions
   - value: "1.86M"
     label: simulator steps a second
   - value: "15 hours"
-    label: of play without a death
+    label: of play without a death, in 30 runs of 30 minutes
 links:
   - label: GitHub
     url: https://github.com/kymotsujason/super-hexagon-rl
@@ -27,7 +27,7 @@ highlights:
   - title: The game stays untouched
     text: A preloaded library takes over the game's clock and input, so training runs the real game one step at a time without patching its binary.
   - title: A simulator that matched the game
-    text: The game's own logic, compiled from its decompiled code, matched the real game on every check, including the whole 247 KB game object, over about 69 minutes of play.
+    text: The game's own logic, compiled from its decompiled code, matched the real game on every check over about 69 minutes of play. That includes the 247 KB game object, apart from the colors, music and sound data, and clock readings the simulator doesn't fill in.
   - title: A bug found by replay
     text: Live runs were dying early because the game dropped held keys when a window changed focus. Replaying live games in the simulator found it, and the fix took a stress test from 0 of 20 runs surviving to 19 of 20.
 results:
@@ -47,16 +47,16 @@ status: Done
 license: MIT
 ---
 
-Super Hexagon RL is a self learning agent for Terry Cavanagh's Super Hexagon, the real game running on Linux. In lockstep with the real game, which pauses after each decision until the agent answers, it survives the full 10 minutes in all 120 of its runs. It also plays all six levels live, on the game's own clock with key presses sent to the game's window, in a 7 minute video that isn't edited. It isn't affiliated with Terry Cavanagh and doesn't include the game or its code.
+Super Hexagon RL is a self learning agent for Terry Cavanagh's Super Hexagon, the real game running on Linux. With the real game paused after each decision until the agent answers, it survives the full 10 minutes in all 120 of its runs. It also plays all six levels live, on the game's own clock with key presses sent to the game's window, in a 7 minute video that isn't edited. It isn't affiliated with Terry Cavanagh and doesn't include the game or its code.
 
 ## How it works
 
 The game runs in fixed 1/60 second steps, so training doesn't need to draw anything. A small library loaded in front of the game takes over its clock, its random numbers, and the Steam calls, then pauses the game after every decision until the agent answers. The game binary is never patched, and the launcher checks its hash before it starts.
 
-Real game steps are still slow, so the agent trains against a simulator instead. I decompiled the game's logic in Ghidra and turned it into C, which a script compares against the real game at every decision. With 256 simulators on 8 threads it runs 1.86 million agent steps a second, and the policy is trained with PPO.
+Real game steps are still slow, so the agent trains against a simulator instead. I decompiled the game's logic in Ghidra and turned it into C, which a script compares against the real game at every decision. With 256 simulators on 8 threads it runs 1.86 million agent steps a second. The agent learns by playing, using a standard method called PPO that nudges its choices towards what scored well.
 
 <figure><img src="/projects/super-hexagon-rl/fig-live-grid.webp" width="1200" height="619" alt="Six Super Hexagon windows open side by side, each in a different level and colors, all being played at once" loading="lazy"><figcaption>Six games played live at once, one window per level.</figcaption></figure>
 
 Playing live is a different problem from training, since the game runs on its own clock and the agent has to keep up. It reads the game's memory, sends keys straight to the game's window, and checks that its keys land on the very next tick. 31,774 of 31,777 key changes did.
 
-The best survival score and the smoothest play pull in different directions. One model taps about six times a second and never dies in 120 lockstep runs of the real game. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold, and still reaches the cap in 116 of 120.
+The best survival score and the smoothest play pull in different directions. One model taps about six times a second and never dies in 120 runs of the real game with the game paused at each decision. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold, and still reaches the cap in 116 of 120.

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif">
 <rect x="0.5" y="0.5" width="959" height="559" rx="18" fill="#1a1a19" stroke="rgba(255,255,255,0.10)"/>
-<text x="40.0" y="54.0" font-size="22" font-weight="600" fill="#f0efec" text-anchor="start">Smooth play without giving up survival</text>
+<text x="40.0" y="54.0" font-size="22" font-weight="600" fill="#f0efec" text-anchor="start">Key presses and survival across seven models</text>
 <text x="40.0" y="80.0" font-size="13.5" font-weight="400" fill="#c3c2b7" text-anchor="start">Seven models, each on 360 seeded runs in the simulator. The line follows the order they were trained in.</text>
 <text x="96.0" y="114.0" font-size="12.5" font-weight="400" fill="#898781" text-anchor="start">Runs reaching the 600 s cap</text>
 <line x1="96" y1="413.7" x2="920" y2="413.7" stroke="#2c2c2a" stroke-width="1"/>
