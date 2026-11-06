@@ -28,11 +28,18 @@ export const orderByRank = <T extends { id: string; data: { rank: number } }>(
 export const rankedProjects = async () =>
   orderByRank(await getCollection("projects"));
 
-export const latestProject = async () => {
-  const [latest] = await sortedProjects();
+export const pickLatest = <T extends { id: string; data: { date: string } }>(
+  entries: T[],
+): T => {
+  const [latest] = [...entries].sort(newestEntryFirst);
   if (!latest) {
     throw new Error("The home screen needs a project in src/content/projects");
   }
+  return latest;
+};
+
+export const latestProject = async () => {
+  const latest = pickLatest(await getCollection("projects"));
   return {
     title: latest.data.title,
     date: latest.data.date,
