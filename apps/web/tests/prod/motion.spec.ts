@@ -320,33 +320,42 @@ test("the 2D version link loads the flat site and the 3D version link loads 3d a
 });
 
 test.describe("a story with a loop", () => {
-  const settled = (page: Page) =>
-    page.waitForFunction(() => {
-      const image = document.querySelector<HTMLImageElement>(
-        "#page .story-hero img.pic",
-      );
-      return Boolean(image?.complete && image.currentSrc);
+  // the browser's own decode proves the picture it chose is a real image, which complete and currentSrc don't
+  const decodedSrc = async (page: Page) => {
+    const image = page.locator("#page .story-hero img.pic");
+    await page.waitForFunction(() =>
+      Boolean(
+        document.querySelector<HTMLImageElement>("#page .story-hero img.pic")
+          ?.currentSrc,
+      ),
+    );
+    return image.evaluate(async (el: HTMLImageElement) => {
+      await el.decode();
+      return {
+        src: el.currentSrc,
+        width: el.naturalWidth,
+        height: el.naturalHeight,
+      };
     });
+  };
 
   test("a story with a loop shows its still with reduced motion", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/projects/super-hexagon-rl?2d");
-    await settled(page);
-    const src = await page
-      .locator("#page .story-hero img.pic")
-      .evaluate((image: HTMLImageElement) => image.currentSrc);
+    const { src, width, height } = await decodedSrc(page);
     expect(src.endsWith("hero.webp")).toBe(true);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
   });
 
   test("a story with a loop plays the loop without it", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/projects/super-hexagon-rl?2d");
-    await settled(page);
-    const src = await page
-      .locator("#page .story-hero img.pic")
-      .evaluate((image: HTMLImageElement) => image.currentSrc);
+    const { src, width, height } = await decodedSrc(page);
     expect(src.endsWith("hero-loop.webp")).toBe(true);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
   });
 });
