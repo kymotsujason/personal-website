@@ -318,3 +318,80 @@ test("two inputs that make the same output are refused by name", (t) => {
     assert.deepEqual(allowlistOf(site), {}, first);
   }
 });
+
+test("a second run after inputs are removed leaves no stale output or allowlist key", (t) => {
+  const site = makeSite(t, {
+    "hero.png": "p",
+    "hero-loop.mp4": "v",
+    "thumb.png": "t",
+    "fig-keep.png": "k",
+    "fig-old.png": "o",
+    "fig-chart.svg": svgBytes,
+  });
+  makeProjectMedia({ site, slug: "demo", encode: fakeEncode });
+  writeFileSync(join(outDir(site), "notes.txt"), "kept");
+  mkdirSync(join(outDir(site), "fig-folder.webp"));
+  const others = {
+    "apps/web/public/projects/demo-two/fig-old.webp": "a",
+    "apps/web/public/projects/demo/notes.txt": "b",
+    "apps/web/public/elsewhere.webp": "c",
+  };
+  writeFileSync(
+    join(site, "privacy-allowlist.json"),
+    JSON.stringify({ ...allowlistOf(site), ...others }),
+  );
+  for (const name of ["hero-loop.mp4", "fig-old.png", "fig-chart.svg"]) {
+    rmSync(join(site, ".media/demo", name));
+  }
+  const removed = [];
+  makeProjectMedia({
+    site,
+    slug: "demo",
+    encode: fakeEncode,
+    onRemove: (path) => removed.push(path.split("/").pop()),
+  });
+  assert.deepEqual(removed, [
+    "fig-chart.svg",
+    "fig-old.webp",
+    "hero-loop.webp",
+  ]);
+  assert.deepEqual(outputs(site), [
+    "fig-folder.webp",
+    "fig-keep.webp",
+    "hero.webp",
+    "notes.txt",
+    "thumb.webp",
+  ]);
+  assert.deepEqual(Object.keys(allowlistOf(site)).sort(), [
+    "apps/web/public/elsewhere.webp",
+    "apps/web/public/projects/demo-two/fig-old.webp",
+    "apps/web/public/projects/demo/fig-keep.webp",
+    "apps/web/public/projects/demo/hero.webp",
+    "apps/web/public/projects/demo/notes.txt",
+    "apps/web/public/projects/demo/thumb.webp",
+  ]);
+});
+
+test("a stale output is off the allowlist and the new outputs are written before it's removed", (t) => {
+  const site = makeSite(t, { "hero.png": "p", "fig-old.png": "o" });
+  makeProjectMedia({ site, slug: "demo", encode: fakeEncode });
+  rmSync(join(site, ".media/demo/fig-old.png"));
+  writeFileSync(join(site, ".media/demo/fig-new.png"), "n");
+  const seen = [];
+  makeProjectMedia({
+    site,
+    slug: "demo",
+    encode: fakeEncode,
+    onRemove: (path) => {
+      seen.push([
+        path.split("/").pop(),
+        Object.hasOwn(
+          allowlistOf(site),
+          "apps/web/public/projects/demo/fig-old.webp",
+        ),
+        existsSync(join(outDir(site), "fig-new.webp")),
+      ]);
+    },
+  });
+  assert.deepEqual(seen, [["fig-old.webp", false, true]]);
+});

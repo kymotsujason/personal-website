@@ -1,6 +1,7 @@
 // makes a project's pictures: reads the raw captures in .media/<SLUG>/ and writes web sized, metadata stripped copies
-// to apps/web/public/projects/<SLUG>/, each one put on the privacy allowlist. it can run again, and an output that
-// already exists gets a new one. run it from site/ (it needs vips, and ffmpeg for a video loop):
+// to apps/web/public/projects/<SLUG>/, each one put on the privacy allowlist. it can run again. an output that
+// already exists gets a new one, and an output whose input is gone is deleted and taken off the allowlist. run it
+// from site/ (it needs vips, and ffmpeg for a video loop):
 //   node tools/make-project-media.mjs <SLUG>
 import { execFileSync } from "node:child_process";
 import {
@@ -28,6 +29,8 @@ const LOOP_EXTENSIONS = ["webp", "gif", "mp4", "webm", "mkv"];
 const NAME = /^[a-z0-9-]+$/;
 const NAME_RULE = "lowercase letters, digits, and hyphens";
 const INPUT_NAMES = ["hero", "hero-loop", "thumb"];
+const OUTPUT_NAME =
+  /^(?:hero\.webp|hero-loop\.webp|thumb\.webp|fig-[a-z0-9-]+\.(?:webp|svg))$/;
 
 const encodeWithTools = ({ kind, source, output }) => {
   const extension = path.extname(source).slice(1).toLowerCase();
@@ -161,6 +164,7 @@ export const makeProjectMedia = ({
   slug,
   encode = encodeWithTools,
   onWrite,
+  onRemove,
 }) => {
   if (!NAME.test(slug)) {
     throw new Error(`the slug "${slug}" must use ${NAME_RULE}`);
@@ -221,8 +225,16 @@ export const makeProjectMedia = ({
     rmSync(work, { recursive: true, force: true });
   }
   made.sort((a, b) => a.name.localeCompare(b.name));
+  const keep = new Set(made.map(({ name }) => name));
+  const stale = (name) => OUTPUT_NAME.test(name) && !keep.has(name);
+  const prefix = `${path.relative(site, out)}/`;
   // nothing is written until every image is made, and the allowlist goes first, so a crash part way never leaves a
   // written image off it
+  for (const key of Object.keys(allowlist)) {
+    if (key.startsWith(prefix) && stale(key.slice(prefix.length))) {
+      delete allowlist[key];
+    }
+  }
   for (const { bytes, name } of made) {
     allowlist[path.relative(site, path.join(out, name))] = sha256(bytes);
   }
@@ -235,6 +247,16 @@ export const makeProjectMedia = ({
   for (const { bytes, name } of made) {
     onWrite?.(path.join(out, name));
     writeFileSync(path.join(out, name), bytes);
+  }
+  // stale outputs leave the allowlist in the write above and are deleted last, so a crash between leaves an unlisted
+  // file that the privacy check refuses
+  const leftover = readdirSync(out, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && stale(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of leftover) {
+    onRemove?.(path.join(out, name));
+    rmSync(path.join(out, name));
   }
   return made.map(({ name }) => path.relative(site, path.join(out, name)));
 };
@@ -250,7 +272,10 @@ if (
   }
   const site = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   try {
-    for (const written of makeProjectMedia({ site, slug })) {
+    const onRemove = (removed) => {
+      console.log(`removed ${path.relative(site, removed)}`);
+    };
+    for (const written of makeProjectMedia({ site, slug, onRemove })) {
       console.log(written);
     }
   } catch (error) {
