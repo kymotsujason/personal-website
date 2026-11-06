@@ -2,21 +2,20 @@ import { expect, test } from "@playwright/test";
 import { quiet } from "./scene";
 
 const PROJECT = {
-  title: "Device intro",
-  date: "2026-10-12",
-  summary: "A foldable phone, live in the browser",
-  path: "/projects/device-intro",
+  title: "jasonyue.ca",
+  date: "2026-10-14",
+  summary: "A foldable phone in the browser, with a screen that is real HTML",
+  path: "/projects/jasonyue-ca",
 };
 
-const PROJECT_DAY = "October 12, 2026";
+const PROJECT_DAY = "October 14, 2026";
 
 test.describe("with javascript off", () => {
   test.use({ javaScriptEnabled: false });
 
-  test("the project list shows the project", async ({ page }) => {
+  test("the project list starts with the rank 1 project", async ({ page }) => {
     await page.goto("/projects");
-    const card = page.locator("#page .project-card");
-    await expect(card).toHaveCount(1);
+    const card = page.locator("#page .project-card").first();
     await expect(card.locator("h2")).toHaveText(PROJECT.title);
     await expect(card.locator(".sub")).toHaveText(PROJECT.summary);
     await expect(card.locator("time")).toHaveText(PROJECT_DAY);
@@ -40,29 +39,25 @@ test.describe("with javascript off", () => {
     await expect(page.locator("#page .column")).toContainText(
       "Hands take out an iPhone Duo and unfold it",
     );
+    await expect(page.locator("#page .sheet .summary")).toHaveText(
+      PROJECT.summary,
+    );
   });
 
-  test("the project page shows its title in the sheet and no toolbar without links", async ({
+  test("the project page shows its hero and a GitHub link in the toolbar", async ({
     page,
   }) => {
     await page.goto(PROJECT.path);
     await expect(page.locator("#page .large-title")).toHaveCount(0);
-    await expect(page.locator("#page .toolbar")).toHaveCount(0);
-    await expect(page.locator("#page .hero")).toHaveCount(0);
-  });
-
-  test("a project with no image starts its sheet under the bar", async ({
-    page,
-  }) => {
-    await page.goto(PROJECT.path);
-    const gap = await page.evaluate(() => {
-      const body = document.querySelector("#page > .body")!;
-      const sheet = document.querySelector("#page .sheet")!;
-      return (
-        sheet.getBoundingClientRect().top - body.getBoundingClientRect().top
-      );
-    });
-    expect(gap).toBeLessThanOrEqual(120);
+    await expect(page.locator("#page .hero img")).toHaveAttribute(
+      "src",
+      "/og.jpg",
+    );
+    await expect(
+      page.locator(
+        '#page .toolbar a[href="https://github.com/kymotsujason/personal-website"]',
+      ),
+    ).toContainText("GitHub");
   });
 
   test("the flat home card names the latest project", async ({ page }) => {

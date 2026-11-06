@@ -55,6 +55,8 @@ const devTools = () => ({
 // https://astro.build/config
 export default defineConfig({
   site: "https://jasonyue.ca",
+  // the project that came first was renamed, and its old address still gets opened
+  redirects: { "/projects/device-intro": "/projects/jasonyue-ca" },
   // the imported posts keep their straight quotes, dashes, and three periods
   markdown: { processor: satteri({ features: { smartPunctuation: false } }) },
   integrations: [

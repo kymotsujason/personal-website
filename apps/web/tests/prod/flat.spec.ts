@@ -6,7 +6,7 @@ const ROUTES = [
   { path: "/", heading: "Jason Yue" },
   { path: "/about", heading: "About" },
   { path: "/projects", heading: "Projects" },
-  { path: "/projects/device-intro", heading: "Device intro" },
+  { path: "/projects/jasonyue-ca", heading: "jasonyue.ca" },
   { path: "/blog", heading: "Blog" },
   { path: "/music", heading: "Music" },
 ];
@@ -43,13 +43,19 @@ test.describe("with javascript off", () => {
     await expect(beside).toHaveAttribute("href", "/");
     await expect(beside).toBeVisible();
     await expect(page.locator("#page .title-row h1")).toHaveText("About");
-    await page.goto("/projects/device-intro");
+    await page.goto("/projects/jasonyue-ca");
     await expect(page.locator("#page > header a.back")).toHaveText("Projects");
     const round = page.locator("#page > header a.home-icon");
     await expect(round).toHaveAttribute("href", "/");
     await expect(round).toHaveAccessibleName("Home");
     await round.click();
     await expect(page.locator("#page h1")).toHaveText("Jason Yue");
+  });
+
+  test("an old project address lands on its new page", async ({ page }) => {
+    await page.goto("/projects/device-intro");
+    await expect(page).toHaveURL(/\/projects\/jasonyue-ca$/);
+    await expect(page.locator("#page h1")).toHaveText("jasonyue.ca");
   });
 
   test("an unknown address shows the not found page", async ({ page }) => {
@@ -224,7 +230,7 @@ type Sample = {
 const RELOADS = [
   { path: "/about", heading: "About" },
   { path: "/about/", heading: "About" },
-  { path: "/projects/device-intro", heading: "Device intro" },
+  { path: "/projects/jasonyue-ca", heading: "jasonyue.ca" },
 ];
 
 for (const route of RELOADS) {

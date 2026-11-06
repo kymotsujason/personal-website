@@ -13,7 +13,7 @@ test.describe("the flat site", () => {
   for (const path of [
     "/about",
     "/projects",
-    "/projects/device-intro",
+    "/projects/jasonyue-ca",
     "/blog",
     "/blog/new-equipment-to-keep-things-interesting",
     "/music",
@@ -34,7 +34,7 @@ test.describe("the flat site", () => {
 
   test("glass shows a focus ring", async ({ page }) => {
     await flatSite(page);
-    await page.goto("/projects/device-intro");
+    await page.goto("/projects/jasonyue-ca");
     const first = page.locator("#page a").first();
     await expect(first).toHaveClass(/glass/);
     for (let i = 0; i < 4; i++) {
@@ -326,8 +326,8 @@ test("glass blurs at full zoom and not while pinned", async ({ page }) => {
   await settledOn(page, "/", null);
   await tapIcon(page, "Projects");
   await settledOn(page, "/projects", "Projects");
-  await page.locator('#page a[href="/projects/device-intro"]').click();
-  await settledOn(page, "/projects/device-intro", "Projects");
+  await page.locator('#page a[href="/projects/jasonyue-ca"]').click();
+  await settledOn(page, "/projects/jasonyue-ca", "Projects");
   const filter = () =>
     page.evaluate(() => {
       const pill = document.querySelector<HTMLElement>("#page .pill.back");

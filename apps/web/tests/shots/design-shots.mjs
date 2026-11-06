@@ -108,7 +108,7 @@ const pruneEmpty = (dir) => {
 const PAGES = [
   ["about", "/about"],
   ["projects", "/projects"],
-  ["project", "/projects/device-intro"],
+  ["project", "/projects/jasonyue-ca"],
   ["blog", "/blog"],
   ...POSTS.map((slug) => [`post-${slug}`, `/blog/${slug}`]),
   ["music", "/music"],

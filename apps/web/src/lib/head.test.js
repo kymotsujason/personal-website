@@ -319,7 +319,7 @@ describe("arrival", () => {
 
   test("a reload of an app page the server names shows the page", () => {
     const page = makePage({
-      path: "/projects/device-intro",
+      path: "/projects/jasonyue-ca",
       app: "Projects",
       navType: "reload",
     });

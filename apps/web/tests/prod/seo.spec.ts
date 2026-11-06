@@ -8,7 +8,7 @@ const PAGES = [
   { path: "/about", type: "website" },
   { path: "/music", type: "website" },
   { path: "/projects", type: "website" },
-  { path: "/projects/device-intro", type: "article" },
+  { path: "/projects/jasonyue-ca", type: "article" },
   { path: "/blog", type: "website" },
   { path: "/blog/new-equipment-to-keep-things-interesting", type: "article" },
 ];
@@ -64,10 +64,10 @@ test.describe("with javascript off", () => {
   test("the project and the post show their own title in the card", async ({
     page,
   }) => {
-    await page.goto("/projects/device-intro");
-    expect(await meta(page, "property", "og:title")).toBe("Device intro");
+    await page.goto("/projects/jasonyue-ca");
+    expect(await meta(page, "property", "og:title")).toBe("jasonyue.ca");
     expect(await meta(page, "property", "og:description")).toBe(
-      "A foldable phone, live in the browser",
+      "A foldable phone in the browser, with a screen that is real HTML",
     );
     await page.goto("/blog/new-equipment-to-keep-things-interesting");
     expect(await meta(page, "property", "og:title")).toBe(

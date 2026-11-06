@@ -1,9 +1,9 @@
 ---
 import Site from "../../layouts/Site.astro";
 import { formatDay } from "../../lib/format";
-import { sortedProjects } from "../../lib/projects";
+import { rankedProjects } from "../../lib/projects";
 
-const projects = await sortedProjects();
+const projects = await rankedProjects();
 ---
 
 <Site
@@ -20,11 +20,7 @@ const projects = await sortedProjects();
       data-project={project.id}
     >
       {i === 0 && <span class="kicker">Latest</span>}
-      {project.data.images?.[0] ? (
-        <img class="pic" src={project.data.images[0]} alt="" />
-      ) : (
-        <div class="pic glow" aria-hidden="true" />
-      )}
+      <img class="pic" src={project.data.hero.still} alt="" />
       <div class="strip glass">
         <div>
           <h2>{project.data.title}</h2>

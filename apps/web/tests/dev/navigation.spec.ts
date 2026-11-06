@@ -524,12 +524,21 @@ test.describe("with the clock installed", () => {
     await settledOn(page, "/", null);
   });
 
+  test("an old project address opens its new page in 3D", async ({ page }) => {
+    // the dev server's redirect drops the query, so window.spike only loads on the second visit
+    await page.goto("/projects/device-intro");
+    await expect(page).toHaveURL(/\/projects\/jasonyue-ca$/);
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
+  });
+
   test("a detail page's round home button goes home, past its list", async ({
     page,
   }) => {
-    await page.goto("/projects/device-intro?dev&noweather");
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
     await page.waitForFunction(() => Boolean((window as any).spike));
-    await settledOn(page, "/projects/device-intro", "Projects");
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
     // the dev panel covers the top right corner, so the click comes from the element itself
     await page.evaluate(() =>
       document.querySelector<HTMLElement>("#page > header .home-icon")!.click(),
@@ -786,9 +795,9 @@ test.describe("with the clock installed", () => {
   test("an edge swipe from a page opened directly goes to its list, sliding the way Back does", async ({
     page,
   }) => {
-    await page.goto("/projects/device-intro?dev&noweather");
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
     await page.waitForFunction(() => Boolean((window as any).spike));
-    await settledOn(page, "/projects/device-intro", "Projects");
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
     const before = await historyIndex(page);
     await watchAnimations(page);
     await edgeDrag(page, 900);
@@ -834,9 +843,9 @@ test.describe("with the clock installed", () => {
   test("the Back pill on a page opened directly goes to its list, sliding the way Back does", async ({
     page,
   }) => {
-    await page.goto("/projects/device-intro?dev&noweather");
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
     await page.waitForFunction(() => Boolean((window as any).spike));
-    await settledOn(page, "/projects/device-intro", "Projects");
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
     const before = await historyIndex(page);
     await watchAnimations(page);
     await page.locator("#page > header a.back").click();
@@ -854,9 +863,9 @@ test.describe("with the clock installed", () => {
   test("a short edge swipe springs back and stays on the page", async ({
     page,
   }) => {
-    await page.goto("/projects/device-intro?dev&noweather");
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
     await page.waitForFunction(() => Boolean((window as any).spike));
-    await settledOn(page, "/projects/device-intro", "Projects");
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
     await page.mouse.move(6, 400);
     await page.mouse.down();
     await page.mouse.move(60, 400, { steps: 6 });
@@ -871,7 +880,7 @@ test.describe("with the clock installed", () => {
     await expect.poll(() => contentOffset(page)).toEqual(["", ""]);
     await page.waitForTimeout(400);
     expect(await page.evaluate(() => location.pathname)).toBe(
-      "/projects/device-intro",
+      "/projects/jasonyue-ca",
     );
   });
 
