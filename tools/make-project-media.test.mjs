@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256 } from "./privacy/allowlist.mjs";
+import { checkFiles } from "./privacy/check.mjs";
+import { collectDir } from "./privacy/collect.mjs";
 import { scanMetadata } from "./privacy/metadata.mjs";
 import { makeProjectMedia } from "./make-project-media.mjs";
 
@@ -394,4 +396,45 @@ test("a stale output is off the allowlist and the new outputs are written before
     },
   });
   assert.deepEqual(seen, [["fig-old.webp", false, true]]);
+});
+
+test("stale outputs left by an interrupted cleanup fail the privacy check", (t) => {
+  const site = makeSite(t, {
+    "hero.png": "p",
+    "fig-old.png": "o",
+    "fig-chart.svg": svgBytes,
+  });
+  makeProjectMedia({ site, slug: "demo", encode: fakeEncode });
+  const prefix = "apps/web/public/projects/demo/";
+  const before = checkFiles(
+    collectDir(outDir(site), prefix),
+    allowlistOf(site),
+  );
+  assert.deepEqual(before, { ok: true, problems: [] });
+  rmSync(join(site, ".media/demo/fig-old.png"));
+  rmSync(join(site, ".media/demo/fig-chart.svg"));
+  assert.throws(
+    () =>
+      makeProjectMedia({
+        site,
+        slug: "demo",
+        encode: fakeEncode,
+        onRemove: () => {
+          throw new Error("interrupted");
+        },
+      }),
+    /interrupted/,
+  );
+  assert.deepEqual(outputs(site), [
+    "fig-chart.svg",
+    "fig-old.webp",
+    "hero.webp",
+    "thumb.webp",
+  ]);
+  const after = checkFiles(collectDir(outDir(site), prefix), allowlistOf(site));
+  assert.equal(after.ok, false);
+  assert.deepEqual(
+    after.problems.map((problem) => problem.split(" ")[0]).sort(),
+    [`${prefix}fig-chart.svg`, `${prefix}fig-old.webp`],
+  );
 });

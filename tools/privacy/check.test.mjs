@@ -678,6 +678,33 @@ test("checkFiles refuses SVGs that embed or point at private data", () => {
   assert.match(result.problems.join("\n"), /notes\.txt carries svg:data-image/);
 });
 
+test("checkFiles holds project SVGs to the allowlist and leaves other SVGs to the scan", () => {
+  const clean = svg('<path d="M0 0h1v1z"/>');
+  const figure = "apps/web/public/projects/demo/fig-chart.svg";
+  const packed = "apps/web/public/projects/demo/fig-chart.svgz";
+  const listed = { [figure]: sha256(clean) };
+  assert.deepEqual(checkFiles([{ path: figure, bytes: clean }], listed), {
+    ok: true,
+    problems: [],
+  });
+  const unlisted = checkFiles([{ path: figure, bytes: clean }], {});
+  assert.equal(unlisted.ok, false);
+  assert.match(unlisted.problems[0], /fig-chart\.svg is not on the allowlist/);
+  const changed = checkFiles([{ path: figure, bytes: clean }], {
+    [figure]: sha256(ascii("other")),
+  });
+  assert.equal(changed.ok, false);
+  assert.match(changed.problems[0], /doesn't match the allowlist/);
+  const gzipped = checkFiles([{ path: packed, bytes: gzipSync(clean) }], {});
+  assert.match(gzipped.problems.join("\n"), /fig-chart\.svgz is not on the allowlist/);
+  const elsewhere = [
+    { path: "apps/web/public/icons/a.svg", bytes: clean },
+    { path: "apps/web/public/projects.svg", bytes: clean },
+    { path: "apps/web/src/assets/projects/b.svg", bytes: clean },
+  ];
+  assert.deepEqual(checkFiles(elsewhere, {}), { ok: true, problems: [] });
+});
+
 const dirtyPng = png(pngChunk("eXIf", ascii("MM\0*")));
 const publicFile = (name) =>
   readFileSync(join(here, "..", "..", "apps", "web", "public", name));

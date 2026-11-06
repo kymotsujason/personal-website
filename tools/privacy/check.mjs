@@ -20,6 +20,10 @@ import {
   unscannableTypes,
 } from "./metadata.mjs";
 
+// make-project-media.mjs lists every svg it writes here, so one left off the allowlist is a stale figure from an
+// interrupted run
+const projectMedia = "apps/web/public/projects/";
+
 const usage =
   "usage: check.mjs --index | --push <REMOTE_NAME> | --range <BEFORE> <AFTER> | --dist <DIR>";
 
@@ -91,7 +95,8 @@ export function checkFiles(files, allowlist) {
       add(`${file.path} is ${typeName(type)}, which the check can't scan`);
       continue;
     }
-    if (type !== "svg" && type !== "svgz") {
+    const svg = type === "svg" || type === "svgz";
+    if (!svg || file.path.startsWith(projectMedia)) {
       const actual = sha256(file.bytes);
       if (!Object.hasOwn(allowlist, file.path)) {
         add(`${file.path} is not on the allowlist (sha256 ${actual})`);
@@ -102,7 +107,7 @@ export function checkFiles(files, allowlist) {
       }
     }
     for (const problem of scanProblems(file.bytes, file.path)) add(problem);
-    if (type === "svg" || type === "svgz") {
+    if (svg) {
       for (const problem of inlineProblems(file, type)) add(problem);
     }
   }
