@@ -23,7 +23,7 @@ hero:
 thumb: /projects/jasonyue-ca/thumb.webp
 highlights:
   - title: A screen made of real pages
-    text: Every page on the phone is a plain HTML page that also reads fine with JavaScript off and with WebGL off, so the 3D scene adds to the site and nobody needs it to read a page.
+    text: Every page on the phone is a plain HTML page. It also reads fine with JavaScript off and with WebGL off, so nobody needs the 3D scene to read a page.
   - title: A sky that follows the visitor
     text: The wallpaper picks one of eight skies from the visitor's local weather and blends day into night with their real sunrise and sunset. The location comes from the request, so nobody sees a permission prompt.
   - title: Steps down on slow phones
@@ -47,4 +47,4 @@ The phone is three.js and Blender work, the hands come from the CC0 MakeHuman mo
 
 <figure><img src="/projects/jasonyue-ca/fig-app-open.webp" width="1200" height="729" alt="The Projects app opening over the home screen on the unfolded phone, with the Super Hexagon RL card and a pickban.gg card inside its window" loading="lazy"><figcaption>The Projects app opening over the home screen, a moment after a tap on its icon.</figcaption></figure>
 
-Speed was a requirement from the start, since a 3D scene is easy to make heavy, so the page watches the frame rate and steps the scene down in stages on a slow phone. The weather sky is one program on the graphics chip for all eight skies, and a change of weather only changes its settings, so nothing has to be rebuilt.
+Speed was a requirement from the start, since a 3D scene is easy to make heavy. The page watches the frame rate and steps the scene down in stages on a slow phone. The weather sky is one program on the graphics chip for all eight skies, and a change of weather only changes its settings, so nothing has to be rebuilt.
