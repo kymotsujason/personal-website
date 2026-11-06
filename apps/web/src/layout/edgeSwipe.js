@@ -6,6 +6,8 @@ import { goBackTo } from "./navigation.js";
 // how far along the page, or how fast in px per ms, a release has to be to go back
 const BACK_SHARE = 0.35;
 const BACK_FLICK = 0.5;
+// the finger's speed is only a flick if it was measured this recently, so a fast move that rests first doesn't count
+const FLICK_FRESH_MS = 100;
 const SPRING_MS = 250;
 const SPRING = "cubic-bezier(0.32, 0.72, 0, 1)";
 // a navigation that never swaps the page out leaves it where the finger let go, so it springs back after this
@@ -82,7 +84,9 @@ const end = (event) => {
   if (!drag || event.pointerId !== drag.id) {
     return;
   }
-  const { els, dx, speed, width, href } = drag;
+  const { els, dx, width, href } = drag;
+  const speed =
+    performance.now() - drag.lastT > FLICK_FRESH_MS ? 0 : drag.speed;
   drag = null;
   if (
     event.type === "pointerup" &&

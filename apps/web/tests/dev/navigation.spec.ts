@@ -918,6 +918,40 @@ test.describe("with the clock installed", () => {
     );
   });
 
+  // a flick is judged by how fast the finger was moving when it let go, so a fast move that rests first has no flick left
+  test("a fast short edge swipe then a hold springs back and stays on the page", async ({
+    page,
+  }) => {
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
+    await page.mouse.move(6, 400);
+    await page.mouse.down();
+    await page.mouse.move(60, 400, { steps: 6 });
+    await page.clock.runFor(1500);
+    await page.mouse.up();
+    await expect.poll(() => contentOffset(page)).toEqual(["", ""]);
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => location.pathname)).toBe(
+      "/projects/jasonyue-ca",
+    );
+  });
+
+  test("a fast short edge swipe let go at once is a flick and goes to the list", async ({
+    page,
+  }) => {
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
+    await page.mouse.move(6, 400);
+    await page.mouse.down();
+    await page.mouse.move(60, 400, { steps: 6 });
+    await page.mouse.up();
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+  });
+
   const transitions = (page: Page) =>
     page.evaluate(() =>
       [
