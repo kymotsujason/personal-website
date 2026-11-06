@@ -1398,7 +1398,8 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 }
 
 /* projects: three Today cards, then one glass panel of rows. a card's picture fills it under the same dark fade as a story's
-   hero (the story sets these three values too), so the card and the page it opens look like one thing */
+   hero, with the same color and opacity under the title (the story sets those two values too), so the card and the page
+   it opens look like one thing. the card's solid distance is fixed here, while the story's follows its words block */
 #page[data-page="projects"] {
   --hero-fade-under-title: 0.8;
   --hero-fade-color: 22, 20, 44;
