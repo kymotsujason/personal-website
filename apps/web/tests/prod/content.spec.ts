@@ -290,6 +290,31 @@ test.describe("with javascript off", () => {
     }
   });
 
+  for (const width of [320, 393]) {
+    test(`a featured card's words stay in the fade's solid zone at ${width} wide`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 852 });
+      await page.goto("/projects");
+      const solid = await page
+        .locator("#page")
+        .evaluate((el) =>
+          parseFloat(
+            getComputedStyle(el).getPropertyValue("--hero-fade-solid"),
+          ),
+        );
+      const cards = page.locator("#page a.project-card.featured");
+      for (let i = 0; i < 3; i++) {
+        const card = (await cards.nth(i).boundingBox())!;
+        const words = (await cards.nth(i).locator(".words").boundingBox())!;
+        expect(card.y + card.height - words.y, `card ${i}`).toBeLessThanOrEqual(
+          solid,
+        );
+        expect(words.y, `card ${i}`).toBeGreaterThanOrEqual(card.y);
+      }
+    });
+  }
+
   test("the flat home card names the latest project", async ({ page }) => {
     await page.goto("/");
     const card = page.locator("#page .widget", {

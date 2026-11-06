@@ -1391,7 +1391,7 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 #page[data-page="projects"] {
   --hero-fade-under-title: 0.8;
   --hero-fade-color: 22, 20, 44;
-  --hero-fade-solid: 150px;
+  --hero-fade-solid: 170px;
 }
 
 #page[data-page="projects"] .project-card {
@@ -1439,7 +1439,7 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   padding: 6px 11px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(12, 10, 24, 0.55);
+  background: rgba(12, 10, 24, 0.78);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   font-size: 12.5px;
@@ -1562,7 +1562,8 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 
 /* a project page is a Today story: the picture fills the top under the bar with its words over a dark fade, then the
    links, three numbers, and the sheet. the fade's alpha at the top of the words is what keeps white text readable on
-   the brightest picture (lib/contrast.test.js reads it from here) */
+   the brightest picture (lib/contrast.test.js reads it from here, and reads the list cards' copy of these values on its
+   own) */
 #page[data-page="project"] {
   --hero-fade-under-title: 0.8;
   --hero-fade-color: 22, 20, 44;

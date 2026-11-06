@@ -24,11 +24,6 @@ const number = (name) => {
 };
 const accentFill = number("--accent-fill");
 const pillBase = number("--pill-base");
-const heroFade = number("--hero-fade-under-title");
-const heroFadeColor = flat
-  .match(/--hero-fade-color:\s*(\d+),\s*(\d+),\s*(\d+)\s*;/)
-  .slice(1)
-  .map(Number);
 const RIM = [255, 255, 255, 0.6];
 const SHEET = [12, 12, 20, 0.72];
 const GLASS = [255, 255, 255, 0.14];
@@ -328,9 +323,51 @@ test("white reads on the flat home's widgets", () => {
   });
 });
 
-// the hero's dark fade, at the top edge of the words on it, over a picture that is pure white at its brightest
-test("white hero text clears 4.5:1 on a white picture", () => {
-  const under = composite([...heroFadeColor, heroFade], [255, 255, 255]);
+// the dark fade, at the top edge of the words on it, over a picture that is pure white at its brightest. the story's hero
+// and the list's cards each set their own values, so each block is read on its own
+const fadeBlock = (selector) => {
+  const found = flat.match(
+    new RegExp(`${selector.replace(/[[\]".]/g, "\\$&")}\\s*\\{([^}]*)\\}`),
+  );
+  if (!found) {
+    throw new Error(`flat.css has no ${selector}`);
+  }
+  const alpha = found[1].match(/--hero-fade-under-title:\s*([0-9.]+)\s*;/);
+  const color = found[1].match(
+    /--hero-fade-color:\s*(\d+),\s*(\d+),\s*(\d+)\s*;/,
+  );
+  if (!alpha || !color) {
+    throw new Error(`${selector} has no hero fade values`);
+  }
+  return { alpha: Number(alpha[1]), color: color.slice(1).map(Number) };
+};
+
+for (const selector of [
+  '#page[data-page="project"]',
+  '#page[data-page="projects"]',
+]) {
+  test(`white hero text clears 4.5:1 on a white picture (${selector})`, () => {
+    const fade = fadeBlock(selector);
+    const under = composite([...fade.color, fade.alpha], [255, 255, 255]);
+    expect(contrastRatio("#ffffff", hex(under))).toBeGreaterThanOrEqual(4.5);
+    const projects = accents.find((a) => a.app === "Projects");
+    expect(contrastRatio(projects.color, hex(under))).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+}
+
+// a featured card's chip is a dark pill over the picture, which can be pure white behind it
+test("the card chip's white label and accent value clear 4.5:1 on a white picture", () => {
+  const chip = rule('#page[data-page="projects"] .project-card .proof');
+  const fill = chip.match(
+    /background:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([0-9.]+)\)/,
+  );
+  expect(fill).not.toBeNull();
+  const under = composite(
+    [Number(fill[1]), Number(fill[2]), Number(fill[3]), Number(fill[4])],
+    [255, 255, 255],
+  );
   expect(contrastRatio("#ffffff", hex(under))).toBeGreaterThanOrEqual(4.5);
   const projects = accents.find((a) => a.app === "Projects");
   expect(contrastRatio(projects.color, hex(under))).toBeGreaterThanOrEqual(4.5);
