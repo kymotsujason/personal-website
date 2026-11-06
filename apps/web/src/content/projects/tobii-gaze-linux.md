@@ -6,11 +6,11 @@ rank: 6
 date: "2026-07-26"
 stats:
   - value: "About 33 Hz"
-    label: what the tracker really sends, sold as 133 Hz
+    label: actual sample rate of a tracker sold as 133 Hz
   - value: "13"
     label: patches to the driver
   - value: "21 of 2,000"
-    label: replies went to the wrong client before the routing fix
+    label: replies sent to the wrong client before the routing fix
 source: unreleased
 hero:
   still: /projects/tobii-gaze-linux/hero.webp
@@ -45,10 +45,10 @@ Tobii Gaze for Linux draws where a player is looking into an OBS stream, with an
 
 ## How it works
 
-The tracker's driver runs as a daemon that clients talk to over a socket. A calibration tool maps the tracker's output to the screen, the tray app turns gaze on and off and sets up the ring, and a filter plugin in OBS draws the ring on the capture of the tracked screen. The ring's constants are shared between the app and the filter, so the two always draw the same thing.
+The tracker's driver runs as a background daemon, and the other programs talk to it over a socket. The calibration tool teaches the system how the tracker's readings line up with positions on the screen. The tray app turns gaze on and off and sets up the ring, and a filter plugin in OBS draws the ring on the capture of the tracked screen. The app and the filter share the ring's constants, so the preview and the stream draw the same ring.
 
-<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" width="432" height="380" alt="The ring preview, a soft purple ring among small circles on a dark panel, with Thin ring and Soft cloud buttons, an opacity slider at 35 percent, and a row of color choices" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
+<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" width="432" height="380" alt="The ring preview, a soft purple ring among small circles on a dark panel, with Thin ring and Soft cloud buttons, an opacity slider, and a row of color choices" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
 
-Thirteen patches change the driver. They make the daemon route each reply to the client that asked, keep one owner of the USB link, queue writes for slow readers, report the tracker's status, and report to systemd when it's ready. The README names the patch series as the notice GPL asks for.
+Thirteen patches change the driver. They make the daemon send each reply only to the client that asked, let one part own the USB connection to the tracker, hold back data for slow readers, report the tracker's status, and tell systemd when it's ready. The README names the patch series as the notice GPL asks for.
 
-Calibration turned out to depend on where you sit. A day old fit left three of the four edge dots 107 to 166 px off target, and a refit to that run's own points fixed it. So the calibration tool now prints the seat distance beside the fit, which lets a stale fit be spotted before it's mistaken for an edge problem.
+Calibration turned out to depend on where you sit. A calibration made the day before, from a different seat position, left three of the four edge targets 107 to 166 px off, and a new calibration from that run's own readings fixed it. So the calibration tool's coverage check now prints how far away you sit beside the calibration, which shows when an old calibration is the problem and not the screen edges.
