@@ -14,7 +14,7 @@ stats:
 source: unreleased
 hero:
   still: /projects/tobii-gaze-linux/hero.webp
-  alt: The Tobii Gaze window, with a setup checklist, a picker for which screen the tracker sits under, and a preview of the gaze ring with opacity, color, and timing controls
+  alt: The Tobii Gaze window on its setup page, with a five step checklist and a picker for the screen the tracker sits under
   position: 50% 50%
 thumb: /projects/tobii-gaze-linux/thumb.webp
 highlights:
@@ -47,8 +47,8 @@ Tobii Gaze for Linux draws where a player is looking into an OBS stream, with an
 
 The tracker's driver runs as a background daemon, and the other programs talk to it over a socket. The calibration tool teaches the system how the tracker's readings line up with positions on the screen. The tray app turns gaze on and off and sets up the ring, and a filter plugin in OBS draws the ring on the capture of the tracked screen. The app and the filter share the ring's constants, so the preview and the stream draw the same ring.
 
-<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" width="432" height="380" alt="The ring preview, a soft purple ring among small circles on a dark panel, with Thin ring and Soft cloud buttons, an opacity slider, and a row of color choices" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
+<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" width="432" height="380" alt="A purple gaze ring preview with controls for style, opacity, and color" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
 
 Thirteen patches change the driver. They make the daemon send each reply only to the client that asked, let one part own the USB connection to the tracker, hold back data for slow readers, report the tracker's status, and tell systemd when it's ready. The README names the patch series as the notice GPL asks for.
 
-Calibration turned out to depend on where you sit. A calibration made the day before, from a different seat position, left three of the four edge targets 107 to 166 px off, and a new calibration from that run's own readings fixed it. So the calibration tool's coverage check now prints how far away you sit beside the calibration, which shows when an old calibration is the problem and not the screen edges.
+Calibration turned out to depend on where you sit. A calibration from the day before used a different seat position. It left three of the four edge targets 107 to 166 px off. A new calibration from that run's own readings fixed the error. Now the calibration tool's coverage check prints how far away you sit. That shows when an old calibration is the problem and not the screen edges.
