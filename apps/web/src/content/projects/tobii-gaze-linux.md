@@ -49,6 +49,6 @@ The tracker's driver runs as a daemon that clients talk to over a socket. A cali
 
 <figure><img src="/projects/tobii-gaze-linux/hero.webp" alt="The Tobii Gaze window showing a five step setup list, a screen picker with the monitors laid out, and a preview of the ring" loading="lazy"><figcaption>The setup window, with the tracker found, the screen picker, and the ring preview.</figcaption></figure>
 
-Thirteen patches change the driver. They make the daemon route each reply to the client that asked, keep one owner of the USB link, queue writes for slow readers, report the tracker's status, and report to systemd when it's ready. The README's patch table serves as the notice GPL asks for.
+Thirteen patches change the driver. They make the daemon route each reply to the client that asked, keep one owner of the USB link, queue writes for slow readers, report the tracker's status, and report to systemd when it's ready. The README names the patch series as the notice GPL asks for.
 
 Calibration turned out to depend on where you sit. A day old fit left three of four calibration dots 107 to 166 px off target, and a refit to that run's own points fixed it. So the calibration tool now prints the seat distance beside the fit, which lets a stale fit be spotted before it's mistaken for an edge problem.
