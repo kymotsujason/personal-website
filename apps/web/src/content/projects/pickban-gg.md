@@ -41,11 +41,11 @@ stack:
 status: Closed beta
 ---
 
-pickban.gg is match preparation for osu! tournaments. A team pastes in its mappool, loads its opponent's roster, and gets a win probability for each map, a ranking of the maps that decide the match, and advice on what to pick and ban. The model is trained on about 96,000 tournament matches from the weekly database dump of o!TR, the osu! Tournament Rating project, and the ratings behind it come from a port of o!TR's OpenSkill PlackettLuce rating algorithm.
+pickban.gg is match preparation for osu! tournaments. A team pastes in its mappool, loads its opponent's roster, and gets a win probability for each map, a ranking of the maps that decide the match, and advice on what to pick and ban. The model is trained on about 96,000 tournament matches from the weekly database dump of o!TR, the osu! Tournament Rating project, and the ratings behind it are computed locally with o!TR's own rating processor, run on that dump.
 
 ## How it works
 
-Every prediction starts from player and map data in PostgreSQL, which holds about 2.7 million player scores in the training data. The o!TR dump supplies the games and the ported rating algorithm computes the ratings locally, and a CatBoost model turns two lineups and a map into the chance that each side wins it. On 144,234 games held out from training, the tuned model scores an AUC of 0.875, and each map carries a 95% interval so a close call looks like one.
+Every prediction starts from player and map data in PostgreSQL, which holds about 2.7 million player scores in the training data. The o!TR dump supplies the games and o!TR's processor turns them into ratings, and a CatBoost model turns two lineups and a map into the chance that each side wins it. On 144,234 games held out from training, the tuned model scores an AUC of 0.875, and each map carries a 95% interval so a close call looks like one.
 
 <figure><img src="/projects/pickban-gg/fig-login.webp" alt="The pickban.gg sign in page, with the name, a short description, a notice that the site is invite only in closed beta, and a button to authorize with osu!" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
 
