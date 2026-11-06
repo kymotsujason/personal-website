@@ -1573,6 +1573,48 @@ test.describe("on the real clock", () => {
     await quiet(page);
   });
 
+  // playwright's clock stamps an event's timeStamp when it is first read, so a late handler can only be shown here.
+  // the release is built before a long task and dispatched after it, the way a busy page sees a prompt input late
+  test("a fast short edge swipe released after a long task is still a flick and goes to the list", async ({
+    page,
+  }) => {
+    await returning(page);
+    await page.goto("/projects/jasonyue-ca?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/jasonyue-ca", "Projects");
+    await page.evaluate(() =>
+      document.addEventListener(
+        "pointerdown",
+        (event) => ((window as any).__downId = event.pointerId),
+        true,
+      ),
+    );
+    await page.mouse.move(6, 400);
+    await page.mouse.down();
+    await page.evaluate(() => {
+      const init = (clientX: number) => ({
+        pointerId: (window as any).__downId,
+        isPrimary: true,
+        bubbles: true,
+        clientX,
+        clientY: 400,
+      });
+      for (let x = 16; x <= 60; x += 11) {
+        document.dispatchEvent(new PointerEvent("pointermove", init(x)));
+      }
+      const up = new PointerEvent("pointerup", init(60));
+      const start = performance.now();
+      while (performance.now() - start < 400) {
+        // a long task between the last move and the release
+      }
+      document.dispatchEvent(up);
+    });
+    await expect
+      .poll(() => page.evaluate(() => location.pathname))
+      .toBe("/projects");
+    await page.mouse.up();
+  });
+
   test("a new build reloads once per address and build, and a second failure shows the flat page", async ({
     page,
   }) => {

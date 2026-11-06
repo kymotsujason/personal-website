@@ -6,7 +6,8 @@ import { goBackTo } from "./navigation.js";
 // how far along the page, or how fast in px per ms, a release has to be to go back
 const BACK_SHARE = 0.35;
 const BACK_FLICK = 0.5;
-// the finger's speed is only a flick if it was measured this recently, so a fast move that rests first doesn't count
+// the finger's speed is only a flick if it was measured this recently, so a fast move that rests first doesn't count.
+// all of it is read from the events' own timeStamp, since a handler can run late behind a long task
 const FLICK_FRESH_MS = 100;
 const SPRING_MS = 250;
 const SPRING = "cubic-bezier(0.32, 0.72, 0, 1)";
@@ -58,7 +59,7 @@ document.addEventListener("pointerdown", (event) => {
     x0: event.clientX,
     dx: 0,
     lastX: event.clientX,
-    lastT: performance.now(),
+    lastT: event.timeStamp,
     speed: 0,
     els: moving(page),
     href: back.getAttribute("href"),
@@ -72,7 +73,7 @@ document.addEventListener("pointermove", (event) => {
   if (!drag || event.pointerId !== drag.id) {
     return;
   }
-  const now = performance.now();
+  const now = event.timeStamp;
   drag.speed = (event.clientX - drag.lastX) / Math.max(now - drag.lastT, 1);
   drag.lastX = event.clientX;
   drag.lastT = now;
@@ -85,8 +86,7 @@ const end = (event) => {
     return;
   }
   const { els, dx, width, href } = drag;
-  const speed =
-    performance.now() - drag.lastT > FLICK_FRESH_MS ? 0 : drag.speed;
+  const speed = event.timeStamp - drag.lastT > FLICK_FRESH_MS ? 0 : drag.speed;
   drag = null;
   if (
     event.type === "pointerup" &&
