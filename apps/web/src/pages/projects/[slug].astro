@@ -72,6 +72,7 @@ const showLinks = links.length > 0 || source === "private";
           class:list={["pill glass", { accent: i === 0 }]}
           href={link.url}
           rel="noopener"
+          aria-label={`${link.label}, ${title}`}
         >
           {link.label}
         </a>

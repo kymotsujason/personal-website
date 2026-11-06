@@ -239,6 +239,22 @@ test.describe("with javascript off", () => {
     await expect(pills.nth(1)).not.toHaveClass(/\baccent\b/);
   });
 
+  test("each story link's name says which project it belongs to", async ({
+    page,
+  }) => {
+    for (const e of byRank.filter((x) => (x.data.links?.length ?? 0) > 0)) {
+      await page.goto(projectPath(e));
+      const pills = page.locator("#page .story-links a.pill");
+      await expect(pills, e.slug).toHaveCount(e.data.links!.length);
+      for (const [i, link] of e.data.links!.entries()) {
+        await expect(pills.nth(i), e.slug).toHaveText(link.label);
+        await expect(pills.nth(i), e.slug).toHaveAccessibleName(
+          `${link.label}, ${e.data.title}`,
+        );
+      }
+    }
+  });
+
   test("a private source shows as text with no pill", async ({ page }) => {
     await page.goto(projectPath(PRIVATE));
     await expect(page.locator("#page .story-links span.private")).toHaveText(
