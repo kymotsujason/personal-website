@@ -1,5 +1,5 @@
 // screenshots of the app pages on the dev server, on the gpu, for the design pass. Run by hand, not by pnpm verify.
-// OUT names the folder (required), BASE the server, PAGES and PROFILES limit the run. PAGES is the projects list and the eight stories.
+// OUT names the folder (required), BASE the server, PAGES and PROFILES limit the run. PAGES is About, the projects list and the eight stories, Blog, and Music.
 import { mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
@@ -39,8 +39,11 @@ const STORIES = [
   "mangadex-paperback",
 ];
 const PAGES = [
+  ["about", "/about"],
   ["projects", "/projects"],
   ...STORIES.map((slug) => [`project-${slug}`, `/projects/${slug}`]),
+  ["blog", "/blog"],
+  ["music", "/music"],
 ].filter(
   ([name]) =>
     !process.env.PAGES ||

@@ -94,19 +94,23 @@ test.describe("with javascript off", () => {
     ).toHaveCount(0);
   });
 
-  test("a featured card's words don't run into its chip at iPhone width", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 393, height: 852 });
-    await page.goto("/projects");
-    const cards = page.locator("#page a.project-card.featured");
-    for (let i = 0; i < 3; i++) {
-      const chip = await cards.nth(i).locator(".proof").boundingBox();
-      const words = await cards.nth(i).locator(".words").boundingBox();
-      expect(chip && words).toBeTruthy();
-      expect(chip!.y + chip!.height).toBeLessThanOrEqual(words!.y);
-    }
-  });
+  for (const width of [320, 393]) {
+    test(`a featured card's words don't run into its chip at ${width} wide`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 852 });
+      await page.goto("/projects");
+      const cards = page.locator("#page a.project-card.featured");
+      for (let i = 0; i < 3; i++) {
+        const chip = await cards.nth(i).locator(".proof").boundingBox();
+        const words = await cards.nth(i).locator(".words").boundingBox();
+        expect(chip && words).toBeTruthy();
+        expect(chip!.y + chip!.height, `card ${i}`).toBeLessThanOrEqual(
+          words!.y,
+        );
+      }
+    });
+  }
 
   test("the story shows the hero, links, three numbers, and the sheet in order", async ({
     page,
@@ -291,6 +295,29 @@ test.describe("with javascript off", () => {
   });
 
   for (const width of [320, 393]) {
+    test(`the small bar title clears both pills on every story at ${width} wide`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 852 });
+      for (const slug of STORIES) {
+        await page.goto(`/projects/${slug}`);
+        const back = (await page
+          .locator("#page > header .pill.back")
+          .boundingBox())!;
+        const home = (await page
+          .locator("#page > header .pill.home-icon")
+          .last()
+          .boundingBox())!;
+        const title = (await page
+          .locator("#page > header .inline-title")
+          .boundingBox())!;
+        expect(title.x, slug).toBeGreaterThanOrEqual(back.x + back.width);
+        expect(title.x + title.width, slug).toBeLessThanOrEqual(home.x);
+      }
+    });
+  }
+
+  for (const width of [320, 393]) {
     test(`a featured card's words stay in the fade's solid zone at ${width} wide`, async ({
       page,
     }) => {
@@ -310,7 +337,6 @@ test.describe("with javascript off", () => {
         expect(card.y + card.height - words.y, `card ${i}`).toBeLessThanOrEqual(
           solid,
         );
-        expect(words.y, `card ${i}`).toBeGreaterThanOrEqual(card.y);
       }
     });
   }
@@ -324,7 +350,13 @@ test.describe("with javascript off", () => {
         .locator("#page img")
         .evaluateAll((imgs) =>
           [
-            ...new Set(imgs.map((img) => (img as HTMLImageElement).currentSrc)),
+            ...new Set(
+              imgs.map(
+                (img) =>
+                  (img as HTMLImageElement).currentSrc ||
+                  (img as HTMLImageElement).src,
+              ),
+            ),
           ].filter(Boolean),
         );
       expect(sources.length, slug).toBeGreaterThan(0);

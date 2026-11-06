@@ -18,5 +18,7 @@ test("orderByRank throws when two entries share a rank", () => {
 });
 
 test("orderByRank throws when ranks skip a number", () => {
-  expect(() => orderByRank([entry("a", 1), entry("c", 3)])).toThrow(/2/);
+  expect(() => orderByRank([entry("a", 1), entry("c", 3)])).toThrow(
+    /2 is missing/,
+  );
 });
