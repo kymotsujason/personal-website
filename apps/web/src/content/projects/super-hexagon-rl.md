@@ -6,7 +6,7 @@ rank: 1
 date: "2026-10-19"
 stats:
   - value: "120/120"
-    label: runs of the real game lasted all 10 minutes, paused between decisions
+    label: real runs survived 10 minutes, paused per decision
   - value: "1.86M"
     label: simulator steps a second
   - value: "15 hours"
@@ -27,7 +27,7 @@ highlights:
   - title: The game stays untouched
     text: A preloaded library takes over the game's clock and input, so training runs the real game one step at a time without patching its binary.
   - title: A simulator that matched the game
-    text: The game's own logic, compiled from its decompiled code, matched the real game on every check over about 69 minutes of play. That includes the 247 KB game object, apart from the colors, music and sound data, and clock readings the simulator doesn't fill in.
+    text: The game's own logic, compiled from its decompiled code, matched the real game on every check over about 69 minutes of play. That includes the 247 KB game object, apart from the colors, music and sound data, clock readings, and the pointers the simulator replaces.
   - title: A bug found by replay
     text: Live runs were dying early because the game dropped held keys when a window changed focus. Replaying live games in the simulator found it, and the fix took a stress test from 0 of 20 runs surviving to 19 of 20.
 results:
@@ -59,4 +59,4 @@ Real game steps are still slow, so the agent trains against a simulator instead.
 
 Playing live is a different problem from training, since the game runs on its own clock and the agent has to keep up. It reads the game's memory, sends keys straight to the game's window, and checks that its keys land on the very next tick. 31,774 of 31,777 key changes did.
 
-The best survival score and the smoothest play pull in different directions. One model taps about six times a second and never dies in 120 runs of the real game with the game paused at each decision. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold, and still reaches the cap in 116 of 120.
+How much survival does smoother play cost? The model that taps about six times a second never dies in 120 runs of the real game, with the game paused at each decision. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold. It reaches the cap in 116 of 120 runs, so smoother play costs four runs.
