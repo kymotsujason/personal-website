@@ -918,6 +918,59 @@ test.describe("with the clock installed", () => {
     );
   });
 
+  const transitions = (page: Page) =>
+    page.evaluate(() =>
+      [
+        document.querySelector<HTMLElement>("#page > header")!,
+        document.querySelector<HTMLElement>("#page > .body")!,
+      ].map((el) => el.style.transition),
+    );
+
+  for (const ending of ["release", "cancel"]) {
+    test(`a short edge swipe ${ending} under reduced motion springs back with no transition`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("/projects/jasonyue-ca?dev&noweather");
+      await page.waitForFunction(() => Boolean((window as any).spike));
+      await settledOn(page, "/projects/jasonyue-ca", "Projects");
+      await page.evaluate(() =>
+        document.addEventListener(
+          "pointerdown",
+          (event) => ((window as any).__downId = event.pointerId),
+          true,
+        ),
+      );
+      await page.mouse.move(6, 400);
+      await page.mouse.down();
+      await page.mouse.move(60, 400, { steps: 6 });
+      await page.waitForTimeout(150);
+      await page.mouse.move(61, 400);
+      expect(await contentOffset(page)).toEqual([
+        "translateX(55px)",
+        "translateX(55px)",
+      ]);
+      if (ending === "release") {
+        await page.mouse.up();
+      } else {
+        await page.evaluate(() =>
+          document.dispatchEvent(
+            new PointerEvent("pointercancel", {
+              pointerId: (window as any).__downId,
+              isPrimary: true,
+              bubbles: true,
+            }),
+          ),
+        );
+      }
+      expect(await contentOffset(page)).toEqual(["", ""]);
+      expect(await transitions(page)).toEqual(["", ""]);
+      if (ending === "cancel") {
+        await page.mouse.up();
+      }
+    });
+  }
+
   // a swipe up from the home bar that rests a moment opens the app switcher, the way ios does
   const openSwitcher = async (page: Page) => {
     const { x, y } = await homeBarPoint(page);

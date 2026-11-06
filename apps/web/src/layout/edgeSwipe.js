@@ -11,6 +11,8 @@ const SPRING = "cubic-bezier(0.32, 0.72, 0, 1)";
 // a navigation that never swaps the page out leaves it where the finger let go, so it springs back after this
 const STUCK_MS = 4000;
 
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+
 let drag = null;
 
 const moving = (page) =>
@@ -26,6 +28,10 @@ const place = (els, dx, ms = 0) => {
 };
 
 const springBack = (els) => {
+  if (reduced.matches) {
+    place(els, 0);
+    return;
+  }
   place(els, 0, SPRING_MS);
   setTimeout(() => {
     for (const el of els) {
