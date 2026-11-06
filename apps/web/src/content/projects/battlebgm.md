@@ -7,8 +7,8 @@ date: "2026-05-01"
 stats:
   - value: "7,859"
     label: hostile requests, no server errors
-  - value: "7,000+"
-    label: tests
+  - value: "1"
+    label: runtime dependency in the browser, a QR code library
   - value: "4,700"
     label: approved tracks across three games, about
 links:

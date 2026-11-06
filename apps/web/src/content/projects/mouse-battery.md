@@ -7,8 +7,8 @@ date: "2026-09-28"
 stats:
   - value: "9"
     label: releases between September 28 and October 17
-  - value: "1,683"
-    label: tests
+  - value: "3"
+    label: package formats in each release, for Debian, Fedora, and Arch
   - value: "42"
     label: charges until it judges battery health
 links:

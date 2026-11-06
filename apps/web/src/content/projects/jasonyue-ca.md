@@ -7,8 +7,8 @@ date: "2026-10-14"
 stats:
   - value: "8"
     label: weather skies behind the home screen
-  - value: "550+"
-    label: tests
+  - value: "0"
+    label: JavaScript needed to read any page
   - value: "4"
     label: apps on the phone, each a real web page
 links:

@@ -7,8 +7,8 @@ date: "2026-03-29"
 stats:
   - value: "0.875"
     label: AUC on 144,234 held out games
-  - value: "1,790+"
-    label: backend tests
+  - value: "4,900"
+    label: lineup matchups scored when picking four of eight
   - value: "2.7M"
     label: player scores in the training data
 links:
@@ -51,4 +51,4 @@ Every prediction starts from player and map data in PostgreSQL, which holds abou
 
 On top of the predictions sit the tools a team uses in the lobby. A live simulator lets a coach drag maps into pick, ban, and protect zones and watch the probabilities move as games finish, and Head-to-Head compares two players on patterns, form, and every game they've played against each other. Every prediction is saved, so an analysis can be forked, rerun against the current model, or shared as a read only link.
 
-The Nash solver treats a lineup choice as a game. For a team of four picked from eight players, it builds a table of every lineup against every counter and scores each by the worst result it can face. The backend has more than 1,790 tests.
+The Nash solver treats a lineup choice as a game. For a team of four picked from eight players, it builds a table of every lineup against every counter and scores each by the worst result it can face.
