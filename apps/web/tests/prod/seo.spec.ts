@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { posts } from "../posts";
+import { entry } from "../projects";
 
 const SITE = "https://jasonyue.ca";
 
@@ -72,10 +73,9 @@ test.describe("with javascript off", () => {
     page,
   }) => {
     await page.goto("/projects/jasonyue-ca");
-    expect(await meta(page, "property", "og:title")).toBe("jasonyue.ca");
-    expect(await meta(page, "property", "og:description")).toBe(
-      "A foldable phone in the browser with a screen that's real HTML",
-    );
+    const { data } = entry("jasonyue-ca");
+    expect(await meta(page, "property", "og:title")).toBe(data.title);
+    expect(await meta(page, "property", "og:description")).toBe(data.summary);
     await page.goto("/blog/new-equipment-to-keep-things-interesting");
     expect(await meta(page, "property", "og:title")).toBe(
       "New equipment to keep things interesting",

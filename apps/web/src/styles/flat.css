@@ -1578,7 +1578,6 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 #page[data-page="project"] {
   --hero-fade-under-title: 0.8;
   --hero-fade-color: 22, 20, 44;
-  --hero-fade-solid: 210px;
 }
 
 #page[data-page="project"] .story-hero {
@@ -1592,27 +1591,32 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
 }
 
-#page[data-page="project"] .story-hero::after {
+/* the fade is the words block's own backing, so it grows with the words. it reaches 48px under them to the hero's foot
+   and fades out over the 90px above, and its solid part always ends at the top of the words */
+#page[data-page="project"] .story-hero .words {
+  --inset: 20px;
+  position: absolute;
+  left: var(--inset);
+  right: var(--inset);
+  bottom: 48px;
+  z-index: 2;
+}
+
+#page[data-page="project"] .story-hero .words::before {
   content: "";
   position: absolute;
-  inset: 0;
-  z-index: 1;
+  top: -90px;
+  right: calc(var(--inset) * -1);
+  bottom: -48px;
+  left: calc(var(--inset) * -1);
+  z-index: -1;
   pointer-events: none;
   background: linear-gradient(
     to top,
     rgba(var(--hero-fade-color), 0.96) 0,
-    rgba(var(--hero-fade-color), var(--hero-fade-under-title))
-      var(--hero-fade-solid),
-    rgba(var(--hero-fade-color), 0) calc(var(--hero-fade-solid) + 90px)
+    rgba(var(--hero-fade-color), var(--hero-fade-under-title)) calc(100% - 90px),
+    rgba(var(--hero-fade-color), 0) 100%
   );
-}
-
-#page[data-page="project"] .story-hero .words {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 48px;
-  z-index: 2;
 }
 
 #page[data-page="project"] .story-hero .kicker {
@@ -1824,8 +1828,7 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   }
 
   #page[data-page="project"] .story-hero .words {
-    left: 40px;
-    right: 40px;
+    --inset: 40px;
   }
 }
 

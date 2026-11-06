@@ -1,87 +1,109 @@
-import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { expect, test, type Page } from "@playwright/test";
+import { alphaAt, paintedFade, worstContrasts, type FadeSpec } from "./fade";
+import {
+  byRank,
+  dayText,
+  firstParagraph,
+  newest,
+  projectPath,
+} from "../projects";
 import { quiet } from "./scene";
 
+const FEATURED = 3;
+
+const STORIES = byRank.map((e) => e.slug);
 const PROJECT = {
-  title: "Super Hexagon RL",
-  date: "2026-10-19",
-  summary: "An agent that plays every level of the real game live",
-  path: "/projects/super-hexagon-rl",
+  title: newest.data.title,
+  date: newest.data.date,
+  summary: newest.data.summary,
+  path: projectPath(newest),
 };
 
-const PROJECT_DAY = "October 19, 2026";
+// each layout case reads the first entry that has the trait, so editing an entry's words never moves a test
+const WITH_LOOP = byRank.find(
+  (e) => e.data.hero.loop && (e.data.links?.length ?? 0) >= 2,
+)!;
+const NO_LOOP = byRank.find((e) => !e.data.hero.loop)!;
+const PRIVATE = byRank.find((e) => e.data.source === "private")!;
+const UNRELEASED = byRank.find((e) => e.data.source === "unreleased")!;
+const BUILT_ON = byRank.find((e) => e.data.builtOn)!;
 
-const STORIES_BY_RANK = [
-  "super-hexagon-rl",
-  "pickban-gg",
-  "battlebgm",
-  "jasonyue-ca",
-  "virtual-ascii",
-  "tobii-gaze-linux",
-  "mouse-battery",
-  "mangadex-paperback",
-];
+// the page's astro smartypants turns straight quotes curly, so both sides are read with straight ones
+const plain = (text: string) =>
+  text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
 
-const STORIES = [
-  "super-hexagon-rl",
-  "pickban-gg",
-  "battlebgm",
-  "jasonyue-ca",
-  "virtual-ascii",
-  "tobii-gaze-linux",
-  "mouse-battery",
-  "mangadex-paperback",
-];
+// the dark fade each page paints under its words. a story's follows its words block, a card's is the card's own pseudo-element
+const STORY_FADE: FadeSpec = {
+  owner: "#page .story-hero .words",
+  pseudo: "::before",
+  words: ".words",
+  texts: [".sub", "h1"],
+};
+const CARD_FADE: FadeSpec = {
+  owner: "#page a.project-card.featured",
+  pseudo: "::after",
+  words: ".words",
+  texts: [".sub", "h2"],
+};
+
+const expectOnFade = async (page: Page, spec: FadeSpec, label: string) => {
+  const painted = await paintedFade(page, spec);
+  expect(painted.gradient, label).toContain("linear-gradient(to top");
+  expect(painted.stops.length, label).toBeGreaterThanOrEqual(3);
+  // the second stop is where the solid part of the fade ends, and the words' top has to be under it
+  // half a pixel absorbs the layout's rounding
+  expect(painted.distance - 0.5, label).toBeLessThanOrEqual(
+    painted.stops[1]!.at,
+  );
+  expect(alphaAt(painted, painted.distance), label).toBeGreaterThan(0.5);
+  for (const { selector, ratio } of worstContrasts(painted)) {
+    expect(ratio, `${label} ${selector}`).toBeGreaterThanOrEqual(4.5);
+  }
+};
 
 test.describe("with javascript off", () => {
   test.use({ javaScriptEnabled: false });
 
-  test("the list shows the eight projects in their order", async ({ page }) => {
+  test("the list shows every project in rank order", async ({ page }) => {
     await page.goto("/projects");
     const hrefs = await page
       .locator("#page a[data-project]")
       .evaluateAll((links) => links.map((a) => a.getAttribute("href")));
-    expect(hrefs).toEqual(STORIES_BY_RANK.map((slug) => `/projects/${slug}`));
+    expect(hrefs).toEqual(STORIES.map((slug) => `/projects/${slug}`));
   });
 
-  test("the first three are featured cards and the other five are rows", async ({
+  test("the first three are featured cards and the rest are rows", async ({
     page,
   }) => {
     await page.goto("/projects");
     const cards = page.locator("#page a.project-card.featured");
-    await expect(cards).toHaveCount(3);
-    await expect(page.locator("#page .more a.project-row")).toHaveCount(5);
+    await expect(cards).toHaveCount(FEATURED);
+    await expect(page.locator("#page .more a.project-row")).toHaveCount(
+      STORIES.length - FEATURED,
+    );
     await expect(page.locator("#page .more h2")).toHaveText("More projects");
-    for (const [i, slug] of STORIES_BY_RANK.slice(0, 3).entries()) {
+    for (const [i, slug] of STORIES.slice(0, FEATURED).entries()) {
       await expect(cards.nth(i)).toHaveAttribute("data-project", slug);
     }
-    for (const [i, slug] of STORIES_BY_RANK.slice(3).entries()) {
+    for (const [i, slug] of STORIES.slice(FEATURED).entries()) {
       await expect(
         page.locator("#page .more a.project-row").nth(i),
       ).toHaveAttribute("data-project", slug);
     }
-    await expect(cards.first().locator("h2")).toHaveText(PROJECT.title);
-    await expect(cards.first().locator(".sub")).toHaveText(PROJECT.summary);
-    await expect(cards.first().locator(".kicker")).toHaveText(
-      "Reinforcement learning",
-    );
+    for (const [i, e] of byRank.slice(0, FEATURED).entries()) {
+      await expect(cards.nth(i).locator("h2")).toHaveText(e.data.title);
+      await expect(cards.nth(i).locator(".sub")).toHaveText(e.data.summary);
+      await expect(cards.nth(i).locator(".kicker")).toHaveText(e.data.kicker);
+    }
   });
 
   test("a featured card's chip is its first number", async ({ page }) => {
     await page.goto("/projects");
-    for (const slug of STORIES_BY_RANK.slice(0, 3)) {
-      const source = readFileSync(
-        path.join("src/content/projects", `${slug}.md`),
-        "utf8",
-      );
-      const first = source.match(
-        /stats:\n\s+- value: "([^"]+)"\n\s+label: (.+)\n/,
-      );
-      expect(first, slug).not.toBeNull();
-      const chip = page.locator(`#page a[data-project="${slug}"] .proof`);
-      await expect(chip.locator("b")).toHaveText(first![1]!);
-      await expect(chip).toHaveText(`${first![1]} ${first![2]}`);
+    for (const e of byRank.slice(0, FEATURED)) {
+      const first = e.data.stats[0]!;
+      const chip = page.locator(`#page a[data-project="${e.slug}"] .proof`);
+      await expect(chip.locator("b"), e.slug).toHaveText(first.value);
+      await expect(chip, e.slug).toHaveText(`${first.value} ${first.label}`);
     }
   });
 
@@ -115,7 +137,7 @@ test.describe("with javascript off", () => {
   test("the story shows the hero, links, three numbers, and the sheet in order", async ({
     page,
   }) => {
-    await page.goto(PROJECT.path);
+    await page.goto(projectPath(WITH_LOOP));
     const order = await page.evaluate(
       (selectors) => {
         const nodes = selectors.map((s) => document.querySelector(s));
@@ -140,85 +162,91 @@ test.describe("with javascript off", () => {
       ],
     );
     expect(order).toEqual(order.map(() => true));
-    await expect(page.locator("#page .story-stats .stat")).toHaveCount(3);
-    await expect(
-      page.locator("#page .story-stats .stat").first(),
-    ).toContainText("120/120");
-    await expect(page.locator("#page .highlights li")).toHaveCount(3);
+    const { data } = WITH_LOOP;
+    const stats = page.locator("#page .story-stats .stat");
+    await expect(stats).toHaveCount(3);
+    for (const [i, stat] of data.stats.entries()) {
+      await expect(stats.nth(i).locator("b")).toHaveText(stat.value);
+      await expect(stats.nth(i).locator("span")).toHaveText(stat.label);
+    }
+    const highlights = page.locator("#page .highlights li");
+    await expect(highlights).toHaveCount(3);
+    for (const [i, item] of data.highlights.entries()) {
+      await expect(highlights.nth(i).locator("b")).toHaveText(item.title);
+      await expect(highlights.nth(i).locator("div > span")).toHaveText(
+        item.text,
+      );
+    }
     await expect(page.locator("#page .story-hero .kicker")).toHaveText(
-      "Reinforcement learning",
+      data.kicker,
     );
     await expect(page.locator("#page .story-hero .sub")).toHaveText(
-      PROJECT.summary,
+      data.summary,
     );
     await expect(page.locator("#page .details time")).toHaveAttribute(
       "datetime",
-      PROJECT.date,
+      data.date,
     );
-    await expect(page.locator("#page .details time")).toHaveText(PROJECT_DAY);
-    await expect(page.locator("#page .column")).toContainText(
-      "Super Hexagon RL is a self learning agent",
+    await expect(page.locator("#page .details time")).toHaveText(
+      dayText(data.date),
+    );
+    const first = await page
+      .locator("#page .sheet > p")
+      .first()
+      .evaluate((p) => p.textContent ?? "");
+    expect(plain(first.replace(/\s+/g, " ").trim())).toBe(
+      plain(firstParagraph(WITH_LOOP)),
     );
   });
 
   test("the story's title is the hero's large title", async ({ page }) => {
-    await page.goto(PROJECT.path);
+    await page.goto(projectPath(WITH_LOOP));
     await expect(page.locator("#page h1")).toHaveCount(1);
     await expect(page.locator("#page .story-hero h1.large-title")).toHaveText(
-      PROJECT.title,
+      WITH_LOOP.data.title,
     );
   });
 
   test("the story's hero picture has the entry's alt text and still", async ({
     page,
   }) => {
-    await page.goto(PROJECT.path);
+    await page.goto(projectPath(WITH_LOOP));
+    const { hero } = WITH_LOOP.data;
     const image = page.locator("#page .story-hero img.pic");
-    await expect(image).toHaveAttribute(
-      "alt",
-      "The agent steering through the walls of a Super Hexagon level",
-    );
-    await expect(image).toHaveAttribute(
-      "data-still",
-      "/projects/super-hexagon-rl/hero.webp",
-    );
-    await expect(image).toHaveAttribute(
-      "src",
-      "/projects/super-hexagon-rl/hero-loop.webp",
-    );
+    await expect(image).toHaveAttribute("alt", hero.alt);
+    await expect(image).toHaveAttribute("data-still", hero.still);
+    await expect(image).toHaveAttribute("src", hero.loop!);
     await expect(
       page.locator("#page .story-hero picture > source"),
-    ).toHaveAttribute("srcset", "/projects/super-hexagon-rl/hero.webp");
+    ).toHaveAttribute("srcset", hero.still);
   });
 
   test("a story without a loop has no source and shows its still", async ({
     page,
   }) => {
-    await page.goto("/projects/tobii-gaze-linux");
+    await page.goto(projectPath(NO_LOOP));
     await expect(
       page.locator("#page .story-hero picture > source"),
     ).toHaveCount(0);
     await expect(page.locator("#page .story-hero img.pic")).toHaveAttribute(
       "src",
-      "/projects/tobii-gaze-linux/hero.webp",
+      NO_LOOP.data.hero.still,
     );
   });
 
   test("the first link is the accent pill", async ({ page }) => {
-    await page.goto(PROJECT.path);
+    await page.goto(projectPath(WITH_LOOP));
+    const links = WITH_LOOP.data.links!;
     const pills = page.locator("#page .story-links a.pill");
-    await expect(pills).toHaveCount(2);
+    await expect(pills).toHaveCount(links.length);
     await expect(pills.first()).toHaveClass(/\baccent\b/);
-    await expect(pills.first()).toHaveAttribute(
-      "href",
-      "https://github.com/kymotsujason/super-hexagon-rl",
-    );
-    await expect(pills.first()).toHaveText("GitHub");
+    await expect(pills.first()).toHaveAttribute("href", links[0]!.url);
+    await expect(pills.first()).toHaveText(links[0]!.label);
     await expect(pills.nth(1)).not.toHaveClass(/\baccent\b/);
   });
 
   test("a private source shows as text with no pill", async ({ page }) => {
-    await page.goto("/projects/battlebgm");
+    await page.goto(projectPath(PRIVATE));
     await expect(page.locator("#page .story-links span.private")).toHaveText(
       "Source is private",
     );
@@ -233,7 +261,7 @@ test.describe("with javascript off", () => {
   test("an unreleased source shows Not public yet and no link row", async ({
     page,
   }) => {
-    await page.goto("/projects/virtual-ascii");
+    await page.goto(projectPath(UNRELEASED));
     await expect(page.locator("#page .story-links")).toHaveCount(0);
     await expect(page.locator("#page .details")).toContainText(
       "Not public yet",
@@ -241,13 +269,11 @@ test.describe("with javascript off", () => {
   });
 
   test("Details shows Built on as a link", async ({ page }) => {
-    await page.goto("/projects/tobii-gaze-linux");
+    await page.goto(projectPath(BUILT_ON));
+    const { builtOn } = BUILT_ON.data;
     const row = page.locator("#page .details dd a");
-    await expect(row).toHaveText("tobiifree");
-    await expect(row).toHaveAttribute(
-      "href",
-      "https://github.com/Aetherall/tobiifree",
-    );
+    await expect(row).toHaveText(builtOn!.name);
+    await expect(row).toHaveAttribute("href", builtOn!.url);
   });
 
   for (const slug of STORIES) {
@@ -279,20 +305,36 @@ test.describe("with javascript off", () => {
         .boundingBox())!;
       const hero = (await page.locator("#page .story-hero").boundingBox())!;
       expect(words.y, slug).toBeGreaterThanOrEqual(bar.y + bar.height);
-      // the fade is solid from its foot up to this distance, and the contrast test assumes the words stay under it
-      const solid = await page
-        .locator("#page")
-        .evaluate((el) =>
-          parseFloat(
-            getComputedStyle(el).getPropertyValue("--hero-fade-solid"),
-          ),
-        );
-      expect(hero.y + hero.height - words.y, slug).toBeLessThanOrEqual(solid);
       expect(words.y + words.height, slug).toBeLessThanOrEqual(
         hero.y + hero.height,
       );
     }
   });
+
+  for (const width of [320, 393]) {
+    test(`every story's words sit on the painted fade at ${width} wide`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 852 });
+      for (const slug of STORIES) {
+        await page.goto(`/projects/${slug}`);
+        await expectOnFade(page, STORY_FADE, slug);
+      }
+    });
+
+    test(`a story's longer summary stays on the painted fade at ${width} wide`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 852 });
+      for (const slug of STORIES) {
+        await page.goto(`/projects/${slug}`);
+        await page.locator("#page .story-hero .sub").evaluate((sub) => {
+          sub.textContent = `${sub.textContent} `.repeat(3).trim();
+        });
+        await expectOnFade(page, STORY_FADE, `${slug} with a longer summary`);
+      }
+    });
+  }
 
   for (const width of [320, 393]) {
     test(`the small bar title clears both pills on every story at ${width} wide`, async ({
@@ -318,25 +360,13 @@ test.describe("with javascript off", () => {
   }
 
   for (const width of [320, 393]) {
-    test(`a featured card's words stay in the fade's solid zone at ${width} wide`, async ({
+    test(`a featured card's words sit on the painted fade at ${width} wide`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 852 });
       await page.goto("/projects");
-      const solid = await page
-        .locator("#page")
-        .evaluate((el) =>
-          parseFloat(
-            getComputedStyle(el).getPropertyValue("--hero-fade-solid"),
-          ),
-        );
-      const cards = page.locator("#page a.project-card.featured");
-      for (let i = 0; i < 3; i++) {
-        const card = (await cards.nth(i).boundingBox())!;
-        const words = (await cards.nth(i).locator(".words").boundingBox())!;
-        expect(card.y + card.height - words.y, `card ${i}`).toBeLessThanOrEqual(
-          solid,
-        );
+      for (let i = 0; i < FEATURED; i++) {
+        await expectOnFade(page, { ...CARD_FADE, index: i }, `card ${i}`);
       }
     });
   }
@@ -360,6 +390,14 @@ test.describe("with javascript off", () => {
           ].filter(Boolean),
         );
       expect(sources.length, slug).toBeGreaterThan(0);
+      const hero = await page
+        .locator("#page .story-hero img.pic")
+        .evaluate(async (img: HTMLImageElement) => {
+          await img.decode();
+          return { width: img.naturalWidth, height: img.naturalHeight };
+        });
+      expect(hero.width, `${slug} hero width`).toBeGreaterThan(0);
+      expect(hero.height, `${slug} hero height`).toBeGreaterThan(0);
       let total = 0;
       for (const src of sources) {
         const response = await page.request.get(src);
