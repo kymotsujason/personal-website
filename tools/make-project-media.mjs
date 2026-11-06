@@ -23,10 +23,11 @@ const STILL_WIDTH = 1200;
 const LOOP_WIDTH = 800;
 const THUMB_SIZE = 124;
 const LOOP_LIMIT = 3_200_000;
-const STILL_EXTENSIONS = ["png", "jpg", "webp"];
+const STILL_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
 const LOOP_EXTENSIONS = ["webp", "gif", "mp4", "webm", "mkv"];
 const NAME = /^[a-z0-9-]+$/;
 const NAME_RULE = "lowercase letters, digits, and hyphens";
+const INPUT_NAMES = ["hero", "hero-loop", "thumb"];
 
 const encodeWithTools = ({ kind, source, output }) => {
   const extension = path.extname(source).slice(1).toLowerCase();
@@ -100,26 +101,56 @@ const encodeWithTools = ({ kind, source, output }) => {
   return readFileSync(output);
 };
 
+const unhandled = (file, extensions) =>
+  new Error(
+    `${file}: the tool only takes ${extensions.join(", ")} for this name, so convert it or rename it`,
+  );
+
 const sortInputs = (media) => {
   const inputs = { figures: [] };
+  const claimed = new Map();
+  const claim = (file, output) => {
+    if (claimed.has(output)) {
+      throw new Error(
+        `${claimed.get(output)} and ${file} both make ${output}, so keep one of them`,
+      );
+    }
+    claimed.set(output, file);
+  };
   for (const file of readdirSync(media).sort()) {
     const extension = path.extname(file).slice(1).toLowerCase();
     const base = path.basename(file, path.extname(file));
+    const lower = base.toLowerCase();
+    if (!INPUT_NAMES.includes(lower) && !lower.startsWith("fig-")) {
+      continue;
+    }
+    if (base !== lower) {
+      throw new Error(`${file}: the name must use ${NAME_RULE}`);
+    }
     const source = path.join(media, file);
-    if (base === "hero" && STILL_EXTENSIONS.includes(extension)) {
-      inputs.hero = source;
-    } else if (base === "hero-loop" && LOOP_EXTENSIONS.includes(extension)) {
+    if (base === "hero-loop") {
+      if (!LOOP_EXTENSIONS.includes(extension)) {
+        throw unhandled(file, LOOP_EXTENSIONS);
+      }
+      claim(file, "hero-loop.webp");
       inputs.loop = source;
-    } else if (base === "thumb" && STILL_EXTENSIONS.includes(extension)) {
-      inputs.thumb = source;
-    } else if (base.startsWith("fig-")) {
+    } else if (base === "hero" || base === "thumb") {
+      if (!STILL_EXTENSIONS.includes(extension)) {
+        throw unhandled(file, STILL_EXTENSIONS);
+      }
+      claim(file, `${base}.webp`);
+      inputs[base] = source;
+    } else {
       const name = base.slice(4);
       if (!NAME.test(name)) {
         throw new Error(`${file}: the name after fig- must use ${NAME_RULE}`);
       }
-      if (extension === "svg" || STILL_EXTENSIONS.includes(extension)) {
-        inputs.figures.push({ name, source, svg: extension === "svg" });
+      const svg = extension === "svg";
+      if (!svg && !STILL_EXTENSIONS.includes(extension)) {
+        throw unhandled(file, ["svg", ...STILL_EXTENSIONS]);
       }
+      claim(file, `fig-${name}.${svg ? "svg" : "webp"}`);
+      inputs.figures.push({ name, source, svg });
     }
   }
   return inputs;

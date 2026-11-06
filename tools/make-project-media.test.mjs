@@ -253,3 +253,68 @@ test("the allowlist is written before any image", (t) => {
     assert.equal(listed, 3);
   }
 });
+
+test("a .jpeg hero, thumb, and figure are each used", (t) => {
+  const site = makeSite(t, {
+    "hero.jpeg": "p",
+    "thumb.jpeg": "t",
+    "fig-demo.jpeg": "f",
+  });
+  const sources = [];
+  makeProjectMedia({
+    site,
+    slug: "demo",
+    encode: (job) => {
+      sources.push([job.kind, job.source.split("/").pop()]);
+      return exifWebp();
+    },
+  });
+  assert.deepEqual(sources, [
+    ["still", "hero.jpeg"],
+    ["thumb", "thumb.jpeg"],
+    ["still", "fig-demo.jpeg"],
+  ]);
+  assert.deepEqual(outputs(site), ["fig-demo.webp", "hero.webp", "thumb.webp"]);
+});
+
+test("an input in a format the tool doesn't handle is refused by name", (t) => {
+  for (const name of [
+    "fig-demo.gif",
+    "fig-demo.heic",
+    "hero.gif",
+    "hero-loop.png",
+    "thumb.gif",
+    "thumb",
+    "HERO.png",
+    "Fig-demo.png",
+  ]) {
+    const site = makeSite(t, { "hero.png": "p", [name]: "x" });
+    assert.throws(
+      () => makeProjectMedia({ site, slug: "demo", encode: fakeEncode }),
+      (error) => error.message.includes(name),
+      name,
+    );
+    assert.deepEqual(outputs(site), [], name);
+    assert.deepEqual(allowlistOf(site), {}, name);
+  }
+});
+
+test("two inputs that make the same output are refused by name", (t) => {
+  for (const [first, second, extra] of [
+    ["hero.jpg", "hero.png", {}],
+    ["hero-loop.gif", "hero-loop.mp4", { "hero.png": "p" }],
+    ["thumb.jpg", "thumb.webp", { "hero.png": "p" }],
+    ["fig-demo.jpg", "fig-demo.png", { "hero.png": "p" }],
+    ["fig-demo.PNG", "fig-demo.png", { "hero.png": "p" }],
+  ]) {
+    const site = makeSite(t, { ...extra, [first]: "a", [second]: "b" });
+    assert.throws(
+      () => makeProjectMedia({ site, slug: "demo", encode: fakeEncode }),
+      (error) =>
+        error.message.includes(first) && error.message.includes(second),
+      `${first} and ${second}`,
+    );
+    assert.deepEqual(outputs(site), [], first);
+    assert.deepEqual(allowlistOf(site), {}, first);
+  }
+});
