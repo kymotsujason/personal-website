@@ -315,6 +315,29 @@ test.describe("with javascript off", () => {
     });
   }
 
+  for (const slug of STORIES) {
+    test(`the story's first load stays under 4 MB of images (${slug})`, async ({
+      page,
+    }) => {
+      await page.goto(`/projects/${slug}`);
+      const sources = await page
+        .locator("#page img")
+        .evaluateAll((imgs) =>
+          [
+            ...new Set(imgs.map((img) => (img as HTMLImageElement).currentSrc)),
+          ].filter(Boolean),
+        );
+      expect(sources.length, slug).toBeGreaterThan(0);
+      let total = 0;
+      for (const src of sources) {
+        const response = await page.request.get(src);
+        expect(response.ok(), src).toBe(true);
+        total += (await response.body()).length;
+      }
+      expect(total, `${slug} ${total} bytes`).toBeLessThan(4_000_000);
+    });
+  }
+
   test("the flat home card names the latest project", async ({ page }) => {
     await page.goto("/");
     const card = page.locator("#page .widget", {

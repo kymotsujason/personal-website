@@ -1,6 +1,6 @@
 // screenshots of the app pages on the dev server, on the gpu, for the design pass. Run by hand, not by pnpm verify.
-// OUT names the folder (required), BASE the server, PAGES and PROFILES limit the run, POSTS lists the post slugs to shoot.
-// Staged posts are copied in from .import for the run and removed in a finally. Never stage them.
+// OUT names the folder (required), BASE the server, PAGES and PROFILES limit the run. PAGES is the projects list and the eight stories.
+// Staged posts are copied in from .import for the run and removed in a finally, which also deletes the tracked copies, so run git checkout on the blog folders after.
 import {
   copyFileSync,
   existsSync,
@@ -105,13 +105,19 @@ const pruneEmpty = (dir) => {
   }
 };
 
+const STORIES = [
+  "super-hexagon-rl",
+  "pickban-gg",
+  "battlebgm",
+  "jasonyue-ca",
+  "virtual-ascii",
+  "tobii-gaze-linux",
+  "mouse-battery",
+  "mangadex-paperback",
+];
 const PAGES = [
-  ["about", "/about"],
   ["projects", "/projects"],
-  ["project", "/projects/jasonyue-ca"],
-  ["blog", "/blog"],
-  ...POSTS.map((slug) => [`post-${slug}`, `/blog/${slug}`]),
-  ["music", "/music"],
+  ...STORIES.map((slug) => [`project-${slug}`, `/projects/${slug}`]),
 ].filter(
   ([name]) =>
     !process.env.PAGES ||
