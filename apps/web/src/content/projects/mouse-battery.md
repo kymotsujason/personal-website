@@ -8,7 +8,7 @@ stats:
   - value: "9"
     label: releases between September 28 and October 17
   - value: "3"
-    label: package formats in each release, for Debian, Fedora, and Arch
+    label: package formats per release
   - value: "About 42"
     label: charges before it judges battery health
 links:
@@ -26,7 +26,7 @@ highlights:
   - title: Reads mice the kernel leaves alone
     text: Linux doesn't support some mice on its own, such as the PRO X3 SUPERSTRIKE's receiver and cable, so Mouse Battery talks to them directly in Logitech's HID++ protocol. Mice the kernel does drive are read through UPower.
   - title: One sandboxed service opens the receiver
-    text: Only one background service ever touches the receiver, and it runs as its own system user in a systemd sandbox. The udev rule hands over an interface only when its report descriptor (the device's own description of itself) passes the app's check.
+    text: The package lets only its own service open the receiver, and that service runs as its own system user in a systemd sandbox. The udev rule hands over an interface only when its report descriptor (the device's own description of itself) passes the app's check.
   - title: A health judgment, with honest limits
     text: After about 42 charges it compares how the battery drains and charges with when tracking began, and warns at 15% worse. Until then it says it's still learning, and it says so when a mouse reports too little.
 stack:
@@ -46,6 +46,6 @@ Mouse Battery shows the battery level of a Logitech mouse in the Linux system tr
 
 A small service reads the mice and saves each one's history in a SQLite database. The tray app and the battery window ask it over the system bus, and it's the only program the package lets open the receiver or cable. The service limits how often it reads, with five reads at once for each account and then one every 30 seconds.
 
-<figure><img src="/projects/mouse-battery/fig-window-hours.webp" width="1200" height="749" alt="The battery window on its Hours per Charge tab, with a line chart of hours per charge over time and a health box saying the battery is doing as well as when tracking began" loading="lazy"><figcaption>The Hours per Charge tab, with the health box, charge cycles, and charging speed.</figcaption></figure>
+<figure><img src="/projects/mouse-battery/fig-window-hours.webp" width="1200" height="749" alt="Hours per charge over time as a line chart, with a health box saying the battery is doing as well as when tracking began" loading="lazy"><figcaption>The Hours per Charge tab, with the health box, charge cycles, and charging speed.</figcaption></figure>
 
 Packages come for Debian, Fedora, and Arch, and each file in a release after 1.1.0 carries a signed record of how it was built, which `gh attestation verify` checks. The README lists the mice it has been tested with, and the known limits sit beside them.
