@@ -24,7 +24,7 @@ highlights:
   - title: Tokens in the wrong slots
     text: The access and refresh tokens can arrive in swapped slots. The source reads each token's type and puts them back, instead of trusting the slot.
   - title: Sign in that handles refresh races
-    text: A request refreshes a token that's about to expire once, and parallel requests share that refresh. A request the API turns down with a 401 gets one retry.
+    text: A request refreshes a token that's about to expire once, and parallel requests share that refresh. A request the API turns down with a 401 gets one retry, and only after a refresh that rotated the tokens or lost a race to a newer rotation.
   - title: Search that takes a pasted ID
     text: Prefixes such as id, ch, grp, usr, author, and list jump straight to a title, chapter, group, user, author, or list, and so does a pasted MangaDex link. Title searches are ordered by relevance.
 builtOn:
@@ -38,11 +38,11 @@ status: Maintained
 license: GPL 3.0 or later
 ---
 
-MangaDex for Paperback is the MangaDex source in Paperback, an iOS manga reader. It lives in the [Inkdex extensions repo](https://github.com/inkdex/general-extensions), where I maintain it, and this page covers only the MangaDex source. Its work includes sign in, search, and the title and chapter handling that sits behind them.
+MangaDex for Paperback is the MangaDex source in Paperback, an iOS manga reader. It lives in the [Inkdex extensions repo](https://github.com/inkdex/general-extensions), where I maintain it. Its work includes sign in, search, and the title and chapter handling that sits behind them.
 
 ## How it works
 
-Paperback runs on iOS, so the extension is TypeScript against the Paperback SDK, and every request goes through one network layer. That layer checks whether the access token is within 60 seconds of expiring and refreshes it first, so a screen full of requests doesn't each try to sign in again.
+The extension is TypeScript against the Paperback SDK, and every request goes through one network layer. That layer checks whether the access token is within 60 seconds of expiring and refreshes it first, so a screen full of requests doesn't each try to sign in again.
 
 <figure><img src="/projects/mangadex-paperback/fig-token-refresh.svg" alt="A flowchart of the token refresh, from a request through the expiry check to five outcomes" loading="lazy"><figcaption>The five outcomes of a refresh. A 401 retries once, and only after a refresh that rotated the tokens or lost a race to a newer rotation.</figcaption></figure>
 

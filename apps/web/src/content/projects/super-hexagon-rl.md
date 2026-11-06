@@ -6,7 +6,7 @@ rank: 1
 date: "2026-10-19"
 stats:
   - value: "120/120"
-    label: real game runs last the full 10 minutes
+    label: lockstep runs of the real game last the full 10 minutes
   - value: "1.86M"
     label: simulator steps a second
   - value: "15 hours"
@@ -45,7 +45,7 @@ status: Done
 license: MIT
 ---
 
-Super Hexagon RL is a self learning agent that plays every level of Terry Cavanagh's Super Hexagon, the real game running on Linux, with real key presses. It isn't affiliated with Terry Cavanagh and doesn't include the game or its code. It exists because I wanted to see whether a small policy could survive a game that most people lose in seconds, and whether I could make it fast to train without ever changing the game itself. The result survives the full 10 minutes in all 120 of its real game runs, and it plays all six levels live in a 7 minute video that isn't edited.
+Super Hexagon RL is a self learning agent for Terry Cavanagh's Super Hexagon, the real game running on Linux. In lockstep with the real game, which pauses after each decision until the agent answers, it survives the full 10 minutes in all 120 of its runs. It also plays all six levels live, on the game's own clock with key presses sent to the game's window, in a 7 minute video that isn't edited. It isn't affiliated with Terry Cavanagh and doesn't include the game or its code.
 
 ## How it works
 
@@ -57,4 +57,4 @@ Real game steps are still slow, so the agent trains against a simulator instead.
 
 Playing live is a different problem from training, since the game runs on its own clock and the agent has to keep up. It reads the game's memory, sends keys straight to the game's window, and checks that its keys land on the very next tick. 31,774 of 31,777 key changes did.
 
-The best survival score and the smoothest play pull in different directions. One model taps about six times a second and never dies in 120 real game runs. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold, and still reaches the cap in 116 of 120.
+The best survival score and the smoothest play pull in different directions. One model taps about six times a second and never dies in 120 lockstep runs of the real game. The one I'd call best holds keys the way a person would, at 1.19 presses a second with a 340 ms average hold, and still reaches the cap in 116 of 120.

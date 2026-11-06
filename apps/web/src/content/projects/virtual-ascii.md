@@ -15,7 +15,7 @@ source: unreleased
 hero:
   still: /projects/virtual-ascii/hero.webp
   loop: /projects/virtual-ascii/hero-loop.webp
-  alt: Green glyphs on a black background in the Matrix look, shown at three levels of detail
+  alt: Rows of green glyphs, a few bright and most dim, filling a black frame in the Matrix look
   position: 50% 50%
 thumb: /projects/virtual-ascii/thumb.webp
 highlights:
