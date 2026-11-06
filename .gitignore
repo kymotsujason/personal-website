@@ -11,3 +11,4 @@ probes/out/
 .dev.vars
 .wrangler/
 .import/
+.media/
