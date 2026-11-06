@@ -343,6 +343,17 @@ html {
   opacity: 1;
 }
 
+/* on a story page the grid keeps a side track at least as wide as the back pill, so the small title ends before
+   either pill and takes an ellipsis instead of running under one */
+#page[data-page="project"] > header {
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr) minmax(112px, auto);
+}
+
+#page[data-page="project"] > header .inline-title {
+  max-width: 100%;
+  text-align: center;
+}
+
 /* the scroll edges: text passing under the floating bar or toolbar blurs and darkens into the edge instead of
    running into the glass */
 #page .edge {
@@ -1642,9 +1653,12 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 #page[data-page="project"] .story-links .pill.accent {
   --tint: color-mix(
     in srgb,
-    var(--accent) calc(var(--accent-fill) * 100%),
+    color-mix(in srgb, var(--accent) 55%, #000) 80%,
     transparent
   );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 18px 40px -18px rgba(0, 0, 0, 0.55);
 }
 
 #page[data-page="project"] .story-links .private {

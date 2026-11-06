@@ -165,6 +165,32 @@ test("white reads on every accent filled pill over the sky", () => {
   });
 });
 
+// the story's first link pill carries a stronger tint, the accent darkened with black, so it's checked with its own
+// tint over the same layers
+test("white reads on the story's accent pill over the sky", () => {
+  const found = flat.match(
+    /\.story-links \.pill\.accent\s*\{[^}]*--tint:\s*color-mix\(\s*in srgb,\s*color-mix\(in srgb, var\(--accent\) (\d+)%, #000\) (\d+)%/,
+  );
+  if (!found) {
+    throw new Error("flat.css has no .story-links .pill.accent tint");
+  }
+  const shade = Number(found[1]) / 100;
+  const tint = Number(found[2]) / 100;
+  expect(tint).toBeGreaterThan(accentFill);
+  const projects = accents.find((a) => a.app === "Projects");
+  const color = hexRgb(projects.color).map((v) => v * shade);
+  eachBack((bg, label) => {
+    let pill = composite(RIM, bg);
+    pill = composite(GLASS, pill);
+    pill = composite([0, 0, 0, pillBase], pill);
+    pill = composite([...color, tint], pill);
+    pill = composite(HIGHLIGHT, pill);
+    expect(contrastRatio("#ffffff", hex(pill)), label).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+});
+
 const rule = (selector) => {
   const found = flat.match(
     new RegExp(`${selector.replace(/[[\]".]/g, "\\$&")}\\s*\\{([^}]*)\\}`),
