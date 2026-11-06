@@ -28,10 +28,6 @@ const PRIVATE = byRank.find((e) => e.data.source === "private")!;
 const UNRELEASED = byRank.find((e) => e.data.source === "unreleased")!;
 const BUILT_ON = byRank.find((e) => e.data.builtOn)!;
 
-// the page's astro smartypants turns straight quotes curly, so both sides are read with straight ones
-const plain = (text: string) =>
-  text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
-
 // the dark fade each page paints under its words. a story's follows its words block, a card's is the card's own pseudo-element
 const STORY_FADE: FadeSpec = {
   owner: "#page .story-hero .words",
@@ -194,9 +190,7 @@ test.describe("with javascript off", () => {
       .locator("#page .sheet > p")
       .first()
       .evaluate((p) => p.textContent ?? "");
-    expect(plain(first.replace(/\s+/g, " ").trim())).toBe(
-      plain(firstParagraph(WITH_LOOP)),
-    );
+    expect(first.replace(/\s+/g, " ").trim()).toBe(firstParagraph(WITH_LOOP));
   });
 
   test("the story's title is the hero's large title", async ({ page }) => {

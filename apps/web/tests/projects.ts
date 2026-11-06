@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { parse } from "yaml";
+import { parseFrontmatter } from "astro/markdown";
+import { createSatteriMarkdownProcessor } from "@astrojs/markdown-satteri";
 
 const DIR = path.join("src/content/projects");
 
@@ -23,24 +24,65 @@ export type Entry = {
     builtOn?: { name: string; url: string };
   };
   body: string;
+  // the first paragraph's text as the page renders it
+  intro: string;
 };
 
-const read = (file: string): Entry => {
-  const source = readFileSync(path.join(DIR, file), "utf8");
-  const found = source.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!found) {
+// the same markdown processor the site builds with, with its smartPunctuation off like astro.config.mjs
+const processor = await createSatteriMarkdownProcessor({
+  syntaxHighlight: false,
+  features: { smartPunctuation: false },
+});
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+};
+
+const introText = async (body: string) => {
+  const { code } = await processor.render(body);
+  const paragraph = code.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+  if (!paragraph) {
+    throw new Error("an entry has no first paragraph");
+  }
+  return paragraph[1]!
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (all, hex, dec, name) =>
+      hex || dec
+        ? String.fromCodePoint(hex ? parseInt(hex, 16) : Number(dec))
+        : (ENTITIES[name] ?? all),
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+// the frontmatter is read by astro's own parser, so line endings and yaml options match the build
+export const parseEntry = async (
+  file: string,
+  source: string,
+): Promise<Entry> => {
+  const { frontmatter, rawFrontmatter, content } = parseFrontmatter(source);
+  if (!rawFrontmatter) {
     throw new Error(`${file} has no frontmatter`);
   }
   return {
     slug: file.replace(/\.md$/, ""),
-    data: parse(found[1]!),
-    body: found[2]!,
+    data: frontmatter as Entry["data"],
+    body: content,
+    intro: await introText(content),
   };
 };
 
-export const entries: Entry[] = readdirSync(DIR)
-  .filter((file) => file.endsWith(".md"))
-  .map(read);
+export const entries: Entry[] = await Promise.all(
+  readdirSync(DIR)
+    .filter((file) => file.endsWith(".md"))
+    .map((file) =>
+      parseEntry(file, readFileSync(path.join(DIR, file), "utf8")),
+    ),
+);
 
 export const byRank = [...entries].sort((a, b) => a.data.rank - b.data.rank);
 
@@ -81,11 +123,5 @@ export const dayText = (date: string) => {
   return `${MONTHS[month! - 1]} ${day}, ${year}`;
 };
 
-// the first paragraph of the body, with the inline markdown marks taken off, to match the rendered text
-export const firstParagraph = (e: Entry) =>
-  e.body
-    .trim()
-    .split(/\n\s*\n/)[0]!
-    .replace(/[*_`]/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\s+/g, " ");
+// the first paragraph of the body, as the page renders its text
+export const firstParagraph = (e: Entry) => e.intro;

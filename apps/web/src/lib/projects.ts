@@ -1,9 +1,6 @@
 import { getCollection } from "astro:content";
 import { newestEntryFirst } from "./format";
 
-export const sortedProjects = async () =>
-  (await getCollection("projects")).sort(newestEntryFirst);
-
 // the build fails on a duplicate rank or a gap, so the list can't quietly lose or repeat an entry
 export const orderByRank = <T extends { id: string; data: { rank: number } }>(
   entries: T[],
