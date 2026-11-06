@@ -1511,6 +1511,8 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
    the brightest picture (lib/contrast.test.js reads it from here) */
 #page[data-page="project"] {
   --hero-fade-under-title: 0.8;
+  --hero-fade-color: 22, 20, 44;
+  --hero-fade-solid: 210px;
 }
 
 #page[data-page="project"] .story-hero {
@@ -1532,9 +1534,10 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   pointer-events: none;
   background: linear-gradient(
     to top,
-    rgba(8, 8, 16, 0.94) 0,
-    rgba(8, 8, 16, var(--hero-fade-under-title)) 260px,
-    rgba(8, 8, 16, 0) 380px
+    rgba(var(--hero-fade-color), 0.96) 0,
+    rgba(var(--hero-fade-color), var(--hero-fade-under-title))
+      var(--hero-fade-solid),
+    rgba(var(--hero-fade-color), 0) calc(var(--hero-fade-solid) + 90px)
   );
 }
 
@@ -1590,11 +1593,9 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 }
 
 #page[data-page="project"] .story-links .private {
-  padding: 6px 12px;
-  border-radius: 999px;
   font-size: 14px;
-  background: rgba(0, 0, 0, 0.5);
   color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
 }
 
 #page[data-page="project"] .story-stats {

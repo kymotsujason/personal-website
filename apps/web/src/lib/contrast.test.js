@@ -25,6 +25,10 @@ const number = (name) => {
 const accentFill = number("--accent-fill");
 const pillBase = number("--pill-base");
 const heroFade = number("--hero-fade-under-title");
+const heroFadeColor = flat
+  .match(/--hero-fade-color:\s*(\d+),\s*(\d+),\s*(\d+)\s*;/)
+  .slice(1)
+  .map(Number);
 const RIM = [255, 255, 255, 0.6];
 const SHEET = [12, 12, 20, 0.72];
 const GLASS = [255, 255, 255, 0.14];
@@ -339,8 +343,7 @@ test("white reads on the flat home's widgets", () => {
 
 // the hero's dark fade, at the top edge of the words on it, over a picture that is pure white at its brightest
 test("white hero text clears 4.5:1 on a white picture", () => {
-  const FADE = [8, 8, 16];
-  const under = composite([...FADE, heroFade], [255, 255, 255]);
+  const under = composite([...heroFadeColor, heroFade], [255, 255, 255]);
   expect(contrastRatio("#ffffff", hex(under))).toBeGreaterThanOrEqual(4.5);
   const projects = accents.find((a) => a.app === "Projects");
   expect(contrastRatio(projects.color, hex(under))).toBeGreaterThanOrEqual(4.5);

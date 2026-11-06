@@ -205,6 +205,15 @@ test.describe("with javascript off", () => {
         .boundingBox())!;
       const hero = (await page.locator("#page .story-hero").boundingBox())!;
       expect(words.y, slug).toBeGreaterThanOrEqual(bar.y + bar.height);
+      // the fade is solid from its foot up to this distance, and the contrast test assumes the words stay under it
+      const solid = await page
+        .locator("#page")
+        .evaluate((el) =>
+          parseFloat(
+            getComputedStyle(el).getPropertyValue("--hero-fade-solid"),
+          ),
+        );
+      expect(hero.y + hero.height - words.y, slug).toBeLessThanOrEqual(solid);
       expect(words.y + words.height, slug).toBeLessThanOrEqual(
         hero.y + hero.height,
       );
