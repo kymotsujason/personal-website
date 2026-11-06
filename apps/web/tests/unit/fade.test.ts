@@ -118,6 +118,27 @@ test("a text low in the fade fails even when the words' top passes", () => {
   expect(ratios[1]!.ratio).toBeLessThan(4.5);
 });
 
+test("a text crossing a white stop inside its box fails while both edges pass", () => {
+  const stops = [
+    { rgb: [0, 0, 0], alpha: 1, at: 0 },
+    { rgb: [0, 0, 0], alpha: 1, at: 30 },
+    { rgb: [255, 255, 255], alpha: 1, at: 50 },
+    { rgb: [0, 0, 0], alpha: 1, at: 70 },
+    { rgb: [0, 0, 0], alpha: 0, at: 260 },
+  ];
+  const edges = (from: number, to: number) =>
+    worstContrasts(
+      painted({
+        stops,
+        distance: to,
+        texts: [{ selector: "h1", color: WHITE, from, to }],
+      }),
+    )[0]!.ratio;
+  expect(edges(20, 20)).toBeGreaterThan(4.5);
+  expect(edges(80, 80)).toBeGreaterThan(4.5);
+  expect(edges(20, 80)).toBeLessThan(4.5);
+});
+
 test("a text's own color decides when only the kicker fails", () => {
   const dark = [30, 30, 30, 1];
   const ratios = worstContrasts(
