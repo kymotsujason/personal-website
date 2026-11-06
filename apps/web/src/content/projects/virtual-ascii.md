@@ -9,7 +9,7 @@ stats:
     label: of one core at 720p, 30 fps, window closed
   - value: "5 ms"
     label: longest app delay for 95% of frames, down from 17 ms
-  - value: "11 ms"
+  - value: "11.3 ms"
     label: camera to output for 95% of frames, at most
 source: unreleased
 hero:
@@ -29,8 +29,8 @@ results:
   src: /projects/virtual-ascii/fig-speed.svg
   width: 960
   height: 520
-  alt: Three pairs of bars for CPU use, the app's own delay, and camera to output time, with the after bar much shorter than the before bar in every pair
-  caption: Median of 5 runs each at 720p and 30 fps in the Matrix look with the window closed, measured on 2026-10-11 and 2026-10-16. CPU use with the window closed moves from about 14.7% to 18.7% with the size of the camera's frames, and with the window open it's 26.06%. The app's own delay runs from taking a frame off the camera queue to finishing its write. Camera to output time also counts the wait before that. It adds two separate measurements, each at its 97.5th percentile, so the real value for 95% of frames is at most that.
+  alt: Bars showing CPU use and two delays dropping sharply after the speed work
+  caption: CPU use fell from 50.21% to 14.68%, the app's own delay from 17.23 ms to 4.98 ms, and camera to output time from 115.8 ms to 11.3 ms. These are medians of 5 runs each at 720p and 30 fps in the Matrix look with the window closed, measured on 2026-10-11 and 2026-10-16. CPU use with the window closed moves from about 14.7% to 18.7% with the size of the camera's frames, and with the window open it's 26.06%. The app's own delay runs from taking a frame off the camera queue to finishing its write. Camera to output time also counts the wait before that. It adds two separate measurements, each at its 97.5th percentile, so the real value for 95% of frames is at most that.
 stack:
   - Rust
   - V4L2
@@ -50,4 +50,4 @@ Most of the work went into making that cheap. The renderer draws straight into t
 
 <figure><img src="/projects/virtual-ascii/fig-settings-sheet.webp" width="840" height="1200" alt="The settings sheet, with the camera choice, the virtual camera's quality and frame rate, the look's controls, and startup options" loading="lazy"><figcaption>The settings sheet. Quality and frame rate set what calls receive, and the look has its own controls.</figcaption></figure>
 
-The camera's frame size moves the CPU number by several points. On one day the camera sent frames of about 240 KB and the app used 14.68% of a core, and on another they were 460 to 490 KB and it used 18.7%, with the same build. Both days stayed under the 20% of one core that was the target, so the figure is a range of about 15 to 19%. Before the speed work it used about 50% of a core.
+The camera's frame size moves the CPU number by several points. On one day the camera sent frames of about 240 KB and the app used 14.68% of a core. On another day they were 460 to 490 KB and it used 18.7%, with the same build. Both days stayed under the 20% of one core that was the target, so the figure is a range of about 15 to 19%. Before the speed work it used about 50% of a core.
