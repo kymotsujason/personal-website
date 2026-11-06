@@ -4,7 +4,11 @@ import { getViteConfig } from "astro/config";
 export default getViteConfig({
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,js}", "worker/**/*.test.js"],
+    include: [
+      "src/**/*.test.{ts,js}",
+      "worker/**/*.test.js",
+      "tests/unit/**/*.test.ts",
+    ],
     exclude: ["src/scene/**"],
   },
 });

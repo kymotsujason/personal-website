@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { composite, contrastRatio } from "../../src/lib/contrast.js";
 
 type Stop = { rgb: number[]; alpha: number; at: number };
 
@@ -8,6 +9,10 @@ export type Painted = {
   // how far the words' top sits above the pseudo-element's foot, and how tall the pseudo-element is
   distance: number;
   height: number;
+  // the pseudo-element's own opacity, whether it is painted at all, and whether it spans the words sideways
+  opacity: number;
+  hidden: boolean;
+  covers: boolean;
   texts: { selector: string; color: number[] }[];
 };
 
@@ -31,6 +36,9 @@ export const paintedFade = (page: Page, spec: FadeSpec): Promise<Painted> =>
       const style = getComputedStyle(ownerEl, pseudo);
       const box = ownerEl.getBoundingClientRect();
       const foot = box.top + parseFloat(style.top) + parseFloat(style.height);
+      const left = box.left + parseFloat(style.left);
+      const right = left + parseFloat(style.width);
+      const wordsBox = wordsEl.getBoundingClientRect();
       const color = (value: string) =>
         (value.match(/[0-9.]+/g) ?? []).map(Number);
       return {
@@ -38,6 +46,13 @@ export const paintedFade = (page: Page, spec: FadeSpec): Promise<Painted> =>
         stops: [],
         distance: foot - wordsEl.getBoundingClientRect().top,
         height: parseFloat(style.height),
+        opacity: parseFloat(style.opacity),
+        hidden:
+          style.display === "none" ||
+          style.visibility !== "visible" ||
+          style.content === "none" ||
+          style.content === "normal",
+        covers: left <= wordsBox.left + 0.5 && right >= wordsBox.right - 0.5,
         texts: texts.map((selector) => ({
           selector,
           color: color(
@@ -67,48 +82,48 @@ const parseStops = (gradient: string, height: number): Stop[] =>
         : parseFloat(m[5]!),
   }));
 
-// the fade's alpha at a distance above its foot, between the stops it was painted with
-export const alphaAt = (painted: Painted, distance: number): number => {
+// the fade's color and alpha at a distance above its foot, between the stops it was painted with. the colors blend
+// premultiplied by their alpha, the way css blends a gradient
+const fadeAt = (painted: Painted, distance: number) => {
   const { stops, height } = painted;
   if (distance < 0 || distance > height) {
-    return 0;
+    return { rgb: [255, 255, 255], alpha: 0 };
   }
   for (let i = 1; i < stops.length; i++) {
     const from = stops[i - 1]!;
     const to = stops[i]!;
     if (distance <= to.at) {
       const t = (distance - from.at) / (to.at - from.at);
-      return from.alpha + (to.alpha - from.alpha) * t;
+      const alpha = from.alpha + (to.alpha - from.alpha) * t;
+      if (alpha === 0) {
+        return { rgb: from.rgb, alpha: 0 };
+      }
+      const rgb = from.rgb.map(
+        (c, k) =>
+          (c * from.alpha + (to.rgb[k]! * to.alpha - c * from.alpha) * t) /
+          alpha,
+      );
+      return { rgb, alpha };
     }
   }
-  return 0;
+  return { rgb: [255, 255, 255], alpha: 0 };
 };
 
-const channel = (v: number) => {
-  const s = v / 255;
-  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-};
+export const alphaAt = (painted: Painted, distance: number): number =>
+  fadeAt(painted, distance).alpha;
 
-const luminance = (rgb: number[]) =>
-  0.2126 * channel(rgb[0]!) +
-  0.7152 * channel(rgb[1]!) +
-  0.0722 * channel(rgb[2]!);
-
-const over = (top: number[], alpha: number, under: number[]) =>
-  under.map((u, i) => top[i]! * alpha + u * (1 - alpha));
-
-export const ratio = (a: number[], b: number[]) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi! + 0.05) / (lo! + 0.05);
-};
-
-// each text's contrast against the fade over a picture that is pure white behind it, with the text's own alpha laid on top
+// each text's contrast against the fade over a picture that is pure white behind it, with the text's own alpha laid on top.
+// a fade that is hidden, transparent, or doesn't span the words leaves the white picture as the backing
 export const worstContrasts = (painted: Painted) => {
-  const alpha = alphaAt(painted, painted.distance);
-  const color = painted.stops[0]?.rgb ?? [255, 255, 255];
-  const backing = over(color, alpha, [255, 255, 255]);
+  const { rgb, alpha } = fadeAt(painted, painted.distance);
+  const painting = painted.hidden || !painted.covers ? 0 : painted.opacity;
+  const white = [255, 255, 255];
+  const backing = composite([...rgb, alpha * painting], white);
   return painted.texts.map(({ selector, color: text }) => ({
     selector,
-    ratio: ratio(over(text.slice(0, 3), text[3] ?? 1, backing), backing),
+    ratio: contrastRatio(
+      composite([...text.slice(0, 3), text[3] ?? 1], backing),
+      backing,
+    ),
   }));
 };
