@@ -59,11 +59,10 @@
 <rect x="760" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
 <text x="774" y="368" font-size="14" font-weight="600" fill="#ffffff">transient</text>
 <text x="774" y="392" font-size="12.5" fill="#c3c2b7">The auth endpoint</text>
-<text x="774" y="410" font-size="12.5" fill="#c3c2b7">failed. No more</text>
-<text x="774" y="428" font-size="12.5" fill="#c3c2b7">refreshes for 10 s.</text>
+<text x="774" y="410" font-size="12.5" fill="#c3c2b7">failed, so it's down</text>
+<text x="774" y="428" font-size="12.5" fill="#c3c2b7">or the network blipped.</text>
 <line x1="774" y1="446" x2="906" y2="446" stroke="#383835"/>
-<text x="774" y="468" font-size="12.5" fill="#e8e8e6">Not expired: send it.</text>
-<text x="774" y="486" font-size="12.5" fill="#e8e8e6">Past expiry: send</text>
-<text x="774" y="504" font-size="12.5" fill="#e8e8e6">without a token.</text>
+<text x="774" y="468" font-size="12.5" fill="#e8e8e6">Error logged.</text>
+<text x="774" y="486" font-size="12.5" fill="#e8e8e6">Send without a token.</text>
 <text x="40" y="566" font-size="12.5" fill="#898781">A 401 from the API gets one retry, and only after a refresh that ended in rotated or racedRotation.</text>
 </svg>

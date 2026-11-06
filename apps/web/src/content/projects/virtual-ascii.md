@@ -48,4 +48,4 @@ Most of the work went into making that cheap. The renderer draws straight into t
 
 <figure><img src="/projects/virtual-ascii/fig-settings-sheet.webp" alt="The settings sheet, with the camera list, quality and frame rate for the virtual camera, contrast and invert brightness for the look, and options to open at login and keep running in the tray" loading="lazy"><figcaption>The settings sheet. Quality and frame rate set what calls receive, and the look has its own controls.</figcaption></figure>
 
-The camera's frame size moves the CPU number by several points. On one day the camera sent frames of about 240 KB and the app used 14.68% of a core, and on another they were 460 to 490 KB and it used 18.7%, with the same build. The target was 20% of one core, so the page says 15 to 19%.
+The camera's frame size moves the CPU number by several points. On one day the camera sent frames of about 240 KB and the app used 14.68% of a core, and on another they were 460 to 490 KB and it used 18.7%, with the same build. Both days stayed under the 20% of one core that was the target, so the figure is a range of about 15 to 19%.
