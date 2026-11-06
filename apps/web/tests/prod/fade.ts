@@ -118,11 +118,14 @@ export const worstContrasts = (painted: Painted) => {
   const { rgb, alpha } = fadeAt(painted, painted.distance);
   const painting = painted.hidden || !painted.covers ? 0 : painted.opacity;
   const white = [255, 255, 255];
-  const backing = composite([...rgb, alpha * painting], white);
+  const backing = composite(
+    [rgb[0]!, rgb[1]!, rgb[2]!, alpha * painting],
+    white,
+  );
   return painted.texts.map(({ selector, color: text }) => ({
     selector,
     ratio: contrastRatio(
-      composite([...text.slice(0, 3), text[3] ?? 1], backing),
+      composite([text[0]!, text[1]!, text[2]!, text[3] ?? 1], backing),
       backing,
     ),
   }));
