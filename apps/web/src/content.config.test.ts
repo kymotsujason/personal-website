@@ -123,6 +123,15 @@ test("a project's pictures are paths on this site", () => {
   ).toBe(true);
   expect(accepts({ ...base, thumb: "https://example.com/a.webp" })).toBe(false);
   expect(accepts({ ...base, thumb: "a.webp" })).toBe(false);
+  expect(accepts({ ...base, thumb: "//example.com/a.webp" })).toBe(false);
+  expect(accepts(withHero({ still: "//example.com/a.webp", alt: "x" }))).toBe(
+    false,
+  );
+  expect(
+    accepts(
+      withHero({ still: "/a.webp", loop: "//example.com/a.webp", alt: "x" }),
+    ),
+  ).toBe(false);
   expect(accepts({ ...base, thumb: "/a b.webp" })).toBe(false);
   expect(accepts(withHero({ still: "a.webp", alt: "x" }))).toBe(false);
   expect(

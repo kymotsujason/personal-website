@@ -3,7 +3,7 @@ import { glob } from "astro/loaders";
 import { z } from "astro/zod";
 import { ISO_DATE, ISO_DAY, isRealDay } from "./lib/format";
 
-const SITE_PATH = z.string().regex(/^\/[^\s]+$/);
+const SITE_PATH = z.string().regex(/^\/(?!\/)\S+$/);
 const HTTPS_URL = z.url().startsWith("https://");
 
 const projects = defineCollection({
