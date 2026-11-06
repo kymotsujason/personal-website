@@ -1,20 +1,11 @@
 // screenshots of the app pages on the dev server, on the gpu, for the design pass. Run by hand, not by pnpm verify.
 // OUT names the folder (required), BASE the server, PAGES and PROFILES limit the run. PAGES is the projects list and the eight stories.
-// Staged posts are copied in from .import for the run and removed in a finally, which also deletes the tracked copies, so run git checkout on the blog folders after.
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const SITE = resolve(WEB, "../..");
 if (!process.env.OUT) {
   console.error("OUT is required, a folder for the screenshots");
   process.exit(1);
@@ -27,15 +18,6 @@ const MODES = process.env.MODES ? process.env.MODES.split(",") : ["3d", "flat"];
 const require = createRequire(WEB + "/package.json");
 const { chromium, devices } = require("@playwright/test");
 
-const STAGED = [
-  "new-equipment-to-keep-things-interesting",
-  "site-redesign-is-now-live",
-  "first-post",
-];
-const POSTS = process.env.POSTS
-  ? process.env.POSTS.split(",")
-  : ["new-equipment-to-keep-things-interesting", "first-post"];
-
 const sceneSource = readFileSync(WEB + "/tests/prod/scene.ts", "utf8");
 const FAKE_YOUTUBE = sceneSource.split("FAKE_YOUTUBE = `")[1].split("`;")[0];
 const PIXEL = Buffer.from(
@@ -45,65 +27,6 @@ const PIXEL = Buffer.from(
   ].join(""),
   "base64",
 );
-
-const importBlog = SITE + "/.import/blog/";
-const importImages = SITE + "/.import/blog-images/";
-const contentBlog = WEB + "/src/content/blog/";
-const publicImages = WEB + "/public/blog/content/images/";
-const staged = [];
-
-const stage = () => {
-  for (const slug of STAGED) {
-    const from = importBlog + slug + ".md";
-    if (!existsSync(from)) {
-      throw new Error("missing staged post " + from);
-    }
-    const dest = contentBlog + slug + ".md";
-    copyFileSync(from, dest);
-    staged.push(dest);
-    const text = readFileSync(from, "utf8");
-    for (const match of text.matchAll(
-      /\/blog\/content\/images\/([^"')\s]+)/g,
-    )) {
-      const rel = match[1];
-      const src = importImages + rel;
-      if (!existsSync(src)) {
-        throw new Error("missing staged image " + src);
-      }
-      const out = publicImages + rel;
-      mkdirSync(dirname(out), { recursive: true });
-      copyFileSync(src, out);
-      staged.push(out);
-    }
-  }
-};
-
-const unstage = () => {
-  for (const file of staged) {
-    rmSync(file, { force: true });
-  }
-  // drop the folders stage() made when they are empty now
-  for (const dir of [
-    publicImages,
-    WEB + "/public/blog/content",
-    WEB + "/public/blog",
-  ]) {
-    if (existsSync(dir)) {
-      pruneEmpty(dir);
-    }
-  }
-};
-
-const pruneEmpty = (dir) => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      pruneEmpty(dir + "/" + entry.name);
-    }
-  }
-  if (readdirSync(dir).length === 0) {
-    rmSync(dir, { recursive: true });
-  }
-};
 
 const STORIES = [
   "super-hexagon-rl",
@@ -212,27 +135,6 @@ const run = async () => {
           await page.screenshot({ path: `${OUT}${name}-${label}-open.png` });
           await page.waitForTimeout(3000);
           await page.screenshot({ path: `${OUT}${name}-${label}-zoom.png` });
-          if (label.startsWith("post-")) {
-            const top = await page.evaluate(async () => {
-              const body = document.querySelector("#page > .body");
-              const link = [...document.querySelectorAll("#page a")].find(
-                (a) => a.textContent.trim() === "Top",
-              );
-              if (!body || !link) {
-                return { found: false };
-              }
-              body.scrollTop = 600;
-              await new Promise((r) => setTimeout(r, 200));
-              const before = body.scrollTop;
-              link.click();
-              await new Promise((r) => setTimeout(r, 1500));
-              return { found: true, before, after: body.scrollTop };
-            });
-            console.log(name, label, "top link", JSON.stringify(top));
-            await page.screenshot({
-              path: `${OUT}${name}-${label}-zoom-after-top.png`,
-            });
-          }
           await follow(page, "/");
           await page.waitForTimeout(2200);
         }
@@ -266,11 +168,4 @@ const run = async () => {
   }
 };
 
-try {
-  stage();
-  // the dev server picks the new files up through its watcher
-  await new Promise((r) => setTimeout(r, 3000));
-  await run();
-} finally {
-  unstage();
-}
+await run();
