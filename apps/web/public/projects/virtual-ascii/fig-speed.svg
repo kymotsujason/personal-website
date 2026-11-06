@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Virtual ASCII speed, before and after</title>
+<desc id="d">Bars for CPU, delay at the 95th percentile, and camera to write time, before and after the speed work, in the 720p 30 fps Matrix case with the window closed.</desc>
+<rect x="0.5" y="0.5" width="959" height="519" rx="18" fill="#1a1a19" stroke="rgba(255,255,255,0.10)"/>
+<text x="40" y="54" font-size="22" font-weight="600" fill="#ffffff">Before and after the speed work</text>
+<text x="40" y="80" font-size="13.5" fill="#c3c2b7">720p, 30 fps, Matrix, window closed. Median of 5 runs each, before on 2026-10-11 and after on 2026-10-16.</text>
+<text x="40" y="128" font-size="13.5" font-weight="600" fill="#e8e8e6">CPU, share of one core</text>
+<line x1="40" y1="428" x2="300" y2="428" stroke="#383835" stroke-width="1"/>
+<rect x="60" y="178.0" width="90" height="250.0" rx="4" fill="#6e6d68"/>
+<text x="105" y="168.0" font-size="15" font-weight="600" fill="#c3c2b7" text-anchor="middle" style="font-variant-numeric: tabular-nums">50.21%</text>
+<text x="105" y="450" font-size="12.5" fill="#898781" text-anchor="middle">Before</text>
+<rect x="190" y="354.9" width="90" height="73.1" rx="4" fill="#f2a48f"/>
+<text x="235" y="344.9" font-size="15" font-weight="600" fill="#f2a48f" text-anchor="middle" style="font-variant-numeric: tabular-nums">14.68%</text>
+<text x="235" y="450" font-size="12.5" fill="#898781" text-anchor="middle">After</text>
+<text x="340" y="128" font-size="13.5" font-weight="600" fill="#e8e8e6">Delay, 95th percentile</text>
+<line x1="340" y1="428" x2="600" y2="428" stroke="#383835" stroke-width="1"/>
+<rect x="360" y="178.0" width="90" height="250.0" rx="4" fill="#6e6d68"/>
+<text x="405" y="168.0" font-size="15" font-weight="600" fill="#c3c2b7" text-anchor="middle" style="font-variant-numeric: tabular-nums">17.23 ms</text>
+<text x="405" y="450" font-size="12.5" fill="#898781" text-anchor="middle">Before</text>
+<rect x="490" y="355.7" width="90" height="72.3" rx="4" fill="#f2a48f"/>
+<text x="535" y="345.7" font-size="15" font-weight="600" fill="#f2a48f" text-anchor="middle" style="font-variant-numeric: tabular-nums">4.98 ms</text>
+<text x="535" y="450" font-size="12.5" fill="#898781" text-anchor="middle">After</text>
+<text x="640" y="128" font-size="13.5" font-weight="600" fill="#e8e8e6">Camera to write, 95th percentile</text>
+<line x1="640" y1="428" x2="900" y2="428" stroke="#383835" stroke-width="1"/>
+<rect x="660" y="178.0" width="90" height="250.0" rx="4" fill="#6e6d68"/>
+<text x="705" y="168.0" font-size="15" font-weight="600" fill="#c3c2b7" text-anchor="middle" style="font-variant-numeric: tabular-nums">115.8 ms</text>
+<text x="705" y="450" font-size="12.5" fill="#898781" text-anchor="middle">Before</text>
+<rect x="790" y="403.6" width="90" height="24.4" rx="4" fill="#f2a48f"/>
+<text x="835" y="393.6" font-size="15" font-weight="600" fill="#f2a48f" text-anchor="middle" style="font-variant-numeric: tabular-nums">11.3 ms</text>
+<text x="835" y="450" font-size="12.5" fill="#898781" text-anchor="middle">After</text>
+<text x="40" y="492" font-size="12" fill="#898781">Each panel has its own scale. Source: the baseline and final speed measurements.</text>
+</svg>

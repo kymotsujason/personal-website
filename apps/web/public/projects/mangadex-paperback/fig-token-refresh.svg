@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 590" width="960" height="590" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">How the MangaDex source refreshes its sign in token</title>
+<desc id="d">A request checks whether the access token is about to expire. If so, one shared refresh runs and ends in one of five outcomes: rotated, racedRotation, racedLogout, loggedOut, or transient.</desc>
+<defs><marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#6e6d68"/></marker><marker id="aa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f2a48f"/></marker></defs>
+<rect x="0.5" y="0.5" width="959" height="589" rx="18" fill="#1a1a19" stroke="rgba(255,255,255,0.10)"/>
+<text x="40" y="54" font-size="22" font-weight="600" fill="#ffffff">Keeping a sign in alive</text>
+<text x="40" y="80" font-size="13.5" fill="#c3c2b7">What the source does when a request finds its access token about to expire. The highlighted path is a clean refresh.</text>
+<rect x="40" y="120" width="200" height="56" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="140.0" y="144" font-size="14" fill="#ffffff" text-anchor="middle">Request to the</text>
+<text x="140.0" y="162" font-size="14" fill="#ffffff" text-anchor="middle">MangaDex API</text>
+<rect x="300" y="120" width="260" height="56" rx="10" fill="#222221" stroke="#f2a48f" stroke-width="1.5"/>
+<text x="430.0" y="144" font-size="14" fill="#ffffff" text-anchor="middle">Is the access token within</text>
+<text x="430.0" y="162" font-size="14" fill="#ffffff" text-anchor="middle">60 s of expiring?</text>
+<rect x="680" y="120" width="240" height="56" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="800.0" y="153" font-size="14" fill="#ffffff" text-anchor="middle">Send with the Bearer token</text>
+<line x1="240" y1="148" x2="298" y2="148" stroke="#f2a48f" stroke-width="2" marker-end="url(#aa)"/>
+<line x1="560" y1="148" x2="678" y2="148" stroke="#6e6d68" stroke-width="1.5" marker-end="url(#ag)"/>
+<text x="619" y="140" font-size="12.5" fill="#c3c2b7" text-anchor="middle">no</text>
+<line x1="430" y1="176" x2="430" y2="228" stroke="#f2a48f" stroke-width="2" marker-end="url(#aa)"/>
+<text x="442" y="206" font-size="12.5" fill="#f2a48f">yes</text>
+<rect x="300" y="230" width="260" height="60" rx="10" fill="#222221" stroke="#f2a48f" stroke-width="1.5"/>
+<text x="430.0" y="256" font-size="14" fill="#ffffff" text-anchor="middle">One refresh with the refresh token</text>
+<text x="430.0" y="274" font-size="14" fill="#ffffff" text-anchor="middle">Parallel requests share it</text>
+<path d="M430 290 V318 H120 V338" fill="none" stroke="#f2a48f" stroke-width="2" marker-end="url(#aa)"/>
+<path d="M430 290 V318 H840" fill="none" stroke="#6e6d68" stroke-width="1.5"/>
+<line x1="300" y1="318" x2="300" y2="338" stroke="#6e6d68" stroke-width="1.5" marker-end="url(#ag)"/>
+<line x1="480" y1="318" x2="480" y2="338" stroke="#6e6d68" stroke-width="1.5" marker-end="url(#ag)"/>
+<line x1="660" y1="318" x2="660" y2="338" stroke="#6e6d68" stroke-width="1.5" marker-end="url(#ag)"/>
+<line x1="840" y1="318" x2="840" y2="338" stroke="#6e6d68" stroke-width="1.5" marker-end="url(#ag)"/>
+<rect x="40" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#f2a48f" stroke-width="2"/>
+<text x="54" y="368" font-size="14" font-weight="600" fill="#f2a48f">rotated</text>
+<text x="54" y="392" font-size="12.5" fill="#c3c2b7">New tokens saved.</text>
+<line x1="54" y1="446" x2="186" y2="446" stroke="#383835"/>
+<text x="54" y="468" font-size="12.5" fill="#f2a48f">Send with the</text>
+<text x="54" y="486" font-size="12.5" fill="#f2a48f">new token.</text>
+<rect x="220" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="234" y="368" font-size="14" font-weight="600" fill="#ffffff">racedRotation</text>
+<text x="234" y="392" font-size="12.5" fill="#c3c2b7">A parallel refresh</text>
+<text x="234" y="410" font-size="12.5" fill="#c3c2b7">already saved newer</text>
+<text x="234" y="428" font-size="12.5" fill="#c3c2b7">tokens.</text>
+<line x1="234" y1="446" x2="366" y2="446" stroke="#383835"/>
+<text x="234" y="468" font-size="12.5" fill="#e8e8e6">Send with those.</text>
+<rect x="400" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="414" y="368" font-size="14" font-weight="600" fill="#ffffff">racedLogout</text>
+<text x="414" y="392" font-size="12.5" fill="#c3c2b7">A parallel flow</text>
+<text x="414" y="410" font-size="12.5" fill="#c3c2b7">signed out while this</text>
+<text x="414" y="428" font-size="12.5" fill="#c3c2b7">one waited.</text>
+<line x1="414" y1="446" x2="546" y2="446" stroke="#383835"/>
+<text x="414" y="468" font-size="12.5" fill="#e8e8e6">Send without</text>
+<text x="414" y="486" font-size="12.5" fill="#e8e8e6">a token.</text>
+<rect x="580" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="594" y="368" font-size="14" font-weight="600" fill="#ffffff">loggedOut</text>
+<text x="594" y="392" font-size="12.5" fill="#c3c2b7">The auth endpoint said</text>
+<text x="594" y="410" font-size="12.5" fill="#c3c2b7">the token is dead, or</text>
+<text x="594" y="428" font-size="12.5" fill="#c3c2b7">the reply was bad.</text>
+<line x1="594" y1="446" x2="726" y2="446" stroke="#383835"/>
+<text x="594" y="468" font-size="12.5" fill="#e8e8e6">Session cleared.</text>
+<text x="594" y="486" font-size="12.5" fill="#e8e8e6">Send without a token.</text>
+<rect x="760" y="340" width="160" height="190" rx="10" fill="#222221" stroke="#4a4a46" stroke-width="1.5"/>
+<text x="774" y="368" font-size="14" font-weight="600" fill="#ffffff">transient</text>
+<text x="774" y="392" font-size="12.5" fill="#c3c2b7">The auth endpoint</text>
+<text x="774" y="410" font-size="12.5" fill="#c3c2b7">failed. No more</text>
+<text x="774" y="428" font-size="12.5" fill="#c3c2b7">refreshes for 10 s.</text>
+<line x1="774" y1="446" x2="906" y2="446" stroke="#383835"/>
+<text x="774" y="468" font-size="12.5" fill="#e8e8e6">Not expired: send it.</text>
+<text x="774" y="486" font-size="12.5" fill="#e8e8e6">Past expiry: send</text>
+<text x="774" y="504" font-size="12.5" fill="#e8e8e6">without a token.</text>
+<text x="40" y="566" font-size="12.5" fill="#898781">A 401 from the API gets one retry, and only after a refresh that ended in rotated or racedRotation.</text>
+</svg>
