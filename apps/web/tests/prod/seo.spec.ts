@@ -12,6 +12,10 @@ const PAGES = [
   { path: "/projects/pickban-gg", type: "article" },
   { path: "/projects/battlebgm", type: "article" },
   { path: "/projects/jasonyue-ca", type: "article" },
+  { path: "/projects/virtual-ascii", type: "article" },
+  { path: "/projects/tobii-gaze-linux", type: "article" },
+  { path: "/projects/mouse-battery", type: "article" },
+  { path: "/projects/mangadex-paperback", type: "article" },
   { path: "/blog", type: "website" },
   { path: "/blog/new-equipment-to-keep-things-interesting", type: "article" },
 ];
