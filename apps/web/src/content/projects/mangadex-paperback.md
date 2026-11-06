@@ -44,7 +44,7 @@ MangaDex for Paperback is the MangaDex source in Paperback, an iOS manga reader.
 
 The extension is TypeScript against the Paperback SDK, and every request goes through one network layer. That layer checks whether the access token is within 60 seconds of expiring and refreshes it first, so a screen full of requests doesn't each try to sign in again.
 
-<figure><img src="/projects/mangadex-paperback/fig-token-refresh.svg" alt="A flowchart of the token refresh, from a request through the expiry check to five outcomes" loading="lazy"><figcaption>The five outcomes of a refresh. A 401 retries once, and only after a refresh that rotated the tokens or lost a race to a newer rotation.</figcaption></figure>
+<figure><img src="/projects/mangadex-paperback/fig-token-refresh.svg" width="960" height="590" alt="A flowchart of the token refresh, from a request through the expiry check to five outcomes" loading="lazy"><figcaption>The five outcomes of a refresh. A 401 retries once, and only after a refresh that rotated the tokens or lost a race to a newer rotation.</figcaption></figure>
 
 Four of my pull requests have been merged there. They cover letting chapters be removed, clearing the read queue, title priority with romanized titles, and a restructuring with bug fixes. The source is about 7,500 lines of TypeScript.
 

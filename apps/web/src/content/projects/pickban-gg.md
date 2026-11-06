@@ -47,7 +47,7 @@ pickban.gg is match preparation for osu! tournaments. A team pastes in its mappo
 
 Every prediction starts from player and map data in PostgreSQL, which holds about 2.7 million player scores in the training data. The o!TR dump supplies the games and o!TR's processor turns them into ratings, and a CatBoost model turns two lineups and a map into the chance that each side wins it. On 144,234 games held out from training, the tuned model scores an AUC of 0.875, and each map carries a 95% interval so a close call looks like one.
 
-<figure><img src="/projects/pickban-gg/fig-login.webp" alt="The pickban.gg sign in page, with the name, a short description, a notice that the site is invite only in closed beta, and a button to authorize with osu!" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
+<figure><img src="/projects/pickban-gg/fig-login.webp" width="1200" height="750" alt="The pickban.gg sign in page, with the name, a short description, a notice that the site is invite only in closed beta, and a button to authorize with osu!" loading="lazy"><figcaption>The sign in page. The site is invite only while it's in closed beta.</figcaption></figure>
 
 On top of the predictions sit the tools a team uses in the lobby. A live simulator lets a coach drag maps into pick, ban, and protect zones and watch the probabilities move as games finish, and Head-to-Head compares two players on patterns, form, and every game they've played against each other. Every prediction is saved, so an analysis can be forked, rerun against the current model, or shared as a read only link.
 

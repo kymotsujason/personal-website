@@ -107,7 +107,13 @@ const showLinks = links.length > 0 || source === "private";
     </section>
     {results && (
       <figure class="results">
-        <img src={results.src} alt={results.alt} loading="lazy" />
+        <img
+          src={results.src}
+          alt={results.alt}
+          width={results.width}
+          height={results.height}
+          loading="lazy"
+        />
         <figcaption>{results.caption}</figcaption>
       </figure>
     )}

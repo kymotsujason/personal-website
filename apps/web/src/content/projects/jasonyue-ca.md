@@ -45,6 +45,6 @@ jasonyue.ca is this site. Hands take an iPhone Duo out, unfold it, and hold it u
 
 The phone and the hands are three.js and Blender work, the desk behind them is a photo, and the screen is the site's pages drawn onto the phone. The same pages also work on their own as a plain, flat site, and each one reads as normal HTML with no JavaScript at all.
 
-<figure><img src="/projects/jasonyue-ca/fig-app-open.webp" alt="The Projects app opening over the home screen on the unfolded phone, with the Super Hexagon RL card and a pickban.gg card inside its window" loading="lazy"><figcaption>The Projects app opening over the home screen, a moment after a tap on its icon.</figcaption></figure>
+<figure><img src="/projects/jasonyue-ca/fig-app-open.webp" width="1200" height="729" alt="The Projects app opening over the home screen on the unfolded phone, with the Super Hexagon RL card and a pickban.gg card inside its window" loading="lazy"><figcaption>The Projects app opening over the home screen, a moment after a tap on its icon.</figcaption></figure>
 
 Speed was a requirement from the start, since a 3D scene is easy to make heavy, so a quality ladder watches the frame rate and steps the scene down on a slow phone. The weather sky is one shader for all eight scenes, picked by uniforms, so a change of weather doesn't compile anything.

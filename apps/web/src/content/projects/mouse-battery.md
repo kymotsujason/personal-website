@@ -46,6 +46,6 @@ Mouse Battery shows the battery level of a Logitech mouse in the Linux system tr
 
 A small service reads the mice and saves each one's history in a SQLite database. The tray app and the battery window ask it over the system bus, and it's the only program the package lets open the receiver or cable. The service limits how often it reads, with five reads at once for each account and then one every 30 seconds.
 
-<figure><img src="/projects/mouse-battery/fig-window-hours.webp" alt="The battery window on its Hours per Charge tab, with a line chart of about 40 hours per charge from March to October and a health box saying the battery is doing as well as when tracking began" loading="lazy"><figcaption>The Hours per Charge tab, with the health box, charge cycles, and charging speed.</figcaption></figure>
+<figure><img src="/projects/mouse-battery/fig-window-hours.webp" width="1200" height="749" alt="The battery window on its Hours per Charge tab, with a line chart of about 40 hours per charge from March to October and a health box saying the battery is doing as well as when tracking began" loading="lazy"><figcaption>The Hours per Charge tab, with the health box, charge cycles, and charging speed.</figcaption></figure>
 
 Packages come for Debian, Fedora, and Arch, and each file in a release after 1.1.0 carries a signed record of how it was built, which `gh attestation verify` checks. The README lists the mice it has been tested with, and the known limits sit beside them.

@@ -30,7 +30,13 @@ const projects = defineCollection({
       .array(z.object({ title: z.string(), text: z.string() }))
       .length(3),
     results: z
-      .object({ src: SITE_PATH, alt: z.string().min(1), caption: z.string() })
+      .object({
+        src: SITE_PATH,
+        alt: z.string().min(1),
+        caption: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
       .optional(),
     stack: z.array(z.string()).min(1),
     status: z.string(),

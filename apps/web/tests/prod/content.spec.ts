@@ -287,6 +287,31 @@ test.describe("with javascript off", () => {
       }
     });
 
+    test(`story figures reserve their image height (${slug})`, async ({
+      page,
+    }) => {
+      await page.goto(`/projects/${slug}`);
+      const images = page.locator("#page .sheet figure img");
+      expect(await images.count()).toBeGreaterThan(0);
+      for (const img of await images.all()) {
+        const size = await img.evaluate((el: HTMLImageElement) => ({
+          width: Number(el.getAttribute("width")),
+          height: Number(el.getAttribute("height")),
+        }));
+        expect(size.width).toBeGreaterThan(0);
+        expect(size.height).toBeGreaterThan(0);
+        // height auto lets the attributes' ratio reserve the space before the file loads
+        const box = await img.evaluate((el: HTMLImageElement) => ({
+          ratio:
+            el.getBoundingClientRect().width /
+            el.getBoundingClientRect().height,
+          aspect: getComputedStyle(el).aspectRatio,
+        }));
+        expect(box.aspect).toContain(`${size.width} / ${size.height}`);
+        expect(box.ratio).toBeCloseTo(size.width / size.height, 1);
+      }
+    });
+
     test(`the story has no toolbar (${slug})`, async ({ page }) => {
       await page.goto(`/projects/${slug}`);
       await expect(page.locator("#page .toolbar")).toHaveCount(0);

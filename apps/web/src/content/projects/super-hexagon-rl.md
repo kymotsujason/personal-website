@@ -32,6 +32,8 @@ highlights:
     text: Live runs were dying early because the game dropped held keys when a window changed focus. Replaying live games in the simulator found it, and the fix took a stress test from 0 of 20 runs surviving to 19 of 20.
 results:
   src: /projects/super-hexagon-rl/fig-tradeoff.svg
+  width: 960
+  height: 560
   alt: A chart of seven models, with the share of runs reaching 600 seconds against key presses a second, where smoother play gives up a few runs
   caption: Seven models on 360 seeded simulator runs each. The model that holds keys like a person, at 1.19 presses a second, reaches the cap in 349 of 360 runs.
 stack:
@@ -53,7 +55,7 @@ The game runs in fixed 1/60 second steps, so training doesn't need to draw anyth
 
 Real game steps are still slow, so the agent trains against a simulator instead. I decompiled the game's logic in Ghidra and turned it into C, which a script compares against the real game at every decision. With 256 simulators on 8 threads it runs 1.86 million agent steps a second, and the policy is trained with PPO.
 
-<figure><img src="/projects/super-hexagon-rl/fig-live-grid.webp" alt="Six Super Hexagon windows open side by side, each in a different level and colors, all being played at once" loading="lazy"><figcaption>Six games played live at once, one window per level.</figcaption></figure>
+<figure><img src="/projects/super-hexagon-rl/fig-live-grid.webp" width="1200" height="619" alt="Six Super Hexagon windows open side by side, each in a different level and colors, all being played at once" loading="lazy"><figcaption>Six games played live at once, one window per level.</figcaption></figure>
 
 Playing live is a different problem from training, since the game runs on its own clock and the agent has to keep up. It reads the game's memory, sends keys straight to the game's window, and checks that its keys land on the very next tick. 31,774 of 31,777 key changes did.
 

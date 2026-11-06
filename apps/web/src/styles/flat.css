@@ -1740,6 +1740,7 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
 #page[data-page="project"] .sheet img {
   display: block;
   width: 100%;
+  height: auto;
   margin: 0;
   border-radius: 16px;
 }

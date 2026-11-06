@@ -44,7 +44,7 @@ BattleBGM is a multiplayer game where you hear a piece of music from a game you 
 
 The browser plays short clips and sends a guess, and the server does everything that has to be trusted. It scores each round, hands out clips with nothing in them that names the answer, and keeps the state of every lobby. The client is written without a framework, and a QR code library is its only runtime dependency.
 
-<figure><img src="/projects/battlebgm/fig-modes.webp" alt="The Play page, with Free Play across the top, Daily and Weekly below it marked as needing a log in, and Score Attack" loading="lazy"><figcaption>The mode picker as a guest sees it. Daily and Weekly ask for a log in.</figcaption></figure>
+<figure><img src="/projects/battlebgm/fig-modes.webp" width="1200" height="750" alt="The Play page, with Free Play across the top, Daily and Weekly below it marked as needing a log in, and Score Attack" loading="lazy"><figcaption>The mode picker as a guest sees it. Daily and Weekly ask for a log in.</figcaption></figure>
 
 Lobbies are the part that has to keep working while people come and go. A lobby has one writer, so two players acting at once can't corrupt its state, and the state sits in Redis so a restart doesn't end a game. A route fuzzer's recorded run sent 7,859 hostile requests and got no server errors back.
 

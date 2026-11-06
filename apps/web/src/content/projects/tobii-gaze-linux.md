@@ -47,7 +47,7 @@ Tobii Gaze for Linux draws where a player is looking into an OBS stream, with an
 
 The tracker's driver runs as a daemon that clients talk to over a socket. A calibration tool maps the tracker's output to the screen, the tray app turns gaze on and off and sets up the ring, and a filter plugin in OBS draws the ring on the capture of the tracked screen. The ring's constants are shared between the app and the filter, so the two always draw the same thing.
 
-<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" alt="The ring preview, a soft purple ring among small circles on a dark panel, with Thin ring and Soft cloud buttons, an opacity slider at 35 percent, and a row of color choices" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
+<figure><img src="/projects/tobii-gaze-linux/fig-ring-preview.webp" width="432" height="380" alt="The ring preview, a soft purple ring among small circles on a dark panel, with Thin ring and Soft cloud buttons, an opacity slider at 35 percent, and a row of color choices" loading="lazy"><figcaption>The ring preview and its controls for style, opacity, and color.</figcaption></figure>
 
 Thirteen patches change the driver. They make the daemon route each reply to the client that asked, keep one owner of the USB link, queue writes for slow readers, report the tracker's status, and report to systemd when it's ready. The README names the patch series as the notice GPL asks for.
 

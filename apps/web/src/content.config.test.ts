@@ -138,11 +138,14 @@ test("a project's pictures are paths on this site", () => {
     accepts(withHero({ still: "/a.webp", loop: "http://x/a.webp", alt: "x" })),
   ).toBe(false);
   expect(accepts(withHero({ still: "/a.webp", alt: "" }))).toBe(false);
+  const sized = { alt: "x", caption: "c", width: 960, height: 560 };
+  expect(accepts({ ...base, results: { src: "/r.svg", ...sized } })).toBe(true);
+  expect(accepts({ ...base, results: { src: "r.svg", ...sized } })).toBe(false);
   expect(
     accepts({ ...base, results: { src: "/r.svg", alt: "x", caption: "c" } }),
-  ).toBe(true);
+  ).toBe(false);
   expect(
-    accepts({ ...base, results: { src: "r.svg", alt: "x", caption: "c" } }),
+    accepts({ ...base, results: { src: "/r.svg", ...sized, height: 0 } }),
   ).toBe(false);
 });
 
