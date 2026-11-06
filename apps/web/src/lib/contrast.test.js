@@ -186,40 +186,27 @@ const secondaryOf = (text) =>
     ([, a]) => Number(a),
   );
 
-// a Today card's strip sits on the card's glass, over the accent glow, over the sky. the glow's strongest alpha
-// is the worst case for white text, and the strip is layered the way .glass layers it
-test("the Today card strip's text reads over the accent glow", () => {
-  const base = baseOf(rule('#page[data-page="projects"] .project-card .strip'));
-  const glows = [
-    ...rule('#page[data-page="projects"] .project-card .pic.glow').matchAll(
-      /var\(--accent\) (\d+)%/g,
-    ),
-  ].map(([, pct]) => Number(pct) / 100);
+// the More projects panel is glass with a dark base, so its rows' title and one line are checked there, under the highlight's peak
+test("the More projects rows' text reads on the panel", () => {
+  const base = baseOf(rule('#page[data-page="projects"] .more'));
   const secondary = secondaryOf(
-    rule('#page[data-page="projects"] .project-card .strip p'),
+    rule('#page[data-page="projects"] .project-row .sub'),
   );
-  expect(glows.length).toBeGreaterThan(0);
   expect(secondary).toHaveLength(1);
-  const glow = Math.max(...glows);
   eachBack((bg, label) => {
-    for (const { app, color } of accents) {
-      let card = composite(RIM, bg);
-      card = composite(GLASS, card);
-      card = composite([...hexRgb(color), glow], card);
-      let strip = composite(RIM, card);
-      strip = composite(GLASS, strip);
-      strip = composite([0, 0, 0, base], strip);
-      strip = composite(HIGHLIGHT, strip);
-      expect(
-        contrastRatio("#ffffff", hex(strip)),
-        `title ${app} ${label}`,
-      ).toBeGreaterThanOrEqual(4.5);
-      const text = composite([235, 235, 245, secondary[0]], strip);
-      expect(
-        contrastRatio(hex(text), hex(strip)),
-        `summary ${app} ${label}`,
-      ).toBeGreaterThanOrEqual(4.5);
-    }
+    let pane = composite(RIM, bg);
+    pane = composite(GLASS, pane);
+    pane = composite([0, 0, 0, base], pane);
+    pane = composite(HIGHLIGHT, pane);
+    expect(
+      contrastRatio("#ffffff", hex(pane)),
+      `title ${label}`,
+    ).toBeGreaterThanOrEqual(4.5);
+    const text = composite([235, 235, 245, secondary[0]], pane);
+    expect(
+      contrastRatio(hex(text), hex(pane)),
+      `summary ${label}`,
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });
 

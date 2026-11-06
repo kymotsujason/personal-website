@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { quiet } from "./scene";
 
 const PROJECT = {
@@ -9,6 +11,17 @@ const PROJECT = {
 };
 
 const PROJECT_DAY = "October 19, 2026";
+
+const STORIES_BY_RANK = [
+  "super-hexagon-rl",
+  "pickban-gg",
+  "battlebgm",
+  "jasonyue-ca",
+  "virtual-ascii",
+  "tobii-gaze-linux",
+  "mouse-battery",
+  "mangadex-paperback",
+];
 
 const STORIES = [
   "super-hexagon-rl",
@@ -24,18 +37,75 @@ const STORIES = [
 test.describe("with javascript off", () => {
   test.use({ javaScriptEnabled: false });
 
-  test("the project list starts with the rank 1 project", async ({ page }) => {
+  test("the list shows the eight projects in their order", async ({ page }) => {
     await page.goto("/projects");
-    const card = page.locator("#page .project-card").first();
-    await expect(card.locator("h2")).toHaveText(PROJECT.title);
-    await expect(card.locator(".sub")).toHaveText(PROJECT.summary);
-    await expect(card.locator("time")).toHaveText(PROJECT_DAY);
-    await expect(card.locator("time")).toHaveAttribute(
-      "datetime",
-      PROJECT.date,
+    const hrefs = await page
+      .locator("#page a[data-project]")
+      .evaluateAll((links) => links.map((a) => a.getAttribute("href")));
+    expect(hrefs).toEqual(STORIES_BY_RANK.map((slug) => `/projects/${slug}`));
+  });
+
+  test("the first three are featured cards and the other five are rows", async ({
+    page,
+  }) => {
+    await page.goto("/projects");
+    const cards = page.locator("#page a.project-card.featured");
+    await expect(cards).toHaveCount(3);
+    await expect(page.locator("#page .more a.project-row")).toHaveCount(5);
+    await expect(page.locator("#page .more h2")).toHaveText("More projects");
+    for (const [i, slug] of STORIES_BY_RANK.slice(0, 3).entries()) {
+      await expect(cards.nth(i)).toHaveAttribute("data-project", slug);
+    }
+    for (const [i, slug] of STORIES_BY_RANK.slice(3).entries()) {
+      await expect(
+        page.locator("#page .more a.project-row").nth(i),
+      ).toHaveAttribute("data-project", slug);
+    }
+    await expect(cards.first().locator("h2")).toHaveText(PROJECT.title);
+    await expect(cards.first().locator(".sub")).toHaveText(PROJECT.summary);
+    await expect(cards.first().locator(".kicker")).toHaveText(
+      "Reinforcement learning",
     );
-    await expect(card).toHaveAttribute("href", PROJECT.path);
-    await expect(card.locator(".kicker")).toHaveText("Latest");
+  });
+
+  test("a featured card's chip is its first number", async ({ page }) => {
+    await page.goto("/projects");
+    for (const slug of STORIES_BY_RANK.slice(0, 3)) {
+      const source = readFileSync(
+        path.join("src/content/projects", `${slug}.md`),
+        "utf8",
+      );
+      const first = source.match(
+        /stats:\n\s+- value: "([^"]+)"\n\s+label: (.+)\n/,
+      );
+      expect(first, slug).not.toBeNull();
+      const chip = page.locator(`#page a[data-project="${slug}"] .proof`);
+      await expect(chip.locator("b")).toHaveText(first![1]!);
+      await expect(chip).toHaveText(`${first![1]} ${first![2]}`);
+    }
+  });
+
+  test("the list has no Latest label and no glass strip", async ({ page }) => {
+    await page.goto("/projects");
+    await expect(page.locator("#page .project-card .strip")).toHaveCount(0);
+    await expect(page.locator("#page .project-card time")).toHaveCount(0);
+    await expect(
+      page.locator("#page .kicker", { hasText: "Latest" }),
+    ).toHaveCount(0);
+  });
+
+  test("a featured card's words don't run into its chip at iPhone width", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 393, height: 852 });
+    await page.goto("/projects");
+    const cards = page.locator("#page a.project-card.featured");
+    for (let i = 0; i < 3; i++) {
+      const chip = await cards.nth(i).locator(".proof").boundingBox();
+      const words = await cards.nth(i).locator(".words").boundingBox();
+      expect(chip && words).toBeTruthy();
+      expect(chip!.y + chip!.height).toBeLessThanOrEqual(words!.y);
+    }
   });
 
   test("the story shows the hero, links, three numbers, and the sheet in order", async ({

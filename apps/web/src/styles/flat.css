@@ -1386,12 +1386,19 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   }
 }
 
-/* projects: App Store Today cards. the picture fills the card and the words sit on a glass strip across its foot */
+/* projects: three Today cards, then one glass panel of rows. a card's picture fills it under the same dark fade as a story's
+   hero (the story sets these three values too), so the card and the page it opens look like one thing */
+#page[data-page="projects"] {
+  --hero-fade-under-title: 0.8;
+  --hero-fade-color: 22, 20, 44;
+  --hero-fade-solid: 150px;
+}
+
 #page[data-page="projects"] .project-card {
   --r: 28px;
   position: relative;
-  height: 440px;
-  margin: 0 0 18px;
+  height: 410px;
+  margin: 0 0 16px;
   padding: 0;
   overflow: hidden;
   color: #fff;
@@ -1408,94 +1415,141 @@ html.page-pinned #page[data-page="music"] > .backdrop img {
   transition: transform 0.25s ease-out;
 }
 
-#page[data-page="projects"] .project-card::before {
+#page[data-page="projects"] .project-card::after {
   content: "";
   position: absolute;
-  inset: 0 0 auto;
-  height: 80px;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
+  background: linear-gradient(
+    to top,
+    rgba(var(--hero-fade-color), 0.96) 0,
+    rgba(var(--hero-fade-color), var(--hero-fade-under-title))
+      var(--hero-fade-solid),
+    rgba(var(--hero-fade-color), 0) calc(var(--hero-fade-solid) + 90px)
+  );
 }
 
-#page[data-page="projects"] .project-card .pic.glow {
-  background:
-    radial-gradient(
-      circle at 28% 30%,
-      color-mix(in srgb, var(--accent) 55%, transparent),
-      transparent 68%
-    ),
-    radial-gradient(
-      circle at 80% 85%,
-      color-mix(in srgb, var(--accent) 28%, transparent),
-      transparent 60%
-    );
-  transform: none;
+#page[data-page="projects"] .project-card .proof {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  max-width: calc(100% - 28px);
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(12, 10, 24, 0.55);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+}
+
+#page[data-page="projects"] .project-card .proof b {
+  color: var(--accent);
+}
+
+#page[data-page="projects"] .project-card .words {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
 }
 
 #page[data-page="projects"] .project-card .kicker {
-  position: absolute;
-  top: 20px;
-  left: 22px;
-  z-index: 1;
-  font-size: 13px;
+  margin: 0;
+  font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  text-shadow:
-    0 0 6px rgba(0, 0, 0, 0.6),
-    0 1px 3px rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
-#page[data-page="projects"] .project-card .strip {
-  --r: 18px;
-  --base: rgba(0, 0, 0, 0.84);
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  padding: 16px 18px;
+#page[data-page="projects"] .project-card h2 {
+  margin: 4px 0 0;
+  font-size: 27px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+#page[data-page="projects"] .project-card .sub {
+  margin: 6px 0 0;
+  font-size: 16px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+}
+
+#page[data-page="projects"] .more {
+  --r: 24px;
+  --base: rgba(0, 0, 0, 0.72);
+  padding: 6px 16px;
+}
+
+#page[data-page="projects"] .more h2 {
+  margin: 10px 2px 6px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+#page[data-page="projects"] .project-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  padding: 10px 0;
+  color: inherit;
+  text-decoration: none;
 }
 
-#page[data-page="projects"] .project-card .strip h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 750;
+#page[data-page="projects"] .project-row + .project-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-#page[data-page="projects"] .project-card .strip p {
-  margin: 2px 0 0;
-  font-size: 15px;
-  opacity: 1;
-  color: rgba(235, 235, 245, 0.68);
-}
-
-#page[data-page="projects"] .project-card .strip time {
-  display: block;
-  margin-top: 4px;
-  font-size: 13px;
-  opacity: 1;
-  color: rgba(235, 235, 245, 0.68);
-}
-
-#page[data-page="projects"] .project-card .get {
-  --fill: 0.22;
-  margin-left: auto;
+#page[data-page="projects"] .project-row .thumb {
   flex: none;
+  width: 62px;
+  height: 62px;
+  border-radius: 15px;
+  object-fit: cover;
 }
 
-/* the card is already a blur, and the strip's base hides what's behind it, so these two nest no more */
-#page[data-page="projects"] .project-card .strip,
-#page[data-page="projects"] .project-card .get {
+#page[data-page="projects"] .project-row > div {
+  flex: 1;
+  min-width: 0;
+}
+
+#page[data-page="projects"] .project-row h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+#page[data-page="projects"] .project-row .sub {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.3;
+  color: rgba(235, 235, 245, 0.82);
+}
+
+#page[data-page="projects"] .project-row .pill {
+  --fill: 0.22;
+  flex: none;
+  height: 30px;
+  min-width: 0;
+  padding: 0 14px;
+  font-size: 13.5px;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
-@media (max-width: 640px) {
+@media (min-width: 641px) {
   #page[data-page="projects"] .project-card {
-    height: 380px;
+    height: 420px;
   }
 }
 

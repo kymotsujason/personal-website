@@ -1,9 +1,10 @@
 ---
 import Site from "../../layouts/Site.astro";
-import { formatDay } from "../../lib/format";
 import { rankedProjects } from "../../lib/projects";
 
 const projects = await rankedProjects();
+const featured = projects.slice(0, 3);
+const more = projects.slice(3);
 ---
 
 <Site
@@ -12,27 +13,48 @@ const projects = await rankedProjects();
   app="Projects"
   kind="projects"
 >
-  {projects.map((project, i) => (
+  {featured.map((project) => (
     <a
-      class="project-card glass depth"
+      class="project-card featured glass depth"
       style="--d:4;--t:1"
       href={`/projects/${project.id}`}
       data-project={project.id}
     >
-      {i === 0 && <span class="kicker">Latest</span>}
-      <img class="pic" src={project.data.hero.still} alt="" />
-      <div class="strip glass">
-        <div>
-          <h2>{project.data.title}</h2>
-          <p class="sub">{project.data.summary}</p>
-          <time datetime={project.data.date}>
-            {formatDay(project.data.date)}
-          </time>
-        </div>
-        <span class="pill get glass" aria-hidden="true">
-          Open
-        </span>
+      <img
+        class="pic"
+        src={project.data.hero.still}
+        alt=""
+        style={`object-position: ${project.data.hero.position ?? "50% 50%"}`}
+      />
+      <span class="proof">
+        <b>{project.data.stats[0]!.value}</b> {project.data.stats[0]!.label}
+      </span>
+      <div class="words">
+        <p class="kicker">{project.data.kicker}</p>
+        <h2>{project.data.title}</h2>
+        <p class="sub">{project.data.summary}</p>
       </div>
     </a>
   ))}
+  {more.length > 0 && (
+    <section class="more glass">
+      <h2>More projects</h2>
+      {more.map((project) => (
+        <a
+          class="project-row"
+          href={`/projects/${project.id}`}
+          data-project={project.id}
+        >
+          <img class="thumb" src={project.data.thumb} alt="" />
+          <div>
+            <h3>{project.data.title}</h3>
+            <p class="sub">{project.data.summary}</p>
+          </div>
+          <span class="pill glass" aria-hidden="true">
+            Open
+          </span>
+        </a>
+      ))}
+    </section>
+  )}
 </Site>
