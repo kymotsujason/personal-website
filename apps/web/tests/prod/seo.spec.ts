@@ -8,6 +8,9 @@ const PAGES = [
   { path: "/about", type: "website" },
   { path: "/music", type: "website" },
   { path: "/projects", type: "website" },
+  { path: "/projects/super-hexagon-rl", type: "article" },
+  { path: "/projects/pickban-gg", type: "article" },
+  { path: "/projects/battlebgm", type: "article" },
   { path: "/projects/jasonyue-ca", type: "article" },
   { path: "/blog", type: "website" },
   { path: "/blog/new-equipment-to-keep-things-interesting", type: "article" },
@@ -67,7 +70,7 @@ test.describe("with javascript off", () => {
     await page.goto("/projects/jasonyue-ca");
     expect(await meta(page, "property", "og:title")).toBe("jasonyue.ca");
     expect(await meta(page, "property", "og:description")).toBe(
-      "A foldable phone in the browser, with a screen that is real HTML",
+      "A foldable phone in the browser with a screen that's real HTML",
     );
     await page.goto("/blog/new-equipment-to-keep-things-interesting");
     expect(await meta(page, "property", "og:title")).toBe(

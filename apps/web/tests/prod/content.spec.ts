@@ -2,13 +2,13 @@ import { expect, test } from "@playwright/test";
 import { quiet } from "./scene";
 
 const PROJECT = {
-  title: "jasonyue.ca",
-  date: "2026-10-14",
-  summary: "A foldable phone in the browser, with a screen that is real HTML",
-  path: "/projects/jasonyue-ca",
+  title: "Super Hexagon RL",
+  date: "2026-10-19",
+  summary: "An agent that plays every level of the real game live",
+  path: "/projects/super-hexagon-rl",
 };
 
-const PROJECT_DAY = "October 14, 2026";
+const PROJECT_DAY = "October 19, 2026";
 
 test.describe("with javascript off", () => {
   test.use({ javaScriptEnabled: false });
@@ -37,7 +37,7 @@ test.describe("with javascript off", () => {
       PROJECT.date,
     );
     await expect(page.locator("#page .column")).toContainText(
-      "Hands take out an iPhone Duo and unfold it",
+      "Super Hexagon RL is a self learning agent",
     );
     await expect(page.locator("#page .sheet .summary")).toHaveText(
       PROJECT.summary,
@@ -51,11 +51,11 @@ test.describe("with javascript off", () => {
     await expect(page.locator("#page .large-title")).toHaveCount(0);
     await expect(page.locator("#page .hero img")).toHaveAttribute(
       "src",
-      "/og.jpg",
+      "/projects/super-hexagon-rl/hero.webp",
     );
     await expect(
       page.locator(
-        '#page .toolbar a[href="https://github.com/kymotsujason/personal-website"]',
+        '#page .toolbar a[href="https://github.com/kymotsujason/super-hexagon-rl"]',
       ),
     ).toContainText("GitHub");
   });
