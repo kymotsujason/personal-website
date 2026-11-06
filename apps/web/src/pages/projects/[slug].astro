@@ -13,7 +13,28 @@ export async function getStaticPaths() {
 
 const { project } = Astro.props;
 const { Content } = await render(project);
-const { title, date, summary, links = [], hero } = project.data;
+const {
+  title,
+  date,
+  summary,
+  kicker,
+  stats,
+  links = [],
+  source,
+  hero,
+  highlights,
+  results,
+  stack,
+  status,
+  license,
+  builtOn,
+} = project.data;
+const sourceLabel = {
+  public: "Public",
+  private: "Private",
+  unreleased: "Not public yet",
+}[source];
+const showLinks = links.length > 0 || source === "private";
 ---
 
 <Site
@@ -25,22 +46,101 @@ const { title, date, summary, links = [], hero } = project.data;
   type="article"
   ownTitle
 >
-  <div class="hero">
-    <img class="pic" src={hero.still} alt="" />
+  <div class="hero story-hero">
+    <picture>
+      {hero.loop && (
+        <source media="(prefers-reduced-motion: reduce)" srcset={hero.still} />
+      )}
+      <img
+        class="pic"
+        src={hero.loop ?? hero.still}
+        data-still={hero.still}
+        alt={hero.alt}
+        style={hero.position ? `object-position: ${hero.position}` : undefined}
+      />
+    </picture>
+    <div class="words">
+      <p class="kicker">{kicker}</p>
+      <h1 class="large-title">{title}</h1>
+      <p class="sub">{summary}</p>
+    </div>
   </div>
-  <article class="sheet">
-    <h1>{title}</h1>
-    <p class="summary">{summary}</p>
-    <time datetime={date}>{formatDay(date)}</time>
-    <Content />
-  </article>
-  {links.length > 0 && (
-    <Fragment slot="toolbar">
-      {links.map((link) => (
-        <a class="pill" href={link.url} rel="noopener">
+  {showLinks && (
+    <div class="story-links">
+      {links.map((link, i) => (
+        <a
+          class:list={["pill glass", { accent: i === 0 }]}
+          href={link.url}
+          rel="noopener"
+        >
           {link.label}
         </a>
       ))}
-    </Fragment>
+      {source === "private" && <span class="private">Source is private</span>}
+    </div>
   )}
+  <div class="story-stats">
+    {stats.map((stat) => (
+      <div class="stat glass">
+        <b>{stat.value}</b>
+        <span>{stat.label}</span>
+      </div>
+    ))}
+  </div>
+  <article class="sheet">
+    <Content />
+    <section class="highlights">
+      <h2>Highlights</h2>
+      <ol>
+        {highlights.map((item, i) => (
+          <li>
+            <span class="num" aria-hidden="true">
+              {i + 1}
+            </span>
+            <div>
+              <b>{item.title}</b>
+              <span>{item.text}</span>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+    {results && (
+      <figure class="results">
+        <img src={results.src} alt={results.alt} loading="lazy" />
+        <figcaption>{results.caption}</figcaption>
+      </figure>
+    )}
+    <section class="stack">
+      <h2>Built with</h2>
+      <ul>
+        {stack.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>
+    </section>
+    <section class="details">
+      <h2>Details</h2>
+      <dl>
+        <dt>Started</dt>
+        <dd>
+          <time datetime={date}>{formatDay(date)}</time>
+        </dd>
+        <dt>Status</dt>
+        <dd>{status}</dd>
+        {license && <dt>License</dt>}
+        {license && <dd>{license}</dd>}
+        <dt>Source</dt>
+        <dd>{sourceLabel}</dd>
+        {builtOn && <dt>Built on</dt>}
+        {builtOn && (
+          <dd>
+            <a href={builtOn.url} rel="noopener">
+              {builtOn.name}
+            </a>
+          </dd>
+        )}
+      </dl>
+    </section>
+  </article>
 </Site>

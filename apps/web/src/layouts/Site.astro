@@ -130,10 +130,18 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
           return;
         }
         const title = page?.querySelector(".large-title");
-        const under =
-          title instanceof HTMLElement
-            ? title.offsetTop + title.offsetHeight / 2 - nav.offsetHeight
-            : 24;
+        // the title's top is measured against the body, since a title inside a positioned box (a story's hero) has
+        // that box as its offset parent. the page can be scaled while it's pinned on the phone, so the rect's gap is
+        // put back to the body's own pixels
+        let under = 24;
+        if (title instanceof HTMLElement) {
+          const box = body.getBoundingClientRect();
+          const scale = box.height / body.clientHeight || 1;
+          const top =
+            (title.getBoundingClientRect().top - box.top) / scale +
+            body.scrollTop;
+          under = top + title.offsetHeight / 2 - nav.offsetHeight;
+        }
         nav.classList.toggle("scrolled", body.scrollTop > under);
         nav.classList.toggle(
           "more-below",

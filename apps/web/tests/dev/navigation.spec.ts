@@ -524,6 +524,40 @@ test.describe("with the clock installed", () => {
     await settledOn(page, "/", null);
   });
 
+  test("a story's small title shows once the hero title scrolls under the bar", async ({
+    page,
+  }) => {
+    await page.goto("/projects/super-hexagon-rl?dev&noweather");
+    await page.waitForFunction(() => Boolean((window as any).spike));
+    await settledOn(page, "/projects/super-hexagon-rl", "Projects");
+    const header = page.locator("#page > header");
+    const title = page.locator("#page .story-hero h1.large-title");
+    await expect(header).not.toHaveClass(/scrolled/);
+    // the title is well below the bar, so a scroll that leaves it there keeps the small title away
+    await page.evaluate(() => {
+      document.querySelector<HTMLElement>("#page > .body")!.scrollTop = 100;
+    });
+    await expect(header).not.toHaveClass(/scrolled/);
+    const bar = (await header.boundingBox())!;
+    await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>("#page > .body")!;
+      const heading = document.querySelector<HTMLElement>(
+        "#page .story-hero h1.large-title",
+      )!;
+      const top =
+        heading.getBoundingClientRect().top -
+        body.getBoundingClientRect().top +
+        body.scrollTop;
+      body.scrollTop = top + heading.offsetHeight / 2;
+    });
+    await expect(header).toHaveClass(/scrolled/);
+    expect((await title.boundingBox())!.y).toBeLessThan(bar.y + bar.height);
+    await expect(page.locator("#page > header .inline-title")).toHaveCSS(
+      "opacity",
+      "1",
+    );
+  });
+
   test("an old project address opens its new page in 3D", async ({ page }) => {
     // the dev server's redirect drops the query, so window.spike only loads on the second visit
     await page.goto("/projects/device-intro");

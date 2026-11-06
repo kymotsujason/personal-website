@@ -15,7 +15,7 @@ source: unreleased
 hero:
   still: /projects/tobii-gaze-linux/hero.webp
   alt: The Tobii Gaze window, with a setup checklist, a picker for which screen the tracker sits under, and a preview of the gaze ring with opacity, color, and timing controls
-  position: 50% 30%
+  position: 50% 0%
 thumb: /projects/tobii-gaze-linux/thumb.webp
 highlights:
   - title: Measured, not trusted

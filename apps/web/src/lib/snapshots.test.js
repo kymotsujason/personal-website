@@ -60,6 +60,24 @@ describe("an app's last page", () => {
     expect(holder.innerHTML).toBe('<h1>Hi</h1><img src="/a.png"><a>link</a>');
   });
 
+  test("a kept page shows a looping hero as its still", () => {
+    const root = snapshotNodes(
+      '<picture><source media="(prefers-reduced-motion: reduce)" srcset="/hero.webp">' +
+        '<img class="pic" src="/hero-loop.webp" data-still="/hero.webp" alt="A hero"></picture>',
+    );
+    expect(root.querySelector("picture > source")).toBeNull();
+    expect(root.querySelector("img").getAttribute("src")).toBe("/hero.webp");
+  });
+
+  test("a still that's a javascript url is dropped before it's used", () => {
+    const root = snapshotNodes(
+      '<picture><img src="/hero-loop.webp" data-still="javascript:x()" alt=""></picture>',
+    );
+    const image = root.querySelector("img");
+    expect(image.hasAttribute("data-still")).toBe(false);
+    expect(image.getAttribute("src")).toBe("/hero-loop.webp");
+  });
+
   test("that storage can't read gives nothing instead of throwing", () => {
     localStorage.setItem("appSnapshots", "{not json");
     expect(snapshotOf("Blog")).toBeNull();

@@ -81,5 +81,10 @@ export const snapshotNodes = (html) => {
       }
     }
   });
+  // a kept loop would play again, so its hero shows the still, and the reduced motion source has nothing left to pick
+  root.querySelectorAll("img[data-still]").forEach((img) => {
+    img.setAttribute("src", img.getAttribute("data-still"));
+  });
+  root.querySelectorAll("picture > source").forEach((el) => el.remove());
   return root;
 };

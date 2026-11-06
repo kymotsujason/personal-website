@@ -318,3 +318,35 @@ test("the 2D version link loads the flat site and the 3D version link loads 3d a
   await expect(page.locator('#page a[data-version="3d"]')).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test.describe("a story with a loop", () => {
+  const settled = (page: Page) =>
+    page.waitForFunction(() => {
+      const image = document.querySelector<HTMLImageElement>(
+        "#page .story-hero img.pic",
+      );
+      return Boolean(image?.complete && image.currentSrc);
+    });
+
+  test("a story with a loop shows its still with reduced motion", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/projects/super-hexagon-rl?2d");
+    await settled(page);
+    const src = await page
+      .locator("#page .story-hero img.pic")
+      .evaluate((image: HTMLImageElement) => image.currentSrc);
+    expect(src.endsWith("hero.webp")).toBe(true);
+  });
+
+  test("a story with a loop plays the loop without it", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/projects/super-hexagon-rl?2d");
+    await settled(page);
+    const src = await page
+      .locator("#page .story-hero img.pic")
+      .evaluate((image: HTMLImageElement) => image.currentSrc);
+    expect(src.endsWith("hero-loop.webp")).toBe(true);
+  });
+});

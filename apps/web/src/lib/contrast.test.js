@@ -24,6 +24,7 @@ const number = (name) => {
 };
 const accentFill = number("--accent-fill");
 const pillBase = number("--pill-base");
+const heroFade = number("--hero-fade-under-title");
 const RIM = [255, 255, 255, 0.6];
 const SHEET = [12, 12, 20, 0.72];
 const GLASS = [255, 255, 255, 0.14];
@@ -334,4 +335,13 @@ test("white reads on the flat home's widgets", () => {
       4.5,
     );
   });
+});
+
+// the hero's dark fade, at the top edge of the words on it, over a picture that is pure white at its brightest
+test("white hero text clears 4.5:1 on a white picture", () => {
+  const FADE = [8, 8, 16];
+  const under = composite([...FADE, heroFade], [255, 255, 255]);
+  expect(contrastRatio("#ffffff", hex(under))).toBeGreaterThanOrEqual(4.5);
+  const projects = accents.find((a) => a.app === "Projects");
+  expect(contrastRatio(projects.color, hex(under))).toBeGreaterThanOrEqual(4.5);
 });
