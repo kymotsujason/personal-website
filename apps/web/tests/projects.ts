@@ -1,9 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
 import { parseFrontmatter } from "astro/markdown";
 import { createSatteriMarkdownProcessor } from "@astrojs/markdown-satteri";
 
-const DIR = path.join("src/content/projects");
+const DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../src/content/projects",
+);
 
 export type Entry = {
   slug: string;
@@ -34,29 +39,14 @@ const processor = await createSatteriMarkdownProcessor({
   features: { smartPunctuation: false },
 });
 
-const ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-};
-
 const introText = async (body: string) => {
   const { code } = await processor.render(body);
-  const paragraph = code.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+  const { document } = new JSDOM(`<body>${code}</body>`).window;
+  const paragraph = document.body.querySelector(":scope > p");
   if (!paragraph) {
     throw new Error("an entry has no first paragraph");
   }
-  return paragraph[1]!
-    .replace(/<[^>]+>/g, "")
-    .replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (all, hex, dec, name) =>
-      hex || dec
-        ? String.fromCodePoint(hex ? parseInt(hex, 16) : Number(dec))
-        : (ENTITIES[name] ?? all),
-    )
-    .replace(/\s+/g, " ")
-    .trim();
+  return paragraph.textContent!.replace(/\s+/g, " ").trim();
 };
 
 // the frontmatter is read by astro's own parser, so line endings and yaml options match the build

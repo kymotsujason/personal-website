@@ -48,3 +48,30 @@ test("an entry with no frontmatter is an error", async () => {
     /no frontmatter/,
   );
 });
+
+test("a link title with a greater-than sign stays out of the first paragraph's text", async () => {
+  const e = await parseEntry(
+    "a.md",
+    source(
+      "\n",
+      'A [fast](https://example.com "Frames > 30") camera.\n\nSecond.',
+    ),
+  );
+  expect(firstParagraph(e)).toBe("A fast camera.");
+});
+
+test("a code block before the first paragraph is not the first paragraph", async () => {
+  const e = await parseEntry(
+    "a.md",
+    source("\n", "```\nsome code\n```\n\nReal words.\n\nSecond."),
+  );
+  expect(firstParagraph(e)).toBe("Real words.");
+});
+
+test("a quoted paragraph is not a top level paragraph", async () => {
+  const e = await parseEntry(
+    "a.md",
+    source("\n", "> A quote.\n\nReal words.\n\nSecond."),
+  );
+  expect(firstParagraph(e)).toBe("Real words.");
+});
