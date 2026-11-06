@@ -13,7 +13,8 @@ export type Painted = {
   opacity: number;
   hidden: boolean;
   covers: boolean;
-  texts: { selector: string; color: number[] }[];
+  // each text's own box, as its bottom and top edges' distances above the pseudo-element's foot
+  texts: { selector: string; color: number[]; from: number; to: number }[];
 };
 
 // reads what the browser painted for a dark fade, so a missing background or a changed stop fails here. the fade is the
@@ -24,6 +25,20 @@ export type FadeSpec = {
   pseudo: "::before" | "::after";
   words: string;
   texts: string[];
+};
+
+// the dark fade each page paints under its words. a story's follows its words block, a card's is the card's own pseudo-element
+export const STORY_FADE: FadeSpec = {
+  owner: "#page .story-hero .words",
+  pseudo: "::before",
+  words: ".words",
+  texts: [".kicker", ".sub", "h1"],
+};
+export const CARD_FADE: FadeSpec = {
+  owner: "#page a.project-card.featured",
+  pseudo: "::after",
+  words: ".words",
+  texts: [".kicker", ".sub", "h2"],
 };
 
 export const paintedFade = (page: Page, spec: FadeSpec): Promise<Painted> =>
@@ -53,12 +68,16 @@ export const paintedFade = (page: Page, spec: FadeSpec): Promise<Painted> =>
           style.content === "none" ||
           style.content === "normal",
         covers: left <= wordsBox.left + 0.5 && right >= wordsBox.right - 0.5,
-        texts: texts.map((selector) => ({
-          selector,
-          color: color(
-            getComputedStyle(wordsEl.querySelector(selector)!).color,
-          ),
-        })),
+        texts: texts.map((selector) => {
+          const el = wordsEl.querySelector(selector)!;
+          const rect = el.getBoundingClientRect();
+          return {
+            selector,
+            color: color(getComputedStyle(el).color),
+            from: foot - rect.bottom,
+            to: foot - rect.top,
+          };
+        }),
       };
     }, spec)
     .then((painted) => ({
@@ -112,21 +131,30 @@ const fadeAt = (painted: Painted, distance: number) => {
 export const alphaAt = (painted: Painted, distance: number): number =>
   fadeAt(painted, distance).alpha;
 
-// each text's contrast against the fade over a picture that is pure white behind it, with the text's own alpha laid on top.
-// a fade that is hidden, transparent, or doesn't span the words leaves the white picture as the backing
+// each text's worst contrast against the fade over a picture that is pure white behind it, taken at every pixel of the
+// gradient behind the text's own box, with the text's own alpha laid on top. a fade that is hidden, transparent, or
+// doesn't span the words leaves the white picture as the backing
 export const worstContrasts = (painted: Painted) => {
-  const { rgb, alpha } = fadeAt(painted, painted.distance);
   const painting = painted.hidden || !painted.covers ? 0 : painted.opacity;
   const white = [255, 255, 255];
-  const backing = composite(
-    [rgb[0]!, rgb[1]!, rgb[2]!, alpha * painting],
-    white,
-  );
-  return painted.texts.map(({ selector, color: text }) => ({
-    selector,
-    ratio: contrastRatio(
-      composite([text[0]!, text[1]!, text[2]!, text[3] ?? 1], backing),
-      backing,
-    ),
-  }));
+  return painted.texts.map(({ selector, color: text, from, to }) => {
+    const distances = [from, to];
+    for (let d = Math.ceil(from); d < to; d++) {
+      distances.push(d);
+    }
+    let worst = Infinity;
+    for (const distance of distances) {
+      const { rgb, alpha } = fadeAt(painted, distance);
+      const backing = composite(
+        [rgb[0]!, rgb[1]!, rgb[2]!, alpha * painting],
+        white,
+      );
+      const ratio = contrastRatio(
+        composite([text[0]!, text[1]!, text[2]!, text[3] ?? 1], backing),
+        backing,
+      );
+      worst = Math.min(worst, ratio);
+    }
+    return { selector, ratio: worst };
+  });
 };

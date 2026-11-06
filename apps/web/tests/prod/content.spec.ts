@@ -1,5 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { alphaAt, paintedFade, worstContrasts, type FadeSpec } from "./fade";
+import {
+  alphaAt,
+  CARD_FADE,
+  paintedFade,
+  STORY_FADE,
+  worstContrasts,
+  type FadeSpec,
+} from "./fade";
 import {
   byRank,
   dayText,
@@ -27,20 +34,6 @@ const NO_LOOP = byRank.find((e) => !e.data.hero.loop)!;
 const PRIVATE = byRank.find((e) => e.data.source === "private")!;
 const UNRELEASED = byRank.find((e) => e.data.source === "unreleased")!;
 const BUILT_ON = byRank.find((e) => e.data.builtOn)!;
-
-// the dark fade each page paints under its words. a story's follows its words block, a card's is the card's own pseudo-element
-const STORY_FADE: FadeSpec = {
-  owner: "#page .story-hero .words",
-  pseudo: "::before",
-  words: ".words",
-  texts: [".sub", "h1"],
-};
-const CARD_FADE: FadeSpec = {
-  owner: "#page a.project-card.featured",
-  pseudo: "::after",
-  words: ".words",
-  texts: [".sub", "h2"],
-};
 
 const expectOnFade = async (page: Page, spec: FadeSpec, label: string) => {
   const painted = await paintedFade(page, spec);
@@ -319,6 +312,17 @@ test.describe("with javascript off", () => {
         }));
         expect(box.aspect).toContain(`${size.width} / ${size.height}`);
         expect(box.ratio).toBeCloseTo(size.width / size.height, 1);
+        // the declared size has to be the file's own, within a pixel once the file is scaled to the declared width
+        const natural = await img.evaluate(async (el: HTMLImageElement) => {
+          const file = new Image();
+          file.src = el.currentSrc || el.src;
+          await file.decode();
+          return { width: file.naturalWidth, height: file.naturalHeight };
+        });
+        expect(natural.width).toBeGreaterThan(0);
+        expect(
+          Math.abs((natural.height * size.width) / natural.width - size.height),
+        ).toBeLessThanOrEqual(1);
       }
     });
 
