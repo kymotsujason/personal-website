@@ -9,6 +9,9 @@ const memory = (items = {}) => ({
   setItem: (key, value) => {
     items[key] = String(value);
   },
+  removeItem: (key) => {
+    delete items[key];
+  },
 });
 
 const refusing = () => ({
@@ -18,12 +21,17 @@ const refusing = () => ({
   setItem: () => {
     throw new Error("storage refused");
   },
+  removeItem: () => {
+    throw new Error("storage refused");
+  },
 });
 
 // a page as the head script sees it: the root's classes, the build id meta, a canvas that may or may not give
 // webgl2, the navigation entry, both storages, and the timers and listeners it registers
 const makePage = ({
   path = "/",
+  search = "",
+  hash = "",
   app = undefined,
   navType = "navigate",
   local = {},
@@ -52,6 +60,7 @@ const makePage = ({
   const contexts = [];
   const links = [];
   const clock = { now: 0 };
+  const replaced = [];
   const document = {
     hidden,
     addEventListener: (type, fn) => {
@@ -100,7 +109,14 @@ const makePage = ({
   };
   const window = {
     document,
-    location: { pathname: path },
+    location: { pathname: path, search, hash },
+    URLSearchParams,
+    history: {
+      state: { index: 0 },
+      replaceState: (...args) => {
+        replaced.push({ state: args[0], url: args[2] });
+      },
+    },
     performance: {
       now: () => clock.now,
       getEntriesByType: (type) =>
@@ -175,6 +191,8 @@ const makePage = ({
     contexts,
     links,
     clock,
+    replaced,
+    localStore,
     setHidden,
     run: () => vm.runInContext(source, context),
   };
@@ -403,6 +421,74 @@ describe("3d and the watchdog", () => {
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.contexts).toHaveLength(0);
     expect(page.links).toHaveLength(0);
+  });
+
+  test("?2d saves the choice, shows the flat site, and leaves the address bar", () => {
+    const local = {};
+    const page = makePage({ path: "/about", search: "?2d", local });
+    page.run();
+    expect(local["2d"]).toBe("1");
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.contexts).toHaveLength(0);
+    expect(page.links).toHaveLength(0);
+    expect(page.replaced).toEqual([{ state: { index: 0 }, url: "/about" }]);
+  });
+
+  test("?2d keeps the other params and the hash", () => {
+    const page = makePage({
+      path: "/blog/x",
+      search: "?ref=mail&2d=1",
+      hash: "#part",
+    });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.replaced.map((entry) => entry.url)).toEqual([
+      "/blog/x?ref=mail#part",
+    ]);
+  });
+
+  test("?2d shows the flat site even when storage refuses the write", () => {
+    const page = makePage({ search: "?2d", storage: refusing() });
+    expect(() => page.run()).not.toThrow();
+    expect(page.classes.has("has-3d")).toBe(false);
+  });
+
+  test("?3d clears a saved 2d choice and shows the scene", () => {
+    const local = { "2d": "1" };
+    const page = makePage({ search: "?3d", local });
+    page.run();
+    expect("2d" in local).toBe(false);
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.replaced.map((entry) => entry.url)).toEqual(["/"]);
+  });
+
+  test("?3d shows the scene even when storage refuses the removal", () => {
+    const page = makePage({
+      search: "?3d",
+      storage: {
+        getItem: (key) => (key === "2d" ? "1" : null),
+        setItem: () => {},
+        removeItem: () => {
+          throw new Error("storage refused");
+        },
+      },
+    });
+    expect(() => page.run()).not.toThrow();
+    expect(page.classes.has("has-3d")).toBe(true);
+  });
+
+  test("a url without the version params leaves the address bar alone", () => {
+    const page = makePage({ search: "?ref=mail" });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.replaced).toHaveLength(0);
+  });
+
+  test("a browser without URLSearchParams ignores the query", () => {
+    const page = makePage({ search: "?2d" });
+    delete page.window.URLSearchParams;
+    expect(() => page.run()).not.toThrow();
+    expect(page.classes.has("has-3d")).toBe(true);
   });
 
   test("the not found page shows as the flat site", () => {

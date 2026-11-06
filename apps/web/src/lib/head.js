@@ -45,6 +45,43 @@
     }
   }
 
+  function remove(kind, key) {
+    try {
+      var store =
+        kind === "session" ? window.sessionStorage : window.localStorage;
+      if (store) {
+        store.removeItem(key);
+      }
+    } catch (error) {
+      // a refused removal is dropped, as in storage.js
+    }
+  }
+
+  // a shared link can carry ?2d or ?3d, which saves the same choice the version links save. the query comes off the
+  // address bar, so a visitor who copies the url doesn't pass the choice on
+  function versionFromQuery() {
+    try {
+      var params = new window.URLSearchParams(window.location.search);
+      var choice = params.has("2d") ? "2d" : params.has("3d") ? "3d" : "";
+      if (!choice) {
+        return "";
+      }
+      params.delete("2d");
+      params.delete("3d");
+      var rest = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname +
+          (rest ? "?" + rest : "") +
+          window.location.hash,
+      );
+      return choice;
+    } catch (error) {
+      return "";
+    }
+  }
+
   // a reload, or back or forward into an app page, shows the page at once. otherwise a first visit plays the full
   // intro and a returning one the fast intro
   function arrivalFor(options) {
@@ -202,7 +239,17 @@
   }
   paintSky();
 
-  if (!notFound && read("local", "2d") !== "1" && hasWebgl2()) {
+  // the query wins for this load even when storage refuses to save it
+  var version = versionFromQuery();
+  if (version === "2d") {
+    write("local", "2d", "1");
+  } else if (version === "3d") {
+    remove("local", "2d");
+  }
+  var chose2d =
+    version === "2d" || (version !== "3d" && read("local", "2d") === "1");
+
+  if (!notFound && !chose2d && hasWebgl2()) {
     root.classList.add("has-3d");
     preload();
     startWatchdog();
