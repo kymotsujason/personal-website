@@ -21,3 +21,22 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   display: inline;
   margin-right: 12px;
 }
+
+/* a captured frame of the hands and phone, drawn from pieces of its atlas. only the frame the player shows is visible */
+.flat-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.flat-frame.on {
+  visibility: visible;
+}
+
+.flat-frame i {
+  position: absolute;
+  background-image: var(--atlas);
+  background-repeat: no-repeat;
+}
