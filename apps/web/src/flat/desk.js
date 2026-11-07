@@ -17,7 +17,9 @@ const cross = ([ax, ay, az], [bx, by, bz]) => [
   ax * by - ay * bx,
 ];
 
-// a world direction as the desk camera sees it, turned as three turns that camera (YXZ, x by pitch, y by -yaw)
+// a world direction as the desk camera sees it. backdrop.js turns that camera with three's YXZ order (rotation x by
+// pitch, y by -yaw), so the view yaws about the world's up and then tilts about its own sideways axis. lonSpan's
+// comment there describes the other order, but the camera renders with this one
 const toCamera = ([x, y, z], yaw, pitch) => {
   const x1 = Math.cos(yaw) * x + Math.sin(yaw) * z;
   const z1 = -Math.sin(yaw) * x + Math.cos(yaw) * z;

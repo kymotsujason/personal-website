@@ -141,11 +141,12 @@ export const curveInverse = (curve, p) => {
 // held longer than the rest, and each time is rounded once so a frame ends on the same ms the next one starts
 export const frameTimes = (manifest, curve, startMs, durationMs) => {
   const { frames } = manifest;
-  // a lead set's frames above LEAD_TOP count as LEAD_TOP, as in frameFor
+  // a lead set's frames above LEAD_TOP count as LEAD_TOP, as in frameFor, while the unfold itself still runs from the
+  // first frame's real fold, so the swap from the lead lands where the moving fold passes it
   const top = isLeadSet(frames) ? LEAD_TOP : Infinity;
   const folds = frames.map((frame) => Math.min(frame.fold, top));
-  const first = folds[0];
-  const span = folds[folds.length - 1] - first;
+  const first = frames[0].fold;
+  const span = frames[frames.length - 1].fold - first;
   const progress = folds.map((fold) =>
     span === 0 ? 0 : Math.min(Math.max((fold - first) / span, 0), 1),
   );

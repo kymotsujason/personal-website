@@ -9,6 +9,7 @@ import {
 } from "../scene/shared/motion.js";
 import { frameTimes } from "./frames.js";
 import { arrivalKind, introPlan, playIntro } from "./intro.js";
+import { stageGeometry } from "./stage.js";
 
 const realManifest = (folder) =>
   JSON.parse(
@@ -218,4 +219,139 @@ test("reduced motion skips the intro", async () => {
   expect(await intro.finished).toBe("skipped");
   await intro.unlocked;
   expectOpenAtRest(fake);
+});
+
+test("a played intro's animations end on an explicit keyframe and share one start time", async () => {
+  const made = [];
+  const animation = (target, keyframes, timing) => {
+    let resolveFinished = () => {};
+    const finished = new Promise((resolve) => {
+      resolveFinished = resolve;
+    });
+    const record = {
+      target,
+      keyframes,
+      timing,
+      startTime: null,
+      cancelled: false,
+      finished,
+      finish: () => resolveFinished(),
+      cancel() {
+        record.cancelled = true;
+      },
+    };
+    made.push(record);
+    return record;
+  };
+  vi.stubGlobal("document", { timeline: { currentTime: 1234.5 } });
+  vi.stubGlobal(
+    "KeyframeEffect",
+    class {
+      constructor(target, keyframes, timing) {
+        Object.assign(this, { target, keyframes, timing });
+      }
+    },
+  );
+  vi.stubGlobal(
+    "Animation",
+    class {
+      constructor(effect) {
+        return animation(null, effect.keyframes, effect.timing);
+      }
+    },
+  );
+  try {
+    const element = (name) => ({
+      name,
+      style: {},
+      animate: (keyframes, timing) => animation(name, keyframes, timing),
+    });
+    const geometry = stageGeometry({
+      width: 1280,
+      height: 800,
+      manifest: landscape,
+    });
+    const shown = [];
+    const stage = {
+      geometry,
+      placed: geometry.placed,
+      setPose: () => {},
+      setFold: () => {},
+      layers: { screens: element("screens"), frames: element("frames") },
+      frameLayer: {
+        elements: landscape.frames.map((_, i) => element(`frame ${i}`)),
+        frameFor: (fold) => (fold === 0 ? landscape.frames.length - 1 : 0),
+        hide: () => shown.push("hide"),
+      },
+    };
+    const screens = {
+      cover: element("cover"),
+      flap: element("flap"),
+      body: element("body"),
+      place: () => {},
+      faceStyles: (frame) => ({
+        cover: { visible: frame.fold > 0.5, zIndex: 1, transform: "none" },
+        flap: {
+          visible: frame.fold <= 0.5,
+          zIndex: 2,
+          transform: `translate(${frame.fold}px)`,
+        },
+      }),
+    };
+    const desk = { blurLayer: element("desk"), setBlur: () => {} };
+    const intro = playIntro("full", {
+      stage,
+      screens,
+      desk,
+      manifest: landscape,
+    });
+    intro.start();
+    const plan = intro.plan;
+
+    expect(shown).toEqual(["hide"]);
+    expect(made.length).toBeGreaterThan(plan.frames.length);
+    made.forEach((a) => expect(a.startTime).toBe(1234.5));
+
+    // every keyframed track ends on offset 1, or on its last keyframe for the two keyframe frame flips
+    const tracks = made.filter(
+      (a) => a.target && !a.target.startsWith("frame "),
+    );
+    expect(tracks.map((a) => a.target).sort()).toEqual(
+      ["cover", "desk", "flap", "frames", "screens"].sort(),
+    );
+    tracks.forEach((a) => {
+      expect(a.keyframes[0].offset).toBe(0);
+      expect(a.keyframes[a.keyframes.length - 1].offset).toBe(1);
+      expect(a.timing).toMatchObject({
+        duration: plan.total,
+        fill: "forwards",
+      });
+    });
+
+    // each shown frame is visible over its own interval, and only the last one holds after it ends
+    const flips = made.filter((a) => a.target?.startsWith("frame "));
+    expect(flips).toHaveLength(plan.frames.length);
+    flips.forEach((a, i) => {
+      const { index, start, end } = plan.frames[i];
+      expect(a.target).toBe(`frame ${index}`);
+      expect(a.keyframes).toEqual([
+        { visibility: "visible" },
+        { visibility: "visible" },
+      ]);
+      expect(a.timing.delay).toBe(start);
+      expect(a.timing.duration).toBe(end - start);
+      expect(a.timing.fill).toBe(i === flips.length - 1 ? "forwards" : "none");
+    });
+
+    // the unlock marker runs to the fold crossing TAP_FOLD
+    const marker = made.find((a) => a.target === null);
+    expect(marker.timing.duration).toBe(plan.unlockAt);
+
+    // once the move ends, every animation goes and the intro is done
+    made.find((a) => a.target === "frames").finish();
+    expect(await intro.finished).toBe("done");
+    made.forEach((a) => expect(a.cancelled).toBe(true));
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

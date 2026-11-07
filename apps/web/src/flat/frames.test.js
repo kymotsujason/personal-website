@@ -125,10 +125,10 @@ test("frameTimes ends at the last frame", () => {
     0, 200, 600, 900,
   ]);
 
-  // the lead frames all have the phone closed, so only the last of them shows during the unfold, which starts from
-  // where the hands wait (0.99)
+  // the lead frames all count as the hands' wait at 0.99, which the unfold from 1 passes at 10 ms, and the intro times
+  // them from their own t instead
   expect(frameTimes(leadSet, linear, 0, 1000)).toEqual([
-    0, 0, 0, 0, 5, 253, 747,
+    0, 10, 10, 10, 15, 260, 750,
   ]);
 });
 
@@ -137,17 +137,19 @@ test("frameFor and frameTimes swap from the lead to the fold frames at the same 
   const { frameFor } = createFrameIndex(leadSet);
   expect(frameFor(0.986, 1)).toBe(3);
   expect(frameFor(0.984, 1)).toBe(4);
-  const times = frameTimes(leadSet, linear, 0, 1000);
-  const foldAt = (ms) => 0.99 * (1 - ms / 1000);
-  expect(frameFor(foldAt(times[4] - 1), 1)).toBe(3);
-  expect(frameFor(foldAt(times[4] + 1), 1)).toBe(4);
-
-  const portrait = realManifest("portrait-open-day-half");
-  const real = createFrameIndex(portrait);
-  const first = portrait.frames.findIndex((f) => f.fold < 0.99);
-  const swap = (0.99 + portrait.frames[first].fold) / 2;
-  expect(real.frameFor(swap + 1e-4, 1)).toBe(first - 1);
-  expect(real.frameFor(swap - 1e-4, 1)).toBe(first);
+  // the unfold runs from the closed phone (1) as the intro plays it, 1 - curve(u), and frameFor at the fold reached a
+  // ms before and after each frame's time picks the frame before and that frame
+  const agree = (manifest, curve, durationMs) => {
+    const times = frameTimes(manifest, curve, 0, durationMs);
+    const index = createFrameIndex(manifest);
+    const foldAt = (ms) => 1 - curve(Math.min(Math.max(ms / durationMs, 0), 1));
+    const first = manifest.frames.findIndex((f) => f.fold < 0.99);
+    expect(index.frameFor(foldAt(times[first] - 1), 1)).toBe(first - 1);
+    expect(index.frameFor(foldAt(times[first] + 1), 1)).toBe(first);
+    expect(index.frameFor(foldAt(times[first + 1] + 1), 1)).toBe(first + 1);
+  };
+  agree(leadSet, linear, 1000);
+  agree(realManifest("portrait-open-day-half"), inOutSine, 1100);
 });
 
 test("chooseLighting gives day at noon, night at 23, dusk at 19", () => {
