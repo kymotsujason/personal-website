@@ -17,14 +17,20 @@ import {
 } from "./apps.js";
 import { createCards, createKept } from "./cards.js";
 import { createDesk } from "./desk.js";
+import { createDrift } from "./drift.js";
 import { createFolds, pathAfter } from "./fold.js";
 import { chooseLighting, phoneHeightPx, sizeFor } from "./frames.js";
 import { arrivalKind, playIntro } from "./intro.js";
 import { createLoop } from "./loop.js";
+import { createHome } from "./home.js";
+import { createLook, motionPose } from "./look.js";
 import { loadManifest } from "./manifest.js";
 import { createNavigation } from "./navigation.js";
+import { createRain } from "./rain.js";
+import { createMeter, startsCalm, watchFrames } from "./rest.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
+import { createFlatStatus } from "./status.js";
 import { createSwitcher } from "./switcher.js";
 import { homography, mapPoint, quadToQuad } from "./warp.js";
 
@@ -90,6 +96,10 @@ export const startFlatScene = ({
   const { signal } = controller;
   let failed = false;
   let shown = false;
+  let busyNow = false;
+  let settleIdle = () => {};
+  let stopEffects = () => {};
+  let flatStatus = null;
   // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
   const scene = {
     manifest: null,
@@ -105,7 +115,16 @@ export const startFlatScene = ({
     drawing: false,
     unlocked: false,
     phone: "closed",
-    busy: false,
+    // a motion starting holds the drift where it was, so the phone doesn't jump (drift.js)
+    get busy() {
+      return busyNow;
+    },
+    set busy(value) {
+      if (value && !busyNow) {
+        settleIdle();
+      }
+      busyNow = value;
+    },
     zoomed: false,
     pageFlat: false,
     appVisible: false,
@@ -129,6 +148,11 @@ export const startFlatScene = ({
     portrait: false,
     full: null,
     frosted: false,
+    // the rest rule (rest.js): plain glass, still rain, and no drift until a device that starts calm measures fast
+    calm: true,
+    rain: null,
+    // the pose as last drawn, with the drift, the dodge, and the trail on it
+    shownPose: null,
     // the slow path (slowPathFor), read once at start
     slow: false,
   };
@@ -140,8 +164,10 @@ export const startFlatScene = ({
     failed = true;
     controller.abort();
     loop.stop();
+    stopEffects();
     unmount();
     dropBlack();
+    document.body.classList.remove("closed", "looking", "over-phone");
     root.classList.remove("has-flat-scene", "flat-ready");
     pageEl.getAnimations?.().forEach((animation) => animation.cancel());
     pageEl.classList.remove("hint-home");
@@ -170,6 +196,8 @@ export const startFlatScene = ({
     };
 
   const loop = createLoop({ onError: (error) => fail(error) });
+  const drift = createDrift({ scene, loop });
+  settleIdle = drift.settle;
 
   // the black the scene fades in from, over everything in the stage until the first frame shows
   const black = document.createElement("div");
@@ -222,9 +250,11 @@ export const startFlatScene = ({
     const { manifest, layer } = activeFrames();
     const frame = manifest.frames[layer.frameFor(now.fold, now.lead)];
     const { x, top } = manifest.margin;
+    // once the loop draws, that's the pose as drawn, with the dodge's move on it
+    const pose = scene.drawing && scene.shownPose ? scene.shownPose : now.pose;
     const bounds = (points) => {
       const shownAt = points.map(([px, py]) =>
-        scene.stage.toWindow([px + x, py + top], now.pose, now.fold),
+        scene.stage.toWindow([px + x, py + top], pose, now.fold),
       );
       const xs = shownAt.map((p) => p[0]);
       const ys = shownAt.map((p) => p[1]);
@@ -375,7 +405,7 @@ export const startFlatScene = ({
 
   // one frame of the phone: the portrait path, the frame and the wrappers, the screens on that frame, the desk's blur,
   // the window, #page, and which faces take input, all in the same frame
-  const draw = () => {
+  const draw = (now = performance.now()) => {
     if (!scene.drawing || !scene.stage || failed) {
       return;
     }
@@ -396,7 +426,14 @@ export const startFlatScene = ({
     scene.lastFold = scene.fold;
     const frames = activeFrames();
     stage.useFrames(frames.layer);
-    stage.setPose(scene.pose);
+    scene.shownPose = motionPose({
+      pose: scene.pose,
+      drift: drift.at(now),
+      avoid: look.avoid,
+      trail: look.trail(),
+      focal: stage.geometry.focal,
+    });
+    stage.setPose(scene.shownPose);
     stage.setFold(scene.fold, scene.lead);
     const index = frames.layer.frameFor(scene.fold, scene.lead);
     if (placedFace.layer !== frames.layer || placedFace.index !== index) {
@@ -408,6 +445,12 @@ export const startFlatScene = ({
     if (blur !== shownBlur) {
       shownBlur = blur;
       desk.setBlur(blur);
+    }
+    desk.setView(look.view.yaw, look.view.pitch);
+    // the desk can be dragged while the phone is closed and still (site.css has the cursor)
+    const closedNow = scene.phone === "closed" && !scene.busy;
+    if (closedNow !== document.body.classList.contains("closed")) {
+      document.body.classList.toggle("closed", closedNow);
     }
     drawWindow();
     scene.cardsView.draw(scene.cards);
@@ -487,6 +530,14 @@ export const startFlatScene = ({
     );
   };
 
+  // the rest rule's state: frosted glass at rest, rain moving, and the drift (which reads scene.calm itself) all follow
+  // scene.calm and reduced motion. a change wakes the loop, so the drift starts or stops on the next frame
+  const applyRest = () => {
+    scene.frosted = !scene.calm;
+    scene.rain?.setStill(scene.calm || reducedQuery.matches);
+    loop.wake();
+  };
+
   // the intro is over (ended, or taken over by a motion), so the loop draws from here on
   const afterIntro = () => {
     if (scene.drawing) {
@@ -494,7 +545,7 @@ export const startFlatScene = ({
     }
     scene.drawing = true;
     scene.moving = false;
-    scene.frosted = scene.manifest.size === "full";
+    applyRest();
     draw();
   };
 
@@ -593,6 +644,9 @@ export const startFlatScene = ({
     drag: { get: () => activeFrames().manifest.dragTable },
   });
   const folds = createFolds({ scene, loop });
+  const look = createLook({ scene, loop, folds });
+  scene.lookAhead = look.lookAhead;
+  scene.effects = { look, drift };
   const apps = createApps({ scene, loop, folds, nav, pageEl });
   const kept = createKept();
   const switcher = createSwitcher({
@@ -623,6 +677,7 @@ export const startFlatScene = ({
   const unmount = () => {
     scene.intro?.cancel();
     scene.cardsView?.destroy();
+    scene.rain?.destroy();
     scene.screens?.destroy();
     scene.desk?.destroy();
     scene.stage?.destroy();
@@ -637,6 +692,7 @@ export const startFlatScene = ({
       closeFrames: null,
       cardsView: null,
       cards: null,
+      rain: null,
     });
   };
 
@@ -662,7 +718,10 @@ export const startFlatScene = ({
       music,
       portrait,
       onOpen,
+      onPing: guard(() => flatStatus?.showPing()),
     });
+    const rain = createRain({ skies: screens.skies });
+    rain.setStill(scene.calm || reducedQuery.matches);
     stage.layers.screens.append(windowEl);
     const desk = createDesk({ host: stageEl, manifest });
     const l = screenLayout(portrait);
@@ -680,6 +739,7 @@ export const startFlatScene = ({
       stage,
       screens,
       desk,
+      rain,
       portrait,
       openFrames: { manifest, layer: stage.frameLayer },
       closeFrames: closing ? { manifest: closing, layer: closeLayer } : null,
@@ -724,6 +784,45 @@ export const startFlatScene = ({
       flatSlow: root.classList.contains("flat-slow"),
       auto: read("local", "2dAuto"),
     });
+    // the rest rule. a device that starts calm waits for the frame meter, which watches the intro's unfold, or the first
+    // motions when there's no intro, and one that doesn't has everything on from the first frame
+    scene.calm = startsCalm({
+      auto: read("local", "2dAuto"),
+      size: scene.manifest.size,
+      flatSlow: root.classList.contains("flat-slow"),
+    });
+    const meter = createMeter();
+    let judged = !scene.calm;
+    const judge = () => {
+      const verdict = judged ? null : meter.verdict();
+      if (verdict === null) {
+        return;
+      }
+      judged = true;
+      if (verdict === "fast") {
+        scene.calm = false;
+        applyRest();
+      }
+    };
+    loop.onDraw((now, dt) => {
+      if (!judged && scene.busy && scene.drawing) {
+        meter.push(dt);
+        judge();
+      }
+    });
+    reducedQuery.addEventListener("change", guard(applyRest), { signal });
+    flatStatus = createFlatStatus({ screens: () => scene.screens });
+    const home = createHome({
+      screens: () => scene.screens,
+      rain: () => scene.rain,
+      signal,
+      guard,
+    });
+    stopEffects = () => {
+      look.stop();
+      flatStatus?.stop();
+    };
+    home.start();
     folds.install({
       signal,
       guard,
@@ -731,6 +830,7 @@ export const startFlatScene = ({
     });
     apps.install({ signal, guard });
     switcher.install({ signal, guard });
+    look.install({ signal, guard });
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,
@@ -767,6 +867,13 @@ export const startFlatScene = ({
       return;
     }
     intro.start();
+    const stopWatching = judged ? () => {} : watchFrames(meter);
+    intro.finished.then(
+      guard(() => {
+        stopWatching();
+        judge();
+      }),
+    );
     intro.unlocked.then(
       guard(() => {
         if (scene.intro !== intro || scene.unlocked) {

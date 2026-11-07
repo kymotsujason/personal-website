@@ -60,16 +60,23 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   pointer-events: none;
 }
 
+/* each look holds one cube, with the camera at its center (src/flat/desk.js sets the perspective and the matrices) */
 .flat-desk-look {
   position: absolute;
   inset: 0;
 }
 
+.flat-desk-cube {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
 .flat-desk-face {
   position: absolute;
-  left: 0;
-  top: 0;
-  transform-origin: 0 0;
   background-repeat: no-repeat;
 }
 
@@ -487,4 +494,126 @@ html.has-flat-scene .flat-card-label-name {
 html.has-flat-scene .flat-snapshot {
   overflow: hidden;
   contain: strict;
+}
+
+/* rain, drizzle, and snow on each face's sky, under the widgets, icons, and text (src/flat/rain.js sets the kind, the
+   color, and the intensity). each depth is a tall layer masked with one tile of streaks or flakes and moved down by one
+   tile each loop, so the loop is a compositor animation and the tile's edge never shows. a still sky pauses it */
+html.has-flat-scene .flat-fall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: calc(0.45 + 0.55 * var(--k, 0.65));
+}
+
+html.has-flat-scene .flat-fall[hidden] {
+  display: none;
+}
+
+html.has-flat-scene .flat-fall i {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: calc(-1 * var(--tile-h));
+  height: calc(100% + var(--tile-h));
+  background: var(--fall, transparent);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  animation: flat-fall var(--loop) linear infinite;
+}
+
+html.has-flat-scene .flat-fall[data-still] i {
+  animation-play-state: paused;
+}
+
+@keyframes flat-fall {
+  to {
+    transform: translateY(var(--tile-h));
+  }
+}
+
+@keyframes flat-sway {
+  from {
+    translate: -8px 0;
+  }
+  to {
+    translate: 8px 0;
+  }
+}
+
+html.has-flat-scene .flat-fall:is([data-kind="rain"], [data-kind="drizzle"]) i {
+  --tile-h: 360px;
+  -webkit-mask-size: 240px 360px;
+  mask-size: 240px 360px;
+}
+
+html.has-flat-scene .flat-fall[data-kind="rain"] .far {
+  -webkit-mask-image: url("/fall/rain-far.svg");
+  mask-image: url("/fall/rain-far.svg");
+  --loop: 0.283s;
+}
+
+html.has-flat-scene .flat-fall[data-kind="rain"] .mid {
+  -webkit-mask-image: url("/fall/rain-mid.svg");
+  mask-image: url("/fall/rain-mid.svg");
+  --loop: 0.246s;
+}
+
+html.has-flat-scene .flat-fall[data-kind="rain"] .near {
+  -webkit-mask-image: url("/fall/rain-near.svg");
+  mask-image: url("/fall/rain-near.svg");
+  --loop: 0.209s;
+}
+
+html.has-flat-scene .flat-fall[data-kind="drizzle"] .far {
+  -webkit-mask-image: url("/fall/rain-far.svg");
+  mask-image: url("/fall/rain-far.svg");
+  --loop: 0.416s;
+}
+
+html.has-flat-scene .flat-fall[data-kind="drizzle"] .mid {
+  -webkit-mask-image: url("/fall/rain-mid.svg");
+  mask-image: url("/fall/rain-mid.svg");
+  --loop: 0.362s;
+}
+
+html.has-flat-scene .flat-fall[data-kind="drizzle"] .near {
+  display: none;
+}
+
+html.has-flat-scene .flat-fall[data-kind="snow"] i {
+  animation:
+    flat-fall var(--loop) linear infinite,
+    flat-sway var(--sway) ease-in-out infinite alternate;
+}
+
+html.has-flat-scene .flat-fall[data-kind="snow"] .far {
+  --tile-h: 200px;
+  --loop: 5s;
+  --sway: 7s;
+  -webkit-mask-image: url("/fall/snow-far.svg");
+  mask-image: url("/fall/snow-far.svg");
+  -webkit-mask-size: 200px 200px;
+  mask-size: 200px 200px;
+}
+
+html.has-flat-scene .flat-fall[data-kind="snow"] .mid {
+  --tile-h: 220px;
+  --loop: 3.7s;
+  --sway: 5.5s;
+  -webkit-mask-image: url("/fall/snow-mid.svg");
+  mask-image: url("/fall/snow-mid.svg");
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+html.has-flat-scene .flat-fall[data-kind="snow"] .near {
+  --tile-h: 240px;
+  --loop: 2.9s;
+  --sway: 4s;
+  -webkit-mask-image: url("/fall/snow-near.svg");
+  mask-image: url("/fall/snow-near.svg");
+  -webkit-mask-size: 240px 240px;
+  mask-size: 240px 240px;
 }

@@ -23,6 +23,21 @@ export const installFlatHook = (probe) => {
       const index = scene.stage.frameLayer.frameFor(fold, lead);
       scene.screens.place(scene.manifest.frames[index], scene.manifest);
     },
+    // the desk's view, the dodge, the drift, and the rest rule's state
+    effects: () => {
+      const { look, drift } = scene.effects;
+      return {
+        yaw: look.view.yaw,
+        pitch: look.view.pitch,
+        targetYaw: look.view.targetYaw,
+        targetPitch: look.view.targetPitch,
+        avoidX: look.avoid.x,
+        avoidY: look.avoid.y,
+        idle: drift.idle(),
+        calm: scene.calm,
+        frosted: scene.frosted,
+      };
+    },
     // the phone's state as the navigation reads it, with its fold
     status: () => probe.status(),
     mount: (options) => probe.mount(options),

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { wallpaperAt, NIGHT } from "./monitors.js";
 import { loadingManager, failScene } from "./lifetime.js";
 import { DESK_FOV, DESK_REST_PITCH } from "./shared/motion.js";
+import { DESK_EXTENT, restPitchFor, createLimits, clampLook } from "./shared/lookLimits.js";
 
 // jason's desk behind the phone: a partial photo sphere stitched from 21 photos taken from his chair (hugin, with the
 // matches filtered against the shooting grid since every monitor shows the same wallpaper). it's drawn by its own
@@ -10,14 +11,7 @@ import { DESK_FOV, DESK_REST_PITCH } from "./shared/motion.js";
 export const DESK = {
     src: "/desk.jpg",
     env: "/desk-env.jpg",
-    lonMin: -100.72,
-    lonMax: 83.16,
-    latMin: -62.6,
-    latMax: 78.48,
-    // the stitch's lon that counts as straight ahead (the keyboard), and the highest the view's top edge may go: just
-    // above the top monitors' frames (their highest point is about 44), past that it's only ceiling
-    forward: -14,
-    topLat: 50,
+    ...DESK_EXTENT,
     // where the view rests, as the lat of its center. halfway between how far it could look up and down before the
     // photo grew 220 rows at its bottom (art/desk-stitch/desk/extend.py)
     restPitch: DESK_REST_PITCH,
@@ -39,8 +33,6 @@ export const DESK = {
 
 const BG_FOV = DESK_FOV;
 const RADIUS = 100;
-// keeps the view's edge a little inside the photo's edge
-const MARGIN = 2;
 
 // whether image bitmaps decode the way loadPhoto needs, by the same test three's GLTFLoader uses
 const browserVersion = (pattern) => {
@@ -500,87 +492,14 @@ export const createBackdrop = (renderer, onEnvironment) => {
     };
 
     // look is where the view points, in degrees: yaw from straight ahead, pitch as the lat of the view's center
-    const halfV = BG_FOV / 2;
-    const pitchLimits = [DESK.latMin + halfV + MARGIN, Math.min(DESK.latMax - MARGIN, DESK.topLat) - halfV];
-    // the view rests where it did before the photo grew at its bottom, halfway between the old limits, so the extra
-    // rows only show when looking down
-    const rest = Math.max(pitchLimits[0], Math.min(pitchLimits[1], DESK.restPitch));
+    const rest = restPitchFor(DESK.restPitch);
     const look = { yaw: 0, pitch: rest, targetYaw: 0, targetPitch: rest };
 
-    // the lowest and highest lon the view's border reaches, for a yaw and pitch in degrees. the camera turns by yaw and
-    // then tilts by pitch about the world's sideways axis (three's XYZ order), and a view tilted down fans out wider at
-    // its bottom corners than at the horizon, so the border is sampled instead of taking the horizon's half width
-    const lonSpan = (yaw, pitch) => {
-        const tanV = Math.tan(THREE.MathUtils.degToRad(halfV));
-        const tanH = tanV * camera.aspect;
-        const a = THREE.MathUtils.degToRad(-yaw);
-        const p = THREE.MathUtils.degToRad(pitch);
-        let lo = Infinity;
-        let hi = -Infinity;
-        for (let i = 0; i <= 32; i++) {
-            const t = (i / 32) * 4;
-            const side = Math.floor(Math.min(t, 3.999));
-            const f = t - side;
-            const u = [-1 + 2 * f, 1, 1 - 2 * f, -1][side];
-            const v = [1, 1 - 2 * f, -1, -1 + 2 * f][side];
-            const x = u * tanH;
-            const y = v * tanV;
-            const x1 = x * Math.cos(a) - Math.sin(a);
-            const z1 = -x * Math.sin(a) - Math.cos(a);
-            const z2 = y * Math.sin(p) + z1 * Math.cos(p);
-            const lon = THREE.MathUtils.radToDeg(Math.atan2(x1, -z2));
-            lo = Math.min(lo, lon);
-            hi = Math.max(hi, lon);
-        }
-        return [lo, hi];
-    };
-
-    // the limits only change with the pitch and the window's shape, and working them out is 60 border samplings, about
-    // 40% of a frame's script on a slowed phone cpu, so the last answer is kept
-    const limitsCache = { pitch: null, aspect: null, value: null };
-    const limits = (pitch) => {
-        if (limitsCache.pitch === pitch && limitsCache.aspect === camera.aspect) {
-            return limitsCache.value;
-        }
-        limitsCache.pitch = pitch;
-        limitsCache.aspect = camera.aspect;
-        limitsCache.value = workOutLimits(pitch);
-        return limitsCache.value;
-    };
-    const workOutLimits = (pitch) => {
-        const [pitchMin, pitchMax] = pitchLimits;
-        const lonLo = DESK.lonMin - DESK.forward + MARGIN;
-        const lonHi = DESK.lonMax - DESK.forward - MARGIN;
-        // the yaw where the border's left (or right) end just meets the photo's edge, found by halving the range
-        const solve = (side, bound) => {
-            let a = -180;
-            let b = 180;
-            for (let i = 0; i < 30; i++) {
-                const m = (a + b) / 2;
-                const reach = lonSpan(m, pitch)[side];
-                if (side === 0 ? reach < bound : reach <= bound) {
-                    a = m;
-                } else {
-                    b = m;
-                }
-            }
-            return side === 0 ? b : a;
-        };
-        const yawMin = solve(0, lonLo);
-        const yawMax = solve(1, lonHi);
-        // a window wider than the photo can't turn at all, so it stays centered on the photo
-        const center = (DESK.lonMin + DESK.lonMax) / 2 - DESK.forward;
-        return {
-            yaw: yawMin <= yawMax ? [yawMin, yawMax] : [center, center],
-            pitch: pitchMin <= pitchMax ? [pitchMin, pitchMax] : [rest, rest]
-        };
-    };
-
+    const limits = createLimits(rest);
     const clampTarget = () => {
-        const [pitchMin, pitchMax] = limits(look.targetPitch).pitch;
-        look.targetPitch = THREE.MathUtils.clamp(look.targetPitch, pitchMin, pitchMax);
-        const l = limits(look.targetPitch);
-        look.targetYaw = THREE.MathUtils.clamp(look.targetYaw, l.yaw[0], l.yaw[1]);
+        const next = clampLook(limits, { yaw: look.targetYaw, pitch: look.targetPitch }, camera.aspect);
+        look.targetYaw = next.yaw;
+        look.targetPitch = next.pitch;
     };
 
     return {

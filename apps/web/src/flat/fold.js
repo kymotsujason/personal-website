@@ -213,6 +213,7 @@ export const createFolds = ({ scene, loop }) => {
       return;
     }
     scene.busy = true;
+    scene.lookAhead?.();
     // with reduced motion the phone is open at once, and the hands don't go ahead of an unfold that isn't played
     if (scene.reduced()) {
       scene.pose = openPose();
@@ -333,6 +334,9 @@ export const createFolds = ({ scene, loop }) => {
       g.lead = along;
       g.from = { ...scene.pose };
       g.to = g.action === "close" ? closedPose() : openPose();
+      if (g.action === "open") {
+        scene.lookAhead?.();
+      }
       g.foldFrom = scene.fold;
       g.foldTo = g.action === "close" ? 1 : 0;
       g.drag = scene.drag[g.action];

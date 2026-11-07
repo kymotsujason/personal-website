@@ -1,15 +1,15 @@
 // the desk behind the phone: the 3d desk's cube faces, captured through a 90 degree camera sharp and blurred
-// (tools/capture-flat), each warped with matrix3d to where the 3d desk camera sees it. the blurred faces lie over the
-// sharp ones and fade in as the phone opens, standing in for the 3d desk's blur. only the faces the resting view
-// reaches are shown, and the look (turning the view) builds on deskQuads
+// (tools/capture-flat), set in a css 3d cube around the camera that the 75 degree desk view turns. the blurred cube
+// lies over the sharp one and fades in as the phone opens, standing in for the 3d desk's blur. deskQuads is the same
+// placement worked out by hand for one face, which the tests hold the cube to
 import { DESK_FOV, DESK_REST_PITCH } from "../scene/shared/motion.js";
-import { quadToQuad } from "./warp.js";
 
 const TAN_HALF = Math.tan((DESK_FOV / 2) * (Math.PI / 180));
 const DESK_NAME = /^desk-(day|dusk|night)-(full|half)$/;
-// the faces the view reaches at rest, drawn in this order so the front lies over the seams with its neighbors
-const RESTING_FACES = ["left", "right", "front"];
+// every face a clamped view can reach (the cube has no back, since the clamp keeps the view inside the photo)
+const FACES = ["front", "left", "right", "up", "down"];
 const LOOKS = ["sharp", "blur"];
+const OVERLAP = 1;
 
 const cross = ([ax, ay, az], [bx, by, bz]) => [
   ay * bz - az * by,
@@ -106,6 +106,45 @@ export const deskQuads = ({
   });
 };
 
+// a face's matrix3d (column major) from its own px, centered on it, to the cube's px with the camera at the origin. the
+// css cube is flipped in y (css points down), so each world direction is written as (x, -y, z)
+export const faceMatrix = ({ dir, up }, focal) => {
+  const right = cross(dir, up);
+  const c0 = [right[0], -right[1], right[2]];
+  const c1 = [-up[0], up[1], -up[2]];
+  const c2 = cross(c0, c1);
+  return [
+    ...c0,
+    0,
+    ...c1,
+    0,
+    ...c2,
+    0,
+    focal * dir[0],
+    -focal * dir[1],
+    focal * dir[2],
+    1,
+  ];
+};
+
+// the cube's matrix3d: the world turned into the desk camera's view (toCamera), and the camera moved back to the
+// perspective's distance
+export const cubeMatrix = (yaw, pitch, focal) => {
+  const yawRad = (yaw * Math.PI) / 180;
+  const pitchRad = (pitch * Math.PI) / 180;
+  const flip = [1, -1, 1];
+  const columns = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ].map((e, j) =>
+    toCamera(e, yawRad, pitchRad).map((v, i) => v * flip[i] * flip[j]),
+  );
+  return [...columns[0], 0, ...columns[1], 0, ...columns[2], 0, 0, 0, focal, 1];
+};
+
+const matrix3d = (m) => `matrix3d(${m.join(", ")})`;
+
 const loadDeskManifest = async (name) => {
   if (!DESK_NAME.test(name ?? "")) {
     throw new Error(`no desk ${name}`);
@@ -127,12 +166,16 @@ export const createDesk = ({ host, manifest }) => {
   const el = document.createElement("div");
   el.className = "flat-desk";
   el.setAttribute("aria-hidden", "true");
+  // each look is a perspective box holding one cube, so the blur layer's opacity never flattens the cube's faces
   const layers = Object.fromEntries(
     LOOKS.map((look) => {
       const layer = document.createElement("div");
       layer.className = `flat-desk-look ${look}`;
+      const cube = document.createElement("div");
+      cube.className = "flat-desk-cube";
+      layer.append(cube);
       el.append(layer);
-      return [look, layer];
+      return [look, { layer, cube }];
     }),
   );
   host.prepend(el);
@@ -142,46 +185,42 @@ export const createDesk = ({ host, manifest }) => {
   let faceEls = [];
   let decoding = null;
   let destroyed = false;
+  let focal = 1;
+  let view = { yaw: 0, pitch: DESK_REST_PITCH };
+  let shownView = "";
 
-  // every face's element laid out again for the window's size
-  const fit = () => {
-    if (!desk) {
+  const turn = () => {
+    const key = `${view.yaw} ${view.pitch} ${focal}`;
+    if (key === shownView) {
       return;
     }
-    const placed = new Map(
-      deskQuads({
-        width: innerWidth,
-        height: innerHeight,
-        size: desk.size,
-        faces: desk.faces,
-        overlap: 1,
-      }).map((q) => [q.name, q]),
-    );
+    shownView = key;
+    const m = matrix3d(cubeMatrix(view.yaw, view.pitch, focal));
+    LOOKS.forEach((look) => {
+      layers[look].cube.style.transform = m;
+    });
+  };
+
+  // every face laid out again for the window's size: 2 focal lengths across, and overlap px more each side so
+  // neighbors cross instead of leaving a seam where both edges are antialiased
+  const fit = () => {
+    focal = innerHeight / (2 * TAN_HALF);
+    const across = 2 * focal + 2 * OVERLAP;
+    LOOKS.forEach((look) => {
+      layers[look].layer.style.perspective = `${focal}px`;
+    });
     faceEls.forEach(({ name, el: face }) => {
-      const q = placed.get(name);
-      if (!q) {
-        face.style.display = "none";
-        return;
-      }
-      const { x0, y0, x1, y1 } = q.rect;
-      const w = x1 - x0;
-      const h = y1 - y0;
       Object.assign(face.style, {
-        display: "",
-        width: `${w}px`,
-        height: `${h}px`,
-        backgroundPosition: `${-x0}px ${-y0}px`,
-        transform: quadToQuad(
-          [
-            [0, 0],
-            [w, 0],
-            [w, h],
-            [0, h],
-          ],
-          q.quad,
-        ),
+        width: `${across}px`,
+        height: `${across}px`,
+        left: `${-across / 2}px`,
+        top: `${-across / 2}px`,
+        backgroundSize: `${across}px ${across}px`,
+        transform: matrix3d(faceMatrix(desk.faces[name], focal)),
       });
     });
+    shownView = "";
+    turn();
   };
 
   // the faces' images decode before any joins the page, so the first frame never shows a desk still loading
@@ -191,7 +230,7 @@ export const createDesk = ({ host, manifest }) => {
     }
     decoding ??= loadDeskManifest(manifest.desk)
       .then((loaded) => {
-        const names = RESTING_FACES.filter((name) => loaded.desk.faces[name]);
+        const names = FACES.filter((name) => loaded.desk.faces[name]);
         desk = {
           size: loaded.desk.size,
           faces: Object.fromEntries(
@@ -220,8 +259,7 @@ export const createDesk = ({ host, manifest }) => {
           const face = document.createElement("i");
           face.className = "flat-desk-face";
           face.style.backgroundImage = `url("${image.src}")`;
-          face.style.backgroundSize = `${desk.size}px ${desk.size}px`;
-          layers[look].append(face);
+          layers[look].cube.append(face);
           return { name, el: face };
         });
         fit();
@@ -229,9 +267,18 @@ export const createDesk = ({ host, manifest }) => {
     return decoding;
   };
 
-  // 0 shows the sharp desk, 1 the blurred one
+  // 0 shows the sharp desk, 1 the blurred one. the blurred one covers the sharp one whole, so the sharp one is left out
+  // once it's all the way in, which halves what the desk costs while the phone is open
   const setBlur = (t) => {
-    layers.blur.style.opacity = String(Math.min(Math.max(t, 0), 1));
+    const blur = Math.min(Math.max(t, 0), 1);
+    layers.blur.layer.style.opacity = String(blur);
+    layers.sharp.layer.style.visibility = blur >= 1 ? "hidden" : "";
+  };
+
+  // turns the view: yaw to the right and pitch (the lat of the view's center), in degrees
+  const setView = (yaw, pitch) => {
+    view = { yaw, pitch };
+    turn();
   };
 
   const destroy = () => {
@@ -244,5 +291,12 @@ export const createDesk = ({ host, manifest }) => {
 
   setBlur(0);
 
-  return { setBlur, decode, fit, destroy, blurLayer: layers.blur };
+  return {
+    setBlur,
+    setView,
+    decode,
+    fit,
+    destroy,
+    blurLayer: layers.blur.layer,
+  };
 };

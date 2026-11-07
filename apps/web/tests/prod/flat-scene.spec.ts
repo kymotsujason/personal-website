@@ -1,5 +1,6 @@
 // the 2d scene's folds, apps, and navigations, against the capture build (window.__flat, src/flat/probeHook.js)
 import { expect, test, type Page } from "@playwright/test";
+import { stubHome } from "../stubHome";
 import { quiet } from "./scene";
 
 type FlatStatus = {
@@ -78,7 +79,9 @@ test("Escape and Enter fold and unfold", async ({ page }) => {
 test("a tap on an icon opens the app and Back closes it", async ({ page }) => {
   await page.goto("/");
   await settledOn(page, "/", null);
-  await page.locator('.flat-home .app-icon[data-app="About"]').click();
+  await page
+    .locator('.flat-home .app-icon[data-app="About"]')
+    .click({ force: true });
   await settledOn(page, "/about", "About");
   await expect(page.locator("#page h1")).toHaveText("About");
   await expect(page.locator("#page h1")).toBeVisible();
@@ -101,7 +104,9 @@ test("a tap on an icon opens the app and Back closes it", async ({ page }) => {
 test("rapid history", async ({ page }) => {
   await page.goto("/");
   await settledOn(page, "/", null);
-  await page.locator('.flat-home .app-icon[data-app="About"]').click();
+  await page
+    .locator('.flat-home .app-icon[data-app="About"]')
+    .click({ force: true });
   await settledOn(page, "/about", "About");
   // a link in About to Music, as the apps link to each other
   await page.evaluate(() => {
@@ -133,7 +138,9 @@ test("a resting swipe opens the switcher and Escape returns", async ({
 }) => {
   await page.goto("/");
   await settledOn(page, "/", null);
-  await page.locator('.flat-home .app-icon[data-app="About"]').click();
+  await page
+    .locator('.flat-home .app-icon[data-app="About"]')
+    .click({ force: true });
   await settledOn(page, "/about", "About");
   const bar = await page.locator("#page .home-bar").boundingBox();
   expect(bar).not.toBeNull();
@@ -322,12 +329,290 @@ test.describe("on the slow path", () => {
       };
       requestAnimationFrame(look);
     });
-    await page.locator('.flat-home .app-icon[data-app="About"]').click();
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
     await settledOn(page, "/about", "About");
     const shown: { z: string; clip: string }[] = await page.evaluate(
       () => (window as any).__page,
     );
     expect(shown.some((p) => p.z === "1")).toBe(true);
     expect(shown.filter((p) => p.clip !== "")).toEqual([]);
+  });
+});
+
+test.describe("continuous effects", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  type Effects = {
+    yaw: number;
+    pitch: number;
+    targetYaw: number;
+    targetPitch: number;
+    avoidX: number;
+    avoidY: number;
+    idle: number;
+    calm: boolean;
+    frosted: boolean;
+  };
+
+  const effects = (page: Page): Promise<Effects> =>
+    page.evaluate(() => (window as any).__flat.effects());
+
+  // the phone closed and still, with the cover live
+  const closePhone = async (page: Page) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  };
+
+  // a drag from one point to another, in steps, with the pointer let go at the end
+  const dragFrom = async (
+    page: Page,
+    from: [number, number],
+    to: [number, number],
+  ) => {
+    const steps = 40;
+    await page.mouse.move(from[0], from[1]);
+    await page.mouse.down();
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(
+        from[0] + ((to[0] - from[0]) * i) / steps,
+        from[1] + ((to[1] - from[1]) * i) / steps,
+      );
+    }
+    await page.mouse.up();
+  };
+
+  test("a drag off the closed phone turns the desk", async ({ page }) => {
+    await closePhone(page);
+    const start = await effects(page);
+    expect(start.yaw).toBe(0);
+    // dragging right turns the view to the left, to the clamp the 3d desk has at 1280 by 800
+    await dragFrom(page, [40, 400], [1240, 400]);
+    await expect
+      .poll(async () => (await effects(page)).yaw)
+      .toBeCloseTo(-33.448, 2);
+    await dragFrom(page, [1240, 400], [40, 400]);
+    await dragFrom(page, [1240, 400], [40, 400]);
+    await expect
+      .poll(async () => (await effects(page)).yaw)
+      .toBeCloseTo(43.89, 2);
+    // down and up reach the pitch limits
+    await dragFrom(page, [640, 790], [640, 10]);
+    await expect
+      .poll(async () => (await effects(page)).pitch)
+      .toBeCloseTo(-23.1, 2);
+    await dragFrom(page, [640, 10], [640, 790]);
+    await dragFrom(page, [640, 10], [640, 790]);
+    await expect
+      .poll(async () => (await effects(page)).pitch)
+      .toBeCloseTo(12.5, 2);
+    // a press on the phone looks nowhere
+    const before = await effects(page);
+    await dragFrom(page, [640, 400], [700, 400]);
+    expect((await effects(page)).targetYaw).toBe(before.targetYaw);
+    // opening the phone brings the view back
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/", null);
+    await expect.poll(async () => (await effects(page)).yaw).toBeCloseTo(0, 2);
+    expect((await effects(page)).pitch).toBeCloseTo(-0.9, 2);
+  });
+
+  test("the closed phone dodges a mouse and ignores touch", async ({
+    page,
+  }) => {
+    await closePhone(page);
+    await page.mouse.move(1200, 40);
+    await expect
+      .poll(async () => (await effects(page)).avoidX)
+      .toBeLessThan(-5);
+    // the mouse above the phone moves it down
+    expect((await effects(page)).avoidY).toBeGreaterThan(0);
+    // the mouse back over the phone lets it settle
+    await page.mouse.move(640, 400);
+    await expect
+      .poll(async () => Math.abs((await effects(page)).avoidX))
+      .toBeLessThan(0.5);
+    // a touch pointer moving over the desk moves nothing
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new PointerEvent("pointermove", {
+          pointerType: "touch",
+          clientX: 1200,
+          clientY: 40,
+          bubbles: true,
+        }),
+      );
+    });
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => resolve(0))),
+    );
+    expect(Math.abs((await effects(page)).avoidX)).toBeLessThan(0.5);
+    // with the phone open it doesn't dodge either
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/", null);
+    await page.mouse.move(1200, 40);
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => resolve(0))),
+    );
+    expect(Math.abs((await effects(page)).avoidX)).toBeLessThan(0.5);
+  });
+
+  test("the phone drifts at rest and the drift settles once it moves", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await expect.poll(async () => (await effects(page)).idle).toBe(1);
+    const transforms = await page.evaluate(async () => {
+      const el = document.querySelector(".flat-frames") as HTMLElement;
+      const seen = new Set<string>();
+      for (let i = 0; i < 30; i++) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(0)));
+        seen.add(el.style.transform);
+      }
+      return seen.size;
+    });
+    expect(transforms).toBeGreaterThan(5);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false });
+    // once it's at rest again it eases back in, and in an app it stays still with no frames asked for
+    await expect.poll(async () => (await effects(page)).idle).toBe(1);
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/", null);
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await settledOn(page, "/about", "About");
+    expect((await effects(page)).idle).toBe(0);
+  });
+
+  const RAIN = {
+    weather: {
+      code: 63,
+      sunrise: 7.5,
+      sunset: 18.4,
+      utcOffset: -25200,
+      moon: null,
+    },
+    github: null,
+  };
+
+  test("rain falls on the screens' sky under a rainy weather", async ({
+    page,
+  }) => {
+    await stubHome(page, RAIN);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await expect(page.locator(".flat-fall[data-kind='rain']")).toHaveCount(3);
+    const falling = await page.evaluate(() => {
+      const layer = document.querySelector(".flat-fall i") as HTMLElement;
+      return {
+        still: document.querySelector(".flat-fall")!.hasAttribute("data-still"),
+        state: getComputedStyle(layer).animationPlayState,
+        animations: layer.getAnimations().length,
+        // under the widgets in the sky, which is before the panels in the face
+        beforePanel:
+          document.querySelector(".flat-fall")!.parentElement!.className ===
+          "flat-sky",
+      };
+    });
+    expect(falling).toEqual({
+      still: false,
+      state: "running",
+      animations: 1,
+      beforePanel: true,
+    });
+    await page.screenshot({ path: "test-results/flat-rain.png" });
+  });
+
+  test("snow falls under a snowy weather", async ({ page }) => {
+    await stubHome(page, {
+      ...RAIN,
+      weather: { ...RAIN.weather, code: 73 },
+    });
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await expect(page.locator(".flat-fall[data-kind='snow']")).toHaveCount(3);
+  });
+
+  test("a clear sky has no fall", async ({ page }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await expect(page.locator(".flat-fall:not([hidden])")).toHaveCount(0);
+  });
+
+  test.describe("the rest rule", () => {
+    test("a device through 2dAuto stays calm when the unfold is slow", async ({
+      page,
+    }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem("2dAuto", String(Date.now()));
+        localStorage.removeItem("introSeen");
+      });
+      await stubHome(page, RAIN);
+      const client = await page.context().newCDPSession(page);
+      await client.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+      await page.goto("/");
+      await expect
+        .poll(() => flatStatus(page), { timeout: 90000 })
+        .toMatchObject({ phone: "open", busy: false });
+      await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      const now = await effects(page);
+      expect(now.calm).toBe(true);
+      expect(now.frosted).toBe(false);
+      expect(now.idle).toBe(0);
+      await expect(page.locator(".flat-fall[data-still]")).toHaveCount(3);
+      await expect(page.locator(".flat-face.frosted")).toHaveCount(0);
+    });
+
+    test("it turns on once the unfold measures fast", async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem("2dAuto", String(Date.now()));
+        localStorage.removeItem("introSeen");
+      });
+      await stubHome(page, RAIN);
+      await page.goto("/");
+      await expect
+        .poll(() => flatStatus(page), { timeout: 60000 })
+        .not.toBeNull();
+      await expect
+        .poll(async () => (await effects(page)).calm, { timeout: 60000 })
+        .toBe(false);
+      await expect.poll(async () => (await effects(page)).idle).toBe(1);
+      await expect(page.locator(".flat-fall[data-still]")).toHaveCount(0);
+      await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
+    });
+  });
+
+  test("the status bar shows the clock and the battery on both screens", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    const bars = await page.evaluate(() => {
+      return {
+        times: [...document.querySelectorAll(".flat-face .status .time")].map(
+          (el) => el.textContent,
+        ),
+        levels: [...document.querySelectorAll(".flat-face .battery")].map(
+          (el) => Number((el as HTMLElement).dataset.level),
+        ),
+      };
+    });
+    expect(bars.times).toHaveLength(2);
+    // the minute may have turned over between the two reads
+    bars.times.forEach((time) => expect(time).toMatch(/^\d{1,2}:\d{2}$/));
+    expect(bars.times[0]).toBe(bars.times[1]);
+    bars.levels.forEach((level) => {
+      expect(level).toBeGreaterThanOrEqual(1);
+      expect(level).toBeLessThanOrEqual(100);
+    });
   });
 });

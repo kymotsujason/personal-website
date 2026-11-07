@@ -138,8 +138,42 @@ const TWO_D: Mode = {
     await expect(page.locator("#page h1")).toBeVisible();
   },
   goHome: (page) => page.locator("#page .home-bar").click(),
-  openAbout: (page) =>
-    page.locator('.flat-home .app-icon[data-app="About"]').click(),
+  // the phone's idle drift keeps an icon from ever being stable, so the click waits for the phone to be open and still
+  // with the icon under its own center, which is what Playwright's checks were for, and then skips them
+  openAbout: async (page) => {
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const s = (
+            window as unknown as {
+              __flat?: {
+                status: () => {
+                  phone: string | null;
+                  busy: boolean;
+                  zoomed: boolean;
+                };
+              };
+            }
+          ).__flat?.status();
+          const icon = document.querySelector(
+            '.flat-home .app-icon[data-app="About"]',
+          );
+          if (!s || !icon || s.phone !== "open" || s.busy || s.zoomed) {
+            return false;
+          }
+          const box = icon.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          );
+          return Boolean(hit && icon.contains(hit));
+        }),
+      )
+      .toBe(true);
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+  },
 };
 
 // a track tapped before the player is ready, then seven navigations with the music playing on

@@ -18,5 +18,5 @@ export const handLoop = () => {
       await Promise.resolve();
     }
   };
-  return { loop, at, now: () => time };
+  return { loop, at, now: () => time, queued: () => queue.length };
 };

@@ -423,8 +423,8 @@ export const createScreens = ({
   };
 
   // the status bar on the body's half and the cover from scene/status.js's status (time, ping, bars, level,
-  // charging), the ping in place of the clock while showPing is set, and the github graph once /api/home answers. an
-  // answer without the graph keeps what's shown, as in 3d
+  // charging), the ping in place of the clock while showPing is set, and the github graph once /api/home answers. null
+  // draws the empty grid, and an answer without the graph isn't passed, so it keeps what's shown, as in 3d
   const update = ({ status, showPing = false, contributions } = {}) => {
     if (status) {
       const ping =
@@ -446,7 +446,7 @@ export const createScreens = ({
         battery.querySelector(".b-level").textContent = String(status.level);
       });
     }
-    if (contributions) {
+    if (contributions !== undefined) {
       fillGraph(flap.querySelector(".widget .graph"), contributions);
       flap.querySelector(".gh-total").textContent = githubTotal(contributions);
     }
@@ -646,6 +646,7 @@ export const createScreens = ({
     flap,
     body,
     home,
+    skies: FACES.map((name) => faces[name].querySelector(".flat-sky")),
     credits: body.querySelector(".credits"),
     update,
     setInput,
