@@ -1169,6 +1169,45 @@ test.describe("the charger", () => {
     expect(await chargerState(page)).toMatchObject({ plugged: true });
   });
 
+  test("a cable that never downloads starts no run, and the folds and the scene go on", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    // the cable's images are asked for and never answered
+    await page.route(/\/flat\/cable-[^/]+\/[^/]+\.webp$/, () => {});
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await setBattery(page, DRAIN - 30000);
+    await expect
+      .poll(async () => (await chargerState(page)).ready, { timeout: 20000 })
+      .toBe(true);
+    await record(page);
+    await setBattery(page, DRAIN - 300);
+    // it charges, with the bolt and no cable
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document
+            .querySelector(".flat-home .battery")
+            ?.getAttribute("data-charging"),
+        ),
+      )
+      .toBe("true");
+    const seen: Seen[] = await page.evaluate(() => (window as any).__runSeen);
+    expect(seen.filter((s) => s.busy)).toEqual([]);
+    expect(await chargerState(page)).toMatchObject({
+      target: true,
+      plugged: false,
+      busy: false,
+      folds: "landscape",
+    });
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+  });
+
   test("a charger that doesn't load leaves the battery cycling with no cable", async ({
     page,
   }) => {

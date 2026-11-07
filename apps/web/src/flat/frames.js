@@ -170,9 +170,11 @@ export const createFrameLayer = (manifest, hostEl) => {
   const overlap = manifest.overlap ?? 0;
   const { width, height } = frameSize(manifest);
   const atlases = new Set();
+  // a set fetched ahead (charger.js) carries its images' blob urls, so its decode needs no network
+  const srcOf = (atlas) => manifest.atlasUrls?.[atlas] ?? `${base}${atlas}`;
   const atlasUrl = (atlas) => {
     atlases.add(atlas);
-    return `url("${base}${atlas}")`;
+    return `url("${srcOf(atlas)}")`;
   };
 
   // a piece reaches overlap px into its neighbors, so scaling never leaves a seam where two meet
@@ -194,6 +196,8 @@ export const createFrameLayer = (manifest, hostEl) => {
   const elements = manifest.frames.map((frame) => {
     const el = document.createElement("div");
     el.className = "flat-frame";
+    // which set a frame is from, for reading the stage in a browser check
+    el.dataset.set = manifest.set;
     el.style.width = `${width}px`;
     el.style.height = `${height}px`;
     if (frame.pieces.length > 0) {
@@ -208,7 +212,7 @@ export const createFrameLayer = (manifest, hostEl) => {
   });
   const images = [...atlases].map((atlas) => ({
     image: new Image(),
-    src: `${base}${atlas}`,
+    src: srcOf(atlas),
   }));
 
   let decoding = null;

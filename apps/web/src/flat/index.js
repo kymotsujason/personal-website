@@ -678,20 +678,57 @@ export const startFlatScene = ({
   scene.lookAhead = look.lookAhead;
   const volume = createVolume({ scene, loop, music });
   scene.volume = volume;
-  // the charger's sets join the stage and leave it as the battery wants the cable, in the lighting and size mounted
+  // the charger's sets and the cable's fold sets, in the lighting and size mounted. they're fetched ahead as blobs once
+  // the battery wants the cable, so a swap during a run only decodes, and their layers join and leave the stage
   const charger = createCharger({
     scene,
     loop,
     sets: {
-      open: async (name) => {
+      fetch: async (name) => {
         const { lighting, size } = scene.manifest;
         const manifest = await loadManifest(name, lighting, size);
+        const atlases = new Set();
+        manifest.frames.forEach((frame) => {
+          if (frame.atlas) {
+            atlases.add(frame.atlas);
+          }
+        });
+        manifest.shared.forEach(({ atlas }) => atlases.add(atlas));
+        const atlasUrls = {};
+        const forget = () =>
+          Object.values(atlasUrls).forEach((url) => URL.revokeObjectURL(url));
+        // every image settles before a failure is given, so none makes a url after the rest were let go
+        const results = await Promise.allSettled(
+          [...atlases].map(async (atlas) => {
+            const response = await fetch(`${manifest.base}${atlas}`, {
+              signal,
+            });
+            if (!response.ok) {
+              throw new Error(
+                `the ${name} image ${atlas} didn't load (${response.status})`,
+              );
+            }
+            atlasUrls[atlas] = URL.createObjectURL(await response.blob());
+          }),
+        );
+        const failure = results.find((r) => r.status === "rejected");
+        if (failure) {
+          forget();
+          throw failure.reason;
+        }
+        return { manifest: { ...manifest, atlasUrls }, forget };
+      },
+      forget: (bytes) => bytes.forget(),
+      open: async (name, bytes) => {
+        const { lighting, size } = scene.manifest;
+        const manifest = bytes
+          ? bytes.manifest
+          : await loadManifest(name, lighting, size);
         return { manifest, layer: scene.stage.addFrames(manifest) };
       },
       release: (entry) => scene.stage?.dropFrames(entry.layer),
     },
     onCable: guard(() => flatStatus?.render()),
-    onFail: (error) => fail(error),
   });
   scene.charger = charger;
   scene.effects = { look, drift };

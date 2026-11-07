@@ -214,3 +214,39 @@ test("a layer released while it decodes says it was released", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+test("a set fetched ahead decodes and draws from its blob urls", async () => {
+  const { window } = new JSDOM("<!doctype html><body></body>");
+  vi.stubGlobal("document", window.document);
+  const sources = [];
+  class TakenImage {
+    set src(value) {
+      sources.push(value);
+    }
+    decode() {
+      return Promise.resolve();
+    }
+    removeAttribute() {}
+  }
+  vi.stubGlobal("Image", TakenImage);
+  try {
+    const manifest = {
+      set: "cable-landscape",
+      base: "/flat/cable-landscape-day-full/",
+      atlasUrls: { "a.webp": "blob:fetched-a" },
+      window: { width: 10, height: 10 },
+      margin: { x: 0, top: 0, bottom: 0 },
+      frames: [frame(0, { atlas: "a.webp", pieces: [[0, 0, 4, 4, 0, 0]] })],
+      shared: [],
+    };
+    const host = document.createElement("div");
+    const layer = createFrameLayer(manifest, host);
+    await layer.decode();
+    expect(sources).toEqual(["blob:fetched-a"]);
+    expect(host.firstElementChild.style.getPropertyValue("--atlas")).toBe(
+      'url("blob:fetched-a")',
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

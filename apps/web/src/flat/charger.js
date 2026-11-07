@@ -2,8 +2,9 @@
 // it into the flap's bottom edge, and at 100% it unplugs it. the hands and the cable are captured frame sets played by
 // time (charger-<orientation>-<open|closed>), with the unplug the plug played backwards, and the phone's own move is
 // worked out at run time with the 3d math (shared/charging.js chargeMove) and added to the pose the stage draws. while
-// the cable is in, the fold sets are the cable versions (cable-*), and only one version is decoded at a time. folds
-// wait for a run (fold.js), a run waits for a fold, and a run while an app is zoomed or with reduced motion ends at once
+// the cable is in, the fold sets are the cable versions (cable-*), and only one version is decoded at a time, with one
+// charger set. folds wait for a run (fold.js), a run waits for a fold, and a run while an app is zoomed or with reduced
+// motion ends at once. nothing the charger loads can drop the scene: a set that doesn't come leaves it with no cable
 import {
   CHARGE_TOTAL,
   PLUG_HOME,
@@ -12,6 +13,13 @@ import {
   swapSchedule,
 } from "../scene/shared/charging.js";
 import { fitInView } from "../scene/shared/placement.js";
+
+// how long a run's fold set swap may take to decode before the run gives the cable up (ms from the run's start), so a
+// stalled decode can't hold the folds for long
+export const SWAP_CAP = 3500;
+// the battery level from which a charging phone has its charger set decoded for the unplug at 100%. it charges a level
+// about every 1.2 s, so that's about 12 s ahead
+export const UNPLUG_SOON = 90;
 
 export const chargerSetFor = ({ portrait, open }) =>
   `charger-${portrait ? "portrait" : "landscape"}-${open ? "open" : "closed"}`;
@@ -35,28 +43,30 @@ export const runAt = ({ plugIn, elapsed, total }) => {
 };
 
 // scene is the phone's state (fold, busy, zoomed, drawing, portrait, appVisible, pose, shownPose, openFrames,
-// closeFrames, stage, edges(), reduced()), loop the scene's loop. sets.open(name) gives { manifest, layer } with the
-// layer in the stage and not yet decoded, and sets.release(entry) lets one go. onCable hears the bolt's state change,
-// and onFail fails the scene when the cable free sets can't come back
+// closeFrames, stage, edges(), reduced()), loop the scene's loop. sets.fetch(name) downloads a set's manifest and
+// images without decoding them, sets.forget(bytes) lets those go, sets.open(name, bytes) gives { manifest, layer } with
+// the layer in the stage and not yet decoded (from the bytes fetched, or from the network with none), and
+// sets.release(entry) lets a layer go. onCable hears the bolt's state change
 export const createCharger = ({
   scene,
   loop,
   sets,
   onCable = () => {},
-  onFail = (error) => {
-    throw error;
-  },
   warn = (...args) => console.warn(...args),
+  swapCap = SWAP_CAP,
 }) => {
   // what the battery wants (the cable in while charging), and what the fold sets show
   let target = false;
   let wanted = false;
+  let level = 100;
   let plugged = false;
-  // a set that didn't load leaves the visit with no cable, as a 3d chunk that didn't load does
+  // a set that didn't come leaves the visit with no cable, as a 3d chunk that didn't load does
   let failed = false;
-  let chargerSets = null;
-  let loading = null;
-  // the cable asked for while the charger's sets loaded goes in at once, as 3d's buildCharger snaps it
+  // the sets fetched ahead for this mount, by name: { value, failed }, value once the bytes are in
+  let fetched = new Map();
+  // the one charger set decoded, for the open or the closed phone
+  let chargerSet = null;
+  // the cable asked for before the charger's bytes were in goes in at once when they are, as 3d's buildCharger snaps it
   let snapNext = false;
   let run = null;
   let swap = null;
@@ -64,6 +74,7 @@ export const createCharger = ({
   let removeStep = null;
   let waiters = [];
   let shownCable = null;
+  let lastNow = 0;
 
   const release = (entry) => {
     if (entry) {
@@ -71,15 +82,26 @@ export const createCharger = ({
     }
   };
 
-  // opens and decodes the named sets together. track gets each one as it's made, so a newer swap can let it go part
-  // way through its decode
+  const chargerNames = () =>
+    [true, false].map((open) =>
+      chargerSetFor({ portrait: scene.portrait, open }),
+    );
+  const foldNames = (cable) => {
+    const names = foldSetsFor({ portrait: scene.portrait, cable });
+    return [names.open, names.close].filter(Boolean);
+  };
+  const isFetched = (names) =>
+    names.every((name) => fetched.get(name)?.value != null);
+
+  // opens and decodes the named sets together, from their fetched bytes where there are some. track gets each one as
+  // it's made, so a newer swap can let it go part way through its decode
   const openSets = (names, track) =>
     Promise.allSettled(
       names.map(async (name) => {
         if (!name) {
           return null;
         }
-        const entry = await sets.open(name);
+        const entry = await sets.open(name, fetched.get(name)?.value ?? null);
         track.push(entry);
         if (track.dropped) {
           release(entry);
@@ -130,10 +152,14 @@ export const createCharger = ({
     return run.done ? run.plugIn : runNow().left >= PLUG_HOME;
   };
 
-  // the bolt shows once the cable is in, not while the hand is still fetching it. with no charger sets to play it shows
-  // as soon as the battery charges, as 3d's does with no cable module
+  // the bolt shows once the cable is in, not while the hand is still fetching it. with no charger or cable to play (not
+  // loaded, or not fetched yet) it shows as soon as the battery charges, as 3d's does with no cable module
   const bolt = (status) =>
-    Boolean(status.charging) && (failed || chargerSets === null || cableIn());
+    Boolean(status.charging) &&
+    (failed ||
+      cableIn() ||
+      !isFetched(chargerNames()) ||
+      !isFetched(foldNames(true)));
 
   const reportCable = () => {
     const now = cableIn();
@@ -143,66 +169,100 @@ export const createCharger = ({
     }
   };
 
-  const releaseChargerSets = () => {
-    if (chargerSets) {
-      release(chargerSets.open);
-      release(chargerSets.closed);
-      chargerSets = null;
-    }
-    if (loading) {
-      drop(loading);
-      loading = null;
+  const releaseChargerSet = () => {
+    if (chargerSet) {
+      drop(chargerSet.track);
+      chargerSet = null;
     }
   };
 
-  // the cable free sets back with no run to cover the change (the charger's sets didn't load), decoded before the cable
-  // ones go, so the phone always has frames
+  const stopStep = () => {
+    if (removeStep) {
+      removeStep();
+      removeStep = null;
+    }
+  };
+
+  const ensureStep = () => {
+    if (!removeStep) {
+      removeStep = loop.add(step);
+    }
+  };
+
+  // the cable free sets back with no run to cover the change (the charger's sets didn't come on a visit that started
+  // with the cable in). they decode beside the cable ones, and go in on a frame with no fold moving
   const dropCable = () => {
     const track = [];
-    dropping = track;
-    const names = foldSetsFor({ portrait: scene.portrait, cable: false });
-    openSets([names.open, names.close], track).then(
+    const next = { track, ready: false, open: null, close: null };
+    dropping = next;
+    openSets(foldNames(false), track).then(
       ([open, close]) => {
-        if (dropping !== track) {
+        if (dropping !== next) {
           return;
         }
-        dropping = null;
-        const old = [scene.openFrames, scene.closeFrames];
-        scene.openFrames = open;
-        scene.closeFrames = close;
-        old.forEach(release);
-        plugged = false;
-        reportCable();
+        Object.assign(next, { ready: true, open, close: close ?? null });
+        ensureStep();
         loop.wake();
       },
       (error) => {
-        if (dropping === track) {
-          onFail(error);
+        if (dropping === next) {
+          dropping = null;
+          warn(
+            "the cable free frames didn't come back, so the cable stays",
+            error,
+          );
         }
       },
     );
   };
 
+  const applyDrop = () => {
+    if (!dropping?.ready || scene.busy) {
+      return;
+    }
+    const old = [scene.openFrames, scene.closeFrames];
+    scene.openFrames = dropping.open;
+    scene.closeFrames = dropping.close;
+    old.forEach(release);
+    dropping = null;
+    plugged = false;
+    reportCable();
+    loop.wake();
+  };
+
   const giveUp = (error) => {
+    if (failed) {
+      return;
+    }
     failed = true;
+    snapNext = false;
     warn("the charging cable didn't load", error);
-    releaseChargerSets();
-    if (plugged && !run) {
-      dropCable();
+    if (!run) {
+      releaseChargerSet();
+      if (plugged) {
+        dropCable();
+      }
     }
     reportCable();
   };
 
   // the fold sets for the cable in or out. the ones showing at rest go first, so only one version is ever decoded,
-  // and the run's frames cover the phone until the new ones are in
-  const swapTo = (cable) => {
+  // and the run's frames cover the phone until the new ones are in. their bytes were fetched ahead, so this only decodes
+  const swapTo = (cable, fallback = false) => {
     if (swap) {
       drop(swap.track);
     }
     release(scene.openFrames);
     release(scene.closeFrames);
     const names = foldSetsFor({ portrait: scene.portrait, cable });
-    const next = { cable, ready: false, track: [] };
+    const next = {
+      cable,
+      ready: false,
+      stuck: false,
+      track: [],
+      started: lastNow,
+      fallback,
+    };
     swap = next;
     openSets([names.open, names.close], next.track).then(
       ([open, close]) => {
@@ -215,29 +275,47 @@ export const createCharger = ({
         loop.wake();
       },
       (error) => {
-        if (swap !== next) {
-          return;
+        if (swap === next && !next.stuck) {
+          swapFailed(next, error);
         }
-        if (!cable) {
-          onFail(error);
-          return;
-        }
-        // with no cable sets the run ends on its unplugged end, and the cable free sets come back
-        failed = true;
-        warn("the cable's fold frames didn't load", error);
-        if (run) {
-          run.plugIn = false;
-          run.elapsed = run.total;
-          run.done = true;
-        }
-        swapTo(false);
       },
     );
   };
 
+  // a swap that failed or took too long ends the run on the side it came from, with those sets back and no more cable
+  // this visit. if they don't come back either, the run holds its end frame and the folds stay held, and the rest of the
+  // scene runs on
+  const swapFailed = (failing, error) => {
+    drop(failing.track);
+    if (failing.fallback) {
+      failing.stuck = true;
+      warn(
+        "the phone's fold frames didn't come back, so the folds stay held",
+        error,
+      );
+      return;
+    }
+    failed = true;
+    snapNext = false;
+    warn("the cable's fold frames didn't load", error);
+    run.plugIn = !failing.cable;
+    run.elapsed = run.total;
+    run.done = true;
+    swapTo(!failing.cable, true);
+  };
+
+  const half = () => scene.fold < 0.5;
+
+  const ready = () =>
+    chargerSet !== null &&
+    chargerSet.ready &&
+    chargerSet.open === half() &&
+    isFetched(foldNames(target));
+
+  const pending = () => !failed && target !== plugged;
+
   const begin = () => {
-    const open = scene.fold < 0.5;
-    const entry = open ? chargerSets.open : chargerSets.closed;
+    const { entry, open } = chargerSet;
     const { total } = entry.manifest.charger;
     // the frames are behind the page while an app is zoomed, and reduced motion plugs it in at once, as in 3d
     const skip = snapNext || scene.zoomed || scene.reduced();
@@ -245,6 +323,7 @@ export const createCharger = ({
     run = {
       plugIn: target,
       open,
+      entry,
       total,
       elapsed: skip ? total : 0,
       done: skip,
@@ -257,30 +336,36 @@ export const createCharger = ({
     plugged = run.plugIn;
     run = null;
     swap = null;
-    if (failed || (!wanted && !plugged && !target)) {
-      releaseChargerSets();
+    if (failed) {
+      releaseChargerSet();
     }
     reportCable();
     letFoldsGo();
+    manage();
     loop.wake();
   };
 
-  const stopStep = () => {
-    if (removeStep) {
-      removeStep();
-      removeStep = null;
-    }
+  // the cable turned around part way runs the same timeline back from where it is, as 3d's start does
+  const turnAround = () => {
+    run.plugIn = target;
+    run.elapsed = run.total - run.elapsed;
+    run.done = run.elapsed >= run.total;
+    swapTo(target);
   };
 
-  const pending = () => chargerSets !== null && !failed && target !== plugged;
-
-  const step = (_now, dt) => {
+  const step = (now, dt) => {
+    lastNow = now;
     if (!scene.stage) {
       return;
     }
+    if (dropping) {
+      applyDrop();
+    }
     if (!run) {
-      if (!pending()) {
-        stopStep();
+      if (!pending() || !ready()) {
+        if (!dropping) {
+          stopStep();
+        }
         return;
       }
       // a run waits for a fold or an app's move to end, and for the intro
@@ -289,10 +374,14 @@ export const createCharger = ({
       }
       begin();
     }
+    if (swap?.stuck) {
+      stopStep();
+      return;
+    }
     if (!run.done) {
       // reduced motion part way through finishes at once, as in 3d, and so does an app zoomed over the frames or a
       // fold the run didn't start on (a navigation can show the open phone at once)
-      if (scene.reduced() || scene.zoomed || scene.fold < 0.5 !== run.open) {
+      if (scene.reduced() || scene.zoomed || half() !== run.open) {
         run.elapsed = run.total;
       } else {
         run.elapsed = Math.min(run.elapsed + dt, run.total);
@@ -310,91 +399,127 @@ export const createCharger = ({
       }
       run.done = run.elapsed >= run.total;
     }
+    if (swap && !swap.ready && now - swap.started >= swapCap) {
+      swapFailed(swap, new Error("the fold frames took too long to decode"));
+    }
     reportCable();
     if (run.done && swap?.ready) {
       finish();
     }
   };
 
-  const ensureStep = () => {
-    if (!removeStep) {
-      removeStep = loop.add(step);
-    }
-  };
-
-  // the cable turned around part way runs the same timeline back from where it is, as 3d's start does
-  const turnAround = () => {
-    run.plugIn = target;
-    run.elapsed = run.total - run.elapsed;
-    run.done = run.elapsed >= run.total;
-    swapTo(target);
-  };
-
-  const loadChargerSets = () => {
-    if (chargerSets || loading || failed || !scene.drawing) {
+  const fetchAhead = (name) => {
+    if (fetched.has(name)) {
       return;
     }
-    const track = [];
-    loading = track;
-    const names = [true, false].map((open) =>
-      chargerSetFor({ portrait: scene.portrait, open }),
-    );
-    openSets(names, track).then(
-      ([open, closed]) => {
-        if (loading !== track) {
+    const record = { value: null, failed: false };
+    const mine = fetched;
+    mine.set(name, record);
+    sets.fetch(name).then(
+      (value) => {
+        if (fetched !== mine) {
+          sets.forget(value);
           return;
         }
-        loading = null;
-        chargerSets = { open, closed };
-        snapNext = target !== plugged;
+        record.value = value;
+        manage();
+        loop.wake();
+      },
+      (error) => {
+        if (fetched === mine) {
+          record.failed = true;
+          giveUp(error);
+        }
+      },
+    );
+  };
+
+  // the charger set is decoded while a plug is near (5% and below), from 90% while charging for the unplug, and while
+  // a run is asked for. most of the charge holds none
+  const chargerNeeded = () =>
+    target !== plugged ||
+    (!plugged && wanted) ||
+    (plugged && target && level >= UNPLUG_SOON);
+
+  const decodeChargerSet = (open) => {
+    const track = [];
+    const next = { open, entry: null, ready: false, track };
+    chargerSet = next;
+    openSets([chargerSetFor({ portrait: scene.portrait, open })], track).then(
+      ([entry]) => {
+        if (chargerSet !== next) {
+          return;
+        }
+        next.entry = entry;
+        next.ready = true;
         if (pending()) {
           ensureStep();
         }
-        reportCable();
+        loop.wake();
       },
       (error) => {
-        if (loading !== track) {
-          return;
+        if (chargerSet === next) {
+          chargerSet = null;
+          giveUp(error);
         }
-        loading = null;
-        giveUp(error);
       },
     );
   };
 
-  // the battery's state, on each change and once the intro is over: the charger's sets load once it's low or charging,
-  // go again once it's neither and the cable is out, and the cable follows charging
-  const battery = (status) => {
-    wanted = chargerWanted(status);
-    const next = Boolean(status.charging);
-    if (next !== target) {
-      target = next;
-      if (run && run.plugIn !== target && !failed) {
-        turnAround();
-      }
-    }
-    if (failed) {
-      reportCable();
+  // on each drawn frame, a battery change, and each fetch or decode that lands: fetch ahead while the cable is wanted,
+  // keep the charger set for the phone's half decoded only while it's needed (swapping it once a fold has ended), and
+  // start the step once a run can begin
+  const manage = () => {
+    if (failed || !scene.stage || !scene.drawing) {
       return;
     }
     if (wanted) {
-      loadChargerSets();
-    } else if (!run && !plugged && !target) {
-      releaseChargerSets();
+      chargerNames().forEach(fetchAhead);
+      foldNames(!plugged).forEach(fetchAhead);
     }
-    if (pending()) {
+    if (!run) {
+      if (!chargerNeeded()) {
+        releaseChargerSet();
+      } else if (
+        isFetched(chargerNames()) &&
+        !scene.busy &&
+        chargerSet?.open !== half()
+      ) {
+        releaseChargerSet();
+        decodeChargerSet(half());
+      }
+    }
+    if ((pending() && ready()) || dropping) {
       ensureStep();
     }
+  };
+  loop.onDraw(() => manage());
+
+  // the battery's state, on each change and once the intro is over
+  const battery = (status) => {
+    wanted = chargerWanted(status);
+    level = status.level;
+    const next = Boolean(status.charging);
+    if (next !== target) {
+      target = next;
+      if (!failed) {
+        if (run && run.plugIn !== target) {
+          turnAround();
+        } else if (!run) {
+          snapNext = target !== plugged && !isFetched(chargerNames());
+        }
+      }
+    }
+    manage();
     reportCable();
   };
 
-  // what the stage shows while a run plays or holds its end: the charger set for the fold, and its frame
+  // what the stage shows while a run plays or holds its end: the run's own charger set, and its frame
   const shown = () => {
     if (!run) {
       return null;
     }
-    const open = run.done ? scene.fold < 0.5 : run.open;
-    const entry = open ? chargerSets.open : chargerSets.closed;
+    const { entry } = run;
     const plugT = run.done
       ? run.plugIn
         ? entry.manifest.charger.total
@@ -423,19 +548,25 @@ export const createCharger = ({
     });
   };
 
-  // a new mount: its stage let every set go, and its fold sets have the cable in or not
+  // a new mount: its stage let every layer go, the bytes fetched for the old one go too, and its fold sets have the
+  // cable in or not
   const mounted = ({ plugged: cable }) => {
     run = null;
     if (swap) {
       drop(swap.track);
       swap = null;
     }
-    if (loading) {
-      drop(loading);
-      loading = null;
+    if (dropping) {
+      drop(dropping.track);
+      dropping = null;
     }
-    dropping = null;
-    chargerSets = null;
+    releaseChargerSet();
+    fetched.forEach((record) => {
+      if (record.value != null) {
+        sets.forget(record.value);
+      }
+    });
+    fetched = new Map();
     snapNext = false;
     plugged = cable;
     stopStep();
@@ -446,12 +577,15 @@ export const createCharger = ({
   const state = () => {
     const now = shown();
     return {
-      ready: chargerSets !== null,
+      ready: chargerSet?.ready ?? false,
+      fetched: isFetched(chargerNames()) && isFetched(foldNames(!plugged)),
+      chargerSet: chargerSet ? (chargerSet.open ? "open" : "closed") : null,
       failed,
       target,
       plugged,
       busy: busy(),
       running: Boolean(run && !run.done),
+      stuck: Boolean(swap?.stuck),
       plugIn: run ? run.plugIn : null,
       elapsed: run ? run.elapsed : null,
       total: run ? run.total : null,
