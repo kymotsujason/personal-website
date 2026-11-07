@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { segmentDistance, handMatrix } from "./hands.js";
 import { PLAN } from "./shared/motion.js";
+import { CHARGE_TOTAL, swapSchedule, liftAt, bumpAt, handOffAt } from "./shared/charging.js";
+
+// the right hand's grip swap lives in shared/charging.js, and stays importable from here
+export { swapSchedule };
 
 // the battery easter egg's cable. when the battery hits 1% the left hand lets go, reaches down out of view, comes back
 // pinching a white usb c plug and pushes it into the port on the flap's bottom edge (the half with the cover screen,
@@ -151,20 +155,6 @@ const viaThumb = (target) => (baked, u) => {
     return out;
 };
 const TO_PINCH = viaThumb(PINCH);
-
-// the right hand takes its one handed grip before the left lets go, and the left has its grip back before the right
-// returns to its own, so the phone always has a hand on it. `swap` is how long the right takes (0 when it has no one
-// handed grip) and `run` how long the left hand's part is. gives the right hand's weight toward its one handed grip,
-// and how far along its own part the left hand is
-export const swapSchedule = (t, swap, run) => {
-    const left = Math.min(Math.max(t - swap, 0), run);
-    if (swap <= 0) {
-        return { right: null, left };
-    }
-    const into = clamp01(t / swap);
-    const out = clamp01((swap * 2 + run - t) / swap);
-    return { right: smooth(Math.min(into, out)), left };
-};
 let TO_OPEN = viaThumb(OPEN);
 
 // still says whether motion is reduced, which plugs and unplugs at once with no reach for the cable
@@ -431,7 +421,7 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
         job = { plugIn, t: 0 };
     };
 
-    const TOTAL = PLAN.away + PLAN.bring + PLAN.push + PLAN.release + PLAN.back;
+    const TOTAL = CHARGE_TOTAL;
     const swapTime = () => (support ? PLAN.swap : 0);
     const runTotal = () => TOTAL + 2 * swapTime();
     // how far along the left hand's own part a run is, and the right hand's weight toward its one handed grip
@@ -540,7 +530,7 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
         }
         target = target || handFor(plugPos, p.quaternion);
         hands.setOverride("Left", { position: target.position, quaternion: target.quaternion, joints, weight, turn: turn ?? weight });
-        handOff = weight;
+        handOff = handOffAt(t);
         // the right hand holds the phone alone in its one handed grip from before the left lets go until it's back
         if (support) {
             // between the two grips the hand opens a little and eases outward, so its fingers go around the phone's
@@ -599,29 +589,9 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
 
     // while the hand works at the port the phone is turned a little to show that edge, like someone finding the port.
     // 0 to 1, rising as the hand leaves and settling once it's back
-    const lift = () => {
-        if (!job) {
-            return 0;
-        }
-        const t = scheduleNow().left;
-        const rise = Math.min(t / PLAN.away, 1);
-        const settle = Math.min(Math.max((TOTAL - t) / PLAN.back, 0), 1);
-        const k = Math.min(rise, settle);
-        return k * k * (3 - 2 * k);
-    };
+    const lift = () => (job ? liftAt(scheduleNow().left) : 0);
     // 0 to 1 and back as the plug is pushed home: rises through the end of the push, falls through the release
-    const bump = () => {
-        if (!job) {
-            return 0;
-        }
-        const t = scheduleNow().left;
-        const start = PLAN.away + PLAN.bring + PLAN.push * 0.5;
-        const end = PLAN.away + PLAN.bring + PLAN.push + PLAN.release + 0.12;
-        if (t <= start || t >= end) {
-            return 0;
-        }
-        return Math.sin((Math.PI * (t - start)) / (end - start));
-    };
+    const bump = () => (job ? bumpAt(scheduleNow().left) : 0);
     // the port's outward direction in the device frame
     const portOut = () => new THREE.Vector3(0, -1, 0).applyQuaternion(portPose().quaternion);
 

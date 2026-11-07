@@ -10,6 +10,7 @@ import { createHands, handMatrix, LIMITS } from "./hands.js";
 import { state, pose, settings, DUO } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
 import { LEAD } from "./shared/motion.js";
+import { chargerWanted } from "./shared/charging.js";
 import { place, centerShift, SCREEN_FRONT, PX_PER_CM, SEAM } from "./shared/placement.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
 import { applyWallpaperMotion, reducedMotion } from "./quality.js";
@@ -243,7 +244,6 @@ let chargerLoading = null;
 // a chunk that didn't load isn't asked for again this page load, since the battery's ticks would ask each time
 let volumeFailed = false;
 let chargerFailed = false;
-const CHARGER_BELOW = 5;
 
 const buildVolume = (body, flap) => {
     const buttons = volumeModule ? body.getObjectByName("Buttons") : null;
@@ -344,9 +344,8 @@ export const loadCharger = async () => {
     }
 };
 
-// the battery is about to need the cable when it's low, and does while it's charging (a visit that starts in the middle
-// of a charge starts with the cable in)
-export const chargerWanted = (status) => status.charging || status.level <= CHARGER_BELOW;
+// when the battery wants the cable (shared/charging.js), kept importable from here
+export { chargerWanted };
 
 export const watchCharger = (status) => {
     if (!chargerModule && !chargerFailed && chargerWanted(status)) {

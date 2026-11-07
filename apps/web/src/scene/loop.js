@@ -4,6 +4,8 @@ import { cornerPin, facing } from "./pin.js";
 import { state, pose, TAP_FOLD, FOV } from "./state.js";
 import { runTweens } from "./tween.js";
 import { idleDrift } from "./shared/motion.js";
+import { fitInView } from "./shared/placement.js";
+import { PRESENT_TILT, SAG, PLUG_BUMP, shakeAt } from "./shared/charging.js";
 import { renderer, scene, camera, backdrop, focusBlur } from "./renderer.js";
 import { frameTimes, stepQuality, reducedMotion, laterLevel } from "./quality.js";
 import { homeCache, refreshStatus } from "./home.js";
@@ -135,43 +137,6 @@ const placePage = () => {
     }
 };
 
-// how far the phone turns its port edge toward the camera while the cable goes in (radians), and the margin it keeps
-// from the window's edges then (of the window's size)
-const PRESENT_TILT = 0.1;
-const PRESENT_MARGIN = 0.07;
-// and how far it lifts while the hand goes for the cable, at most (of the window's height), as if the holding hand
-// raises it to make room. it never lifts past the top margin
-const PRESENT_LIFT = 0.06;
-// the extra shake while one hand holds the open phone (cm, radians), and how far its free half sags (radians)
-const SHAKE_MOVE = 0.12;
-const SHAKE_TURN = 0.008;
-const SAG = 0.035;
-// how far the phone gives when the plug is pushed home (cm)
-const PLUG_BUMP = 0.35;
-
-// the move (cm, in the scene) for the charging cable: the phone rises by PRESENT_LIFT of the window's height while
-// staying whole in view with PRESENT_MARGIN on every side, backing off from the camera if there isn't room to rise
-const fitInView = () => {
-    const { outer } = phoneEdges();
-    const d = -state.root.position.z;
-    const mx = innerWidth * PRESENT_MARGIN;
-    const my = innerHeight * PRESENT_MARGIN;
-    const lift = PRESENT_LIFT * innerHeight;
-    const cx = innerWidth / 2;
-    const cy = innerHeight / 2;
-    // the phone has to fit with room to rise: between the top margin and the bottom margin raised by the lift
-    const scale = Math.max(1, (outer.right - outer.left) / (innerWidth - 2 * mx), (outer.bottom - outer.top) / (innerHeight - 2 * my - lift));
-    const s = 1 / scale;
-    const box = { left: cx + (outer.left - cx) * s, right: cx + (outer.right - cx) * s, top: cy + (outer.top - cy) * s, bottom: cy + (outer.bottom - cy) * s };
-    const shiftX = Math.max(mx - box.left, 0) - Math.max(box.right - (innerWidth - mx), 0);
-    // up by the lift (more if the bottom is still past its margin), but never past the top margin
-    const room = Math.max(box.top - my, 0);
-    const up = Math.min(Math.max(lift, box.bottom - (innerHeight - my)), room);
-    const shiftY = -up;
-    const worldPerPx = (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * d * scale) / innerHeight;
-    return { x: shiftX * worldPerPx, y: -shiftY * worldPerPx, z: -(d * scale - d) };
-};
-
 // the idle drift lives in shared/motion.js, and fold.js reads it from here
 export { idleDrift };
 
@@ -264,12 +229,12 @@ const frame = (now) => {
     // layer made the browser drop strips of its text
     const shaky = (state.charger ? state.charger.handOff() : 0) * THREE.MathUtils.clamp(1 - pose.fold, 0, 1);
     if (shaky > 0) {
-        const t = now / 1000;
-        root.position.x += (Math.sin(t * 5.3) * 0.6 + Math.sin(t * 8.9 + 1.3) * 0.4) * SHAKE_MOVE * shaky;
-        root.position.y += (Math.sin(t * 6.1 + 0.7) * 0.6 + Math.sin(t * 9.7 + 2.1) * 0.4) * SHAKE_MOVE * shaky;
+        const shake = shakeAt(now / 1000);
+        root.position.x += shake.x * shaky;
+        root.position.y += shake.y * shaky;
         if (!state.appVisible) {
-            root.rotation.x += Math.sin(t * 4.7 + 0.4) * SHAKE_TURN * shaky;
-            root.rotation.y += Math.sin(t * 5.9 + 1.9) * SHAKE_TURN * shaky;
+            root.rotation.x += shake.rx * shaky;
+            root.rotation.y += shake.ry * shaky;
             // the left half droops in landscape, the top half tips back in portrait
             if (state.portrait) {
                 root.rotation.x -= SAG * shaky;
@@ -283,7 +248,7 @@ const frame = (now) => {
     const present = state.charger ? state.charger.lift() : 0;
     if (present > 0) {
         if (!state.chargeFit) {
-            state.chargeFit = fitInView();
+            state.chargeFit = fitInView({ outer: phoneEdges().outer, z: state.root.position.z, width: innerWidth, height: innerHeight });
         }
         const out = state.charger.portOut();
         const axis = new THREE.Vector3().crossVectors(out, new THREE.Vector3(0, 0, 1)).normalize();

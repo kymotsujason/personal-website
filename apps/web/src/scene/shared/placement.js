@@ -86,3 +86,32 @@ export const place = ({ width, height, portrait }) => {
         fastStart: { x: 0, y: -bodyH * 0.18, z: -homeDist * 1.06, rx: -0.28, ry: 0.05, rz: -0.03 }
     };
 };
+
+// the margin the phone keeps from the window's edges while the charging cable goes in (of the window's size), and how
+// far it lifts while the hand goes for the cable, at most (of the window's height), as if the holding hand raises it to
+// make room. it never lifts past the top margin
+const PRESENT_MARGIN = 0.07;
+const PRESENT_LIFT = 0.06;
+
+// the move (cm, in the scene) for the charging cable: the phone rises by PRESENT_LIFT of the window's height while
+// staying whole in view with PRESENT_MARGIN on every side, backing off from the camera if there isn't room to rise.
+// outer is the phone's bounds in window px, and z its distance along the camera's z (negative, in cm)
+export const fitInView = ({ outer, z, width, height }) => {
+    const d = -z;
+    const mx = width * PRESENT_MARGIN;
+    const my = height * PRESENT_MARGIN;
+    const lift = PRESENT_LIFT * height;
+    const cx = width / 2;
+    const cy = height / 2;
+    // the phone has to fit with room to rise: between the top margin and the bottom margin raised by the lift
+    const scale = Math.max(1, (outer.right - outer.left) / (width - 2 * mx), (outer.bottom - outer.top) / (height - 2 * my - lift));
+    const s = 1 / scale;
+    const box = { left: cx + (outer.left - cx) * s, right: cx + (outer.right - cx) * s, top: cy + (outer.top - cy) * s, bottom: cy + (outer.bottom - cy) * s };
+    const shiftX = Math.max(mx - box.left, 0) - Math.max(box.right - (width - mx), 0);
+    // up by the lift (more if the bottom is still past its margin), but never past the top margin
+    const room = Math.max(box.top - my, 0);
+    const up = Math.min(Math.max(lift, box.bottom - (height - my)), room);
+    const shiftY = -up;
+    const worldPerPx = (2 * Math.tan((FOV / 2) * (Math.PI / 180)) * d * scale) / height;
+    return { x: shiftX * worldPerPx, y: -shiftY * worldPerPx, z: -(d * scale - d) };
+};
