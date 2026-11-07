@@ -582,6 +582,18 @@ describe("3d and the watchdog", () => {
     expect(page.events).toEqual([]);
   });
 
+  test("the 3d watchdog stands down once a handoff has taken has-3d away", () => {
+    const page = makePage();
+    page.run();
+    // the handoff clears __sceneShown and has-3d, and the 2d scene now runs under has-flat-scene
+    page.classes.delete("has-3d");
+    page.classes.add("has-flat-scene");
+    page.timers[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(false);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.events).toEqual([]);
+  });
+
   test("popstate records whether the browser played its own transition", () => {
     const page = makePage();
     page.run();
@@ -757,7 +769,6 @@ describe("the 2d scene", () => {
     expect(page.classes.has("has-flat-scene")).toBe(true);
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.classes.has("flat-slow")).toBe(false);
-    expect(page.window.__flatChosen).toBe(false);
   });
 
   test("a scene that can run in 3d doesn't get has-flat-scene", () => {
@@ -778,11 +789,10 @@ describe("the 2d scene", () => {
     }
   });
 
-  test("a saved 2d choice gives has-flat-scene and __flatChosen", () => {
+  test("a saved 2d choice gives has-flat-scene", () => {
     const page = makePage({ local: { "2d": "1" } });
     page.run();
     expect(page.classes.has("has-flat-scene")).toBe(true);
-    expect(page.window.__flatChosen).toBe(true);
   });
 
   test("a recent flatAuto gives the plain flat page and flat-slow", () => {
@@ -816,7 +826,6 @@ describe("the 2d scene", () => {
     page.run();
     expect(page.classes.has("flat-slow")).toBe(true);
     expect(page.classes.has("has-flat-scene")).toBe(false);
-    expect(page.window.__flatChosen).toBe(true);
   });
 
   test("?3d clears flatAuto and 2dAuto", () => {
@@ -840,7 +849,6 @@ describe("the 2d scene", () => {
     expect(local["2d"]).toBe("1");
     expect(page.classes.has("has-flat-scene")).toBe(true);
     expect(page.classes.has("flat-slow")).toBe(false);
-    expect(page.window.__flatChosen).toBe(true);
   });
 
   test("the not found page never gets has-flat-scene", () => {

@@ -221,6 +221,10 @@
       if (window[shownFlag]) {
         return;
       }
+      // a handoff from 3d to 2d takes has-3d away, and the 2d scene it hands to has a watchdog of its own
+      if (!root.classList.contains(classes[0])) {
+        return;
+      }
       root.classList.add("scene-failed");
       for (var i = 0; i < classes.length; i++) {
         root.classList.remove(classes[i]);
@@ -311,7 +315,6 @@
   var choice = version || (saved === "1" ? "2d" : saved === "0" ? "3d" : "");
   // the scene only switches a slow device to the flat site when the visitor hasn't chosen 3d
   window.__chose3d = choice === "3d";
-  window.__flatChosen = choice === "2d";
   var show3d =
     !notFound &&
     (choice === "3d"

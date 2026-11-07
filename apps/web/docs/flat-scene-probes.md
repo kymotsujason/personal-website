@@ -78,7 +78,7 @@ While the phone moves, the 2D scene uses live HTML, and this choice is provision
 
 `window.__flat` comes from `src/flat/probeHook.js`, and `src/flat/index.js` imports it only under `if (__CAPTURE__)`, the same flag that gates `window.__capture`. It has `stage`, `frames`, `screens`, `manifest`, `ready`, `setPose(pose)`, `setFold(fold, lead)` (which also places the screens on that frame), `mount({ set, lighting, size })`, and `unmount()`. It mounts a stage and the screens on its own (landscape or portrait by the window, lighting by the hour, size by `sizeFor`) and shows the rest pose at fold 0, the open phone. The ruling said fold 1, but fold 1 is the closed first frame, and the probes need the open home screen.
 
-To check the shipped build, I built with `CAPTURE=0 pnpm exec astro build --outDir dist-ship-check` and searched every file for `__flat`, `installFlatHook`, and `probeHook`. The only matches were `__flatChosen` and `__flatShown`, which are the layout's own flags, and `_astro` had no probe chunk. The same search on a `CAPTURE=1` build found `installFlatHook` 4 times, `probeHook` twice, and one `window.__flat`. Both folders were deleted afterwards.
+To check the shipped build, I built with `CAPTURE=0 pnpm exec astro build --outDir dist-ship-check` and searched every file for `__flat`, `installFlatHook`, and `probeHook`. The only match was `__flatShown`, the layout's own flag, and `_astro` had no probe chunk. The same search on a `CAPTURE=1` build found `installFlatHook` 4 times, `probeHook` twice, and one `window.__flat`. Both folders were deleted afterwards.
 
 ## Limits
 
