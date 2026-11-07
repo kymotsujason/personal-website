@@ -1,0 +1,74 @@
+---
+// one home screen's sky and content, as buildHomeContent in scene/home.js lays it out: the status bar, the app icons,
+// and the credits row. the 2d body's half and the cover both carry it, since the cover lies over the body's half closed
+interface Props {
+  apps: { name: string; glyph: string; color: string }[];
+}
+
+const { apps } = Astro.props;
+---
+
+<div class="flat-sky" aria-hidden="true">
+  <div class="stars"></div>
+  <div class="clouds"></div>
+  <div class="dim"></div>
+</div>
+<div class="panel main">
+  <div class="status">
+    <span class="time"></span>
+    <span class="indicators" role="button" tabindex="0" aria-label="Show ping">
+      <span class="wifi" data-bars="0">
+        <svg viewBox="0 0 17 12" aria-hidden="true">
+          <circle class="bar b0" cx="8.5" cy="9.941" r="1.341"></circle>
+          <path
+            class="bar b1"
+            d="M4.632 7.132A5.471 5.471 0 0 1 12.368 7.132"
+          ></path>
+          <path class="bar b2" d="M2.136 4.636A9 9 0 0 1 14.864 4.636"></path>
+          <path class="slash" d="M1 0 16 12"></path>
+        </svg>
+      </span>
+      <span class="battery" data-level="100" data-charging="false">
+        <span class="b-body">
+          <span class="b-fill"></span>
+        </span>
+        <span class="b-text">
+          <span class="b-level">100</span>
+          <svg class="b-bolt" viewBox="0 0 50 100" aria-hidden="true">
+            <path d="M34 0 0 56H26L16 100 50 42H24Z"></path>
+          </svg>
+        </span>
+      </span>
+    </span>
+  </div>
+  <div class="home">
+    {apps.map((app) => (
+      <button class="app-icon" type="button" data-app={app.name}>
+        <span
+          class="glyph"
+          aria-hidden="true"
+          style={`background:${app.color}`}
+        >
+          {app.glyph}
+        </span>
+        <span>{app.name}</span>
+      </button>
+    ))}
+  </div>
+  <div class="credits">
+    <a
+      class="credit"
+      href="https://open-meteo.com/"
+      target="_blank"
+      rel="noopener"
+      set:text="Weather data by Open-Meteo.com"
+    />
+    <a
+      class="credit"
+      href="/"
+      data-version="3d"
+      data-astro-reload
+      set:text="3D version"
+    />
+  </div>
+</div>

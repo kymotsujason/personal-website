@@ -9,6 +9,41 @@ export const SCREEN_FRONT = DUO.depth / 2 + 0.003;
 // the lid opens upward
 export const centerShift = (fold, portrait) => (portrait ? -(DUO.halfW / 2) * Math.min(Math.max(fold, 0), 1) : 0);
 
+// the home screens' css px per cm of the phone (device.js lays them out at this)
+export const PX_PER_CM = 54.4;
+// how far the two halves' screens overlap at the hinge, in cm, so no seam shows (device.js hole)
+export const SEAM = 0.02;
+
+// the open screen, its halves, and the cover in the open screen's css px, upright on screen, the way device.js lays
+// them out from the model. side is the flap's half with the widgets, main is where the cover lies over the body's half
+// when closed (its content continues there open), and flap, body, and cover are each screen's whole box, which is
+// what the capture records the corners of. main and cover can start a little outside the screen, since the cover is
+// taller than it
+export const screenLayout = (portrait) => {
+    const { halfW, halfScreenW, screenH, screenR, coverW, coverH, coverR } = DUO;
+    const sy = screenH / 2;
+    // a point in the body's frame onto the open screen, which portrait's roll turns a quarter
+    const toPx = (x, y) => (portrait ? [(y + sy) * PX_PER_CM, (halfScreenW + x) * PX_PER_CM] : [(x + halfScreenW) * PX_PER_CM, (sy - y) * PX_PER_CM]);
+    const rect = (x0, x1, y0, y1) => {
+        const [ax, ay] = toPx(x0, y0);
+        const [bx, by] = toPx(x1, y1);
+        return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) };
+    };
+    // closed, the flap is turned over onto the body, so the cover's x in the flap is -x in the body
+    const main = rect(halfW / 2 - coverW / 2, halfW / 2 + coverW / 2, -coverH / 2, coverH / 2);
+    return {
+        fullW: (portrait ? screenH : halfScreenW * 2) * PX_PER_CM,
+        fullH: (portrait ? halfScreenW * 2 : screenH) * PX_PER_CM,
+        radius: screenR * PX_PER_CM,
+        side: rect(-halfScreenW, 0, -sy, sy),
+        main,
+        flap: rect(-halfScreenW, SEAM, -sy, sy),
+        body: rect(-SEAM, halfScreenW, -sy, sy),
+        cover: { x: 0, y: 0, w: main.w, h: main.h },
+        coverRadius: coverR * PX_PER_CM
+    };
+};
+
 // where the phone sits for a window of this size, in the camera's space (cm), for both scenes. nothing here may reach
 // three.js, since the 2d bundle imports it
 export const place = ({ width, height, portrait }) => {

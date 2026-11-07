@@ -95,7 +95,8 @@ html {
   }
 }
 
-#page .sky .stars {
+#page .sky .stars,
+html.has-flat-scene .flat-sky .stars {
   position: absolute;
   inset: 0;
   opacity: var(--stars);

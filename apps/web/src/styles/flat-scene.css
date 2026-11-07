@@ -50,3 +50,306 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   transform-origin: 0 0;
   pointer-events: none;
 }
+
+/* the home and cover screens (components/FlatScreens.astro), laid out by site.css's 3d screen rules at the 3d screens'
+   px and warped onto the frame by src/flat/screens.js. a face shows once it's placed, and takes input unless inert */
+html.has-flat-scene .flat-home {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+html.has-flat-scene .flat-home > .face-title,
+html.has-flat-scene .flat-cover > .face-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+html.has-flat-scene .flat-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  visibility: hidden;
+  background: #000;
+  pointer-events: auto;
+}
+
+/* the sky the app pages draw (lib/sky.js), as wide as the open screen and cut to the part each face shows */
+html.has-flat-scene .flat-sky {
+  position: absolute;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at var(--sun-x) var(--sun-y),
+      var(--sun-glow) 0,
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at var(--moon-x) var(--moon-y),
+      var(--moon-glow) 0,
+      transparent 28%
+    ),
+    linear-gradient(to bottom, var(--sky-top), var(--sky-low));
+}
+
+html.has-flat-scene .flat-sky .clouds {
+  position: absolute;
+  inset: 0 0 25%;
+  opacity: var(--clouds);
+  filter: brightness(var(--cloud-light));
+  background: url("/clouds.webp") center top / cover no-repeat;
+}
+
+html.has-flat-scene .flat-sky .dim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--dim-top)),
+    rgba(0, 0, 0, var(--dim-low))
+  );
+}
+
+/* the widgets' glass: the 3d scene's plain glass (the sky lifted toward white, composite.js) while the phone moves,
+   and frosted only at rest, since a backdrop blur under a moving warp costs each frame */
+html.has-flat-scene .flat-face .widget {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+html.has-flat-scene .flat-face.frosted .widget {
+  background: rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* a line capped at one, which 3d draws cut short with three periods (homeDraw.js drawText) */
+html.has-flat-scene .flat-face .wt.wrap[data-lines="1"] {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+html.has-flat-scene .flat-face :focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+html.has-flat-scene .flat-face .app-icon > span:last-child {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* the status bar's wifi fan and battery, drawn the way screens.js draws them in 3d */
+html.has-flat-scene .flat-face .wifi svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+html.has-flat-scene .flat-face .wifi .bar {
+  opacity: 0.32;
+  fill: #fff;
+  stroke: #fff;
+  stroke-width: 2.19;
+  stroke-linecap: round;
+}
+
+html.has-flat-scene .flat-face .wifi path.bar {
+  fill: none;
+}
+
+html.has-flat-scene .flat-face .wifi[data-bars="1"] .b0,
+html.has-flat-scene .flat-face .wifi[data-bars="2"] :is(.b0, .b1),
+html.has-flat-scene .flat-face .wifi[data-bars="3"] .bar {
+  opacity: 1;
+}
+
+html.has-flat-scene .flat-face .wifi .slash {
+  display: none;
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+
+html.has-flat-scene .flat-face .wifi[data-bars="0"] .slash {
+  display: inline;
+}
+
+html.has-flat-scene .flat-face .battery {
+  position: relative;
+  display: block;
+  line-height: 1;
+}
+
+html.has-flat-scene .flat-face .battery::after {
+  content: "";
+  position: absolute;
+  left: 25px;
+  top: 4.16px;
+  width: 2px;
+  height: 4.68px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+html.has-flat-scene .flat-face .b-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 13px;
+  border-radius: 4.16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+html.has-flat-scene .flat-face .b-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--level, 100) * 1%);
+  background: #fff;
+}
+
+html.has-flat-scene .flat-face .b-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: #000;
+}
+
+html.has-flat-scene .flat-face .b-bolt {
+  display: none;
+  height: 8.06px;
+  fill: currentColor;
+}
+
+html.has-flat-scene .flat-face .battery[data-state="charging"] .b-fill {
+  background: #34c759;
+}
+
+html.has-flat-scene .flat-face .battery[data-state="low"] .b-fill {
+  background: #ff3b30;
+}
+
+html.has-flat-scene
+  .flat-face
+  .battery:is([data-state="charging"], [data-state="low"])
+  .b-text {
+  color: #fff;
+}
+
+html.has-flat-scene .flat-face .battery[data-state="charging"] .b-bolt {
+  display: block;
+}
+
+/* the music card's art, a square cut from the middle of the video in youtube's letterboxed thumbnail as 3d cuts it, and
+   a tile with a note until it loads */
+html.has-flat-scene .flat-face .music-card .art {
+  object-fit: cover;
+  transform: scale(1.3333);
+  clip-path: inset(12.5% round 9px);
+  border-radius: 0;
+}
+
+html.has-flat-scene .flat-face .music-card .art:not(.loaded) {
+  visibility: hidden;
+}
+
+html.has-flat-scene .flat-face .art-note {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 118px;
+  height: 118px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html.has-flat-scene .flat-face .art-note svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+}
+
+html.has-flat-scene .flat-face .ctl svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+}
+
+html.has-flat-scene .flat-face .ctl[data-icon="play"] .i-pause,
+html.has-flat-scene .flat-face .ctl[data-icon="pause"] .i-play {
+  display: none;
+}
+
+/* the bar thickens while it's dragged, and the time so far and the time left sit under it */
+html.has-flat-scene .flat-face .m-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+html.has-flat-scene .flat-face .m-progress[data-dragging="true"] .m-track {
+  top: 5px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+html.has-flat-scene .flat-face .m-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--at, 0) * 100%);
+  background: #fff;
+}
+
+html.has-flat-scene .flat-face .m-times {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* the picture of a face (screens.js picture) stands in for its html while the phone moves, if the probes pick it */
+html.has-flat-scene .flat-picture {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+html.has-flat-scene .flat-face.pictured > .flat-picture {
+  display: block;
+}
+
+html.has-flat-scene .flat-face.pictured > :not(.flat-picture) {
+  visibility: hidden;
+}

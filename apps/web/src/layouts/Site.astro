@@ -3,6 +3,7 @@ import { ClientRouter } from "astro:transitions";
 import headSource from "../lib/head.js?raw";
 import { APPS } from "../data/apps.js";
 import { latestProject } from "../lib/projects";
+import FlatScreens from "../components/FlatScreens.astro";
 import "../styles/site.css";
 import "../styles/flat.css";
 import "../styles/flat-scene.css";
@@ -49,10 +50,11 @@ const toolbar = Astro.slots.has("toolbar")
   : "";
 const isApp = app !== "home";
 const documentTitle = title === "Jason Yue" ? title : `${title} | Jason Yue`;
+const latest = await latestProject();
 // the data sits in a script element, so no "<" may end it early
 const siteData = JSON.stringify({
   apps: APPS,
-  latestProject: await latestProject(),
+  latestProject: latest,
 }).replace(/</g, "\\u003c");
 const buildId = import.meta.env.BUILD_ID;
 const path = Astro.url.pathname.replace(/(.)\/+$/, "$1");
@@ -492,5 +494,6 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
       <canvas id="gl-layer"></canvas>
     </div>
     <div id="player-host" inert></div>
+    <FlatScreens apps={APPS} latestProject={latest} />
   </body>
 </html>

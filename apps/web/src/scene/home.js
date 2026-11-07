@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { unpin } from "./pin.js";
 import { drawHome, redrawStatus, elementRect } from "./screens.js";
-import { cleanTitle } from "./musicInfo.js";
+import { listenForPress, clock, seekFor, musicCard, githubTotal, fitLines } from "./shared/homeParts.js";
 import { GITHUB_URL, fillGraph } from "./github.js";
 import { createStatus } from "./status.js";
 import { state } from "./state.js";
@@ -69,11 +69,7 @@ export const showMusic = () => {
     if (!card) {
         return;
     }
-    // the play button still asks again, as the music page's pill does
-    const down = unavailable || failed;
-    const title = (current && cleanTitle(current.title)) || "Music";
-    const channel = down ? "Music unavailable" : (current && current.channel) || "Songs I grew up on";
-    const shown = JSON.stringify([title, channel, playing, down, current ? current.art : ""]);
+    const { title, channel, icon, label, shown } = musicCard({ current, playing, unavailable, failed });
     // in the spike a redraw for each title made 60 to 110 ms frames on a 4x slowed cpu, so only what shows redraws
     if (card.dataset.shown === shown) {
         return;
@@ -82,40 +78,14 @@ export const showMusic = () => {
     card.querySelector(".m-title").textContent = title;
     card.querySelector(".m-channel").textContent = channel;
     const toggle = card.querySelector('[data-control="toggle"]');
-    toggle.dataset.icon = playing ? "pause" : "play";
-    toggle.setAttribute("aria-label", down ? "Music unavailable" : playing ? "Pause" : "Play");
+    toggle.dataset.icon = icon;
+    toggle.setAttribute("aria-label", label);
     const art = card.querySelector("img.art");
     if (current && art.dataset.src !== current.art) {
         art.dataset.src = current.art;
         art.src = current.art;
     }
     state.screensChanged = true;
-};
-
-// a div or span acting as a button answers Enter and Space with the click it would get from a tap. like a button, Enter
-// clicks on keydown and Space on keyup, and a held key doesn't repeat the click
-const pressOnKey = (event) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-        return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.repeat || (event.key === " ") !== (event.type === "keyup")) {
-        return;
-    }
-    event.currentTarget.click();
-};
-
-const listenForPress = (el, accept = () => true) => {
-    const press = (event) => accept(event) && pressOnKey(event);
-    el.addEventListener("keydown", press);
-    el.addEventListener("keyup", press);
-};
-
-// the time as the slider reads it aloud, as 1:05 of 3:20
-const clock = (seconds) => {
-    const s = Math.max(Math.floor(seconds), 0);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
 // the widgets on the flap's half of the open screen. each one does something when tapped: the profile opens About,
@@ -206,17 +176,7 @@ export const buildWidgets = (homeEl) => {
         if (!duration) {
             return;
         }
-        // a share of the track for each key, or null for a key the bar doesn't answer
-        const to = {
-            ArrowRight: at + 5 / duration,
-            ArrowUp: at + 5 / duration,
-            ArrowLeft: at - 5 / duration,
-            ArrowDown: at - 5 / duration,
-            PageUp: at + 0.1,
-            PageDown: at - 0.1,
-            Home: 0,
-            End: 1
-        }[event.key];
+        const to = seekFor(event.key, at, duration);
         if (to === undefined) {
             return;
         }
@@ -255,22 +215,8 @@ const showPosition = () => {
     refreshStatus();
 };
 
-// a line marked .fit shrinks until it's one line in its box, down to 10px, since the card's width follows the screen's
-// size and the font differs between systems. it's measured with the canvas font the screen is drawn with
-const FIT_MIN = 10;
-export const fitLines = (homeEl) => {
-    const ctx = document.createElement("canvas").getContext("2d");
-    homeEl.querySelectorAll(".wt.fit").forEach((el) => {
-        el.style.fontSize = "";
-        const cs = getComputedStyle(el);
-        ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-        const width = ctx.measureText(el.textContent).width;
-        if (width > el.clientWidth) {
-            const size = Math.floor(((parseFloat(cs.fontSize) * el.clientWidth) / width) * 2) / 2;
-            el.style.fontSize = `${Math.max(size, FIT_MIN)}px`;
-        }
-    });
-};
+// device.js reads it from here
+export { fitLines };
 
 // the graph's data, from the home route's answer. an answer without it keeps what's shown, so a later failed ask never
 // blanks a graph that has data
@@ -293,7 +239,7 @@ export const fillGithub = (homeEl) => {
         return;
     }
     fillGraph(graph, contributions);
-    homeEl.querySelector(".gh-total").textContent = contributions ? `${contributions.total.toLocaleString("en-US")} in the last year` : "";
+    homeEl.querySelector(".gh-total").textContent = githubTotal(contributions);
 };
 
 // each screen is kept drawn without its status bar, so a clock or battery tick only repaints the bar (the whole inner

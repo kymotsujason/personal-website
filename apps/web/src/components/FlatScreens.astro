@@ -1,0 +1,173 @@
+---
+// the 2d scene's home and cover screens, as live html in the layout of the 3d ones (scene/home.js, device.js). the
+// template renders nothing itself, and the 2d module clones it into #stage under has-flat-scene
+import { GITHUB_URL } from "../scene/github.js";
+import FlatHomeContent from "./FlatHomeContent.astro";
+
+interface Props {
+  apps: { name: string; glyph: string; color: string }[];
+  latestProject: { title: string; path: string };
+}
+
+const { apps, latestProject } = Astro.props;
+---
+
+<template id="flat-screens">
+  <div class="flat-home" role="region" aria-label="Home screen">
+    <h1 class="face-title">Jason Yue</h1>
+    <div class="screen flat-face flat-flap" data-face="flap">
+      <div class="flat-sky" aria-hidden="true">
+        <div class="stars"></div>
+        <div class="clouds"></div>
+        <div class="dim"></div>
+      </div>
+      <div class="panel side">
+        <div class="widgets">
+          <div
+            class="widget small tappable about-card"
+            data-action="about"
+            role="button"
+            tabindex="0"
+          >
+            <img class="avatar" src="/ice.png" alt="" />
+            <span class="wt w-big">Jason</span>
+            <span class="wt w-line fit">Just another developer =P</span>
+          </div>
+          <div
+            class="widget small tappable"
+            data-action="project"
+            data-path={latestProject.path}
+            role="button"
+            tabindex="0"
+          >
+            <span class="wt w-title">LATEST PROJECT</span>
+            <span class="wt w-big wrap">{latestProject.title}</span>
+          </div>
+          <a
+            class="widget wide tappable"
+            data-action="github"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener"
+            draggable="false"
+          >
+            <div class="w-head">
+              <span class="wt w-title">GITHUB</span>
+              <span class="wt w-title gh-total"></span>
+            </div>
+            <div class="graph"></div>
+          </a>
+          <div class="widget wide tappable music-card" data-action="music">
+            <span class="art-note" aria-hidden="true">
+              <svg viewBox="0 0 100 100">
+                <ellipse
+                  cx="38"
+                  cy="68"
+                  rx="8.5"
+                  ry="6.5"
+                  transform="rotate(-22.9 38 68)"
+                ></ellipse>
+                <ellipse
+                  cx="66"
+                  cy="62"
+                  rx="8.5"
+                  ry="6.5"
+                  transform="rotate(-22.9 66 62)"
+                ></ellipse>
+                <rect x="43" y="28" width="3.5" height="40"></rect>
+                <rect x="71" y="22" width="3.5" height="40"></rect>
+                <path d="M43 28 74.5 22 74.5 30 43 36Z"></path>
+              </svg>
+            </span>
+            <img class="art" crossorigin="anonymous" alt="" />
+            <div class="m-side">
+              <span class="wt w-line wrap m-title" data-lines="1">
+                Music
+              </span>
+              <span class="wt w-line wrap m-channel" data-lines="1">
+                Songs I grew up on
+              </span>
+              <span
+                class="m-progress"
+                role="slider"
+                tabindex="0"
+                aria-label="Seek"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+                data-at="0"
+                data-time="0"
+                data-duration="0"
+              >
+                <span class="m-track">
+                  <span class="m-fill"></span>
+                </span>
+                <span class="m-times">
+                  <span class="m-time"></span>
+                  <span class="m-left"></span>
+                </span>
+              </span>
+              <div class="m-controls">
+                <span
+                  class="ctl"
+                  data-control="previous"
+                  data-icon="previous"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Previous"
+                >
+                  <svg viewBox="0 0 28 28" aria-hidden="true">
+                    <path d="M24.08 3.92 9.968 14 24.08 24.08ZM4.928 3.92h4.032v20.16H4.928Z"></path>
+                  </svg>
+                </span>
+                <span
+                  class="ctl"
+                  data-control="toggle"
+                  data-icon="play"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Play"
+                >
+                  <svg viewBox="0 0 28 28" aria-hidden="true">
+                    <path
+                      class="i-play"
+                      d="M6.944 3.92 24.08 14 6.944 24.08Z"
+                    ></path>
+                    <path
+                      class="i-pause"
+                      d="M6.44 3.92h5.04v20.16H6.44ZM16.52 3.92h5.04v20.16h-5.04Z"
+                    ></path>
+                  </svg>
+                </span>
+                <span
+                  class="ctl"
+                  data-control="next"
+                  data-icon="next"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Next"
+                >
+                  <svg viewBox="0 0 28 28" aria-hidden="true">
+                    <path d="M3.92 3.92 18.032 14 3.92 24.08ZM19.04 3.92h4.032v20.16H19.04Z"></path>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen flat-face flat-body" data-face="body">
+      <FlatHomeContent apps={apps} />
+    </div>
+  </div>
+  <div
+    class="screen flat-face flat-cover cover-screen"
+    data-face="cover"
+    role="region"
+    aria-label="Cover screen"
+  >
+    <h1 class="face-title">Jason Yue</h1>
+    <FlatHomeContent apps={apps} />
+  </div>
+</template>

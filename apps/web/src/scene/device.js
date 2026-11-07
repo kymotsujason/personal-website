@@ -10,14 +10,12 @@ import { createHands, handMatrix, LIMITS } from "./hands.js";
 import { state, pose, settings, DUO } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
 import { LEAD } from "./shared/motion.js";
-import { place, centerShift, SCREEN_FRONT } from "./shared/placement.js";
+import { place, centerShift, SCREEN_FRONT, PX_PER_CM, SEAM } from "./shared/placement.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
 import { applyWallpaperMotion, reducedMotion } from "./quality.js";
 import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus, siteData } from "./home.js";
 import { APP_BACKGROUND, pageEl, tapApp, tapFromCover, setAppVisible } from "./appWindow.js";
 import { sceneFetch, signal, failScene } from "./lifetime.js";
-
-const PX_PER_CM = 54.4;
 
 // the app switcher's icons and names, shared by every build (see cardAtlas)
 let cardAtlasTexture = null;
@@ -469,7 +467,7 @@ export const buildDevice = () => {
     }
     // the screens are textured parts of the model, drawn in the same pass as the phone, so the home screen can't drift
     // from it the way warped html behind the canvas did. the halves overlap a hair at the hinge so no seam shows
-    const seam = 0.02;
+    const seam = SEAM;
     const glass = glassUniforms();
     const screenMaterial = glassMaterial(glass, PX_PER_CM);
     const coverMaterial = glassMaterial(glass, PX_PER_CM);
