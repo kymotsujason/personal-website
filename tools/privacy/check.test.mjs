@@ -1573,9 +1573,12 @@ const runRepeatedInputs = (viaSystemd) => {
     .split("\n")
     .map((line) => JSON.parse(line));
   assert.equal(lines.length, repeatedInputs.length);
+  // the slowest case takes about 1.4 s on Jason's pc and took 5 s on a cloudflare build machine, which also runs this
+  // in the deploy. a scan that went quadratic would take far longer than 20 s on a 1M input, so this still catches it
+  const LIMIT_MS = 20000;
   for (const { label, ms, rss } of lines) {
     assert.ok(rss < 1e9, `${label} reached ${Math.round(rss / 1e6)} MB`);
-    assert.ok(ms < 5000, `${label} took ${ms} ms`);
+    assert.ok(ms < LIMIT_MS, `${label} took ${ms} ms`);
   }
 };
 
