@@ -83,3 +83,15 @@ To check the shipped build, I built with `CAPTURE=0 pnpm exec astro build --outD
 ## Limits
 
 Headless frame gaps lock to vsync and the CPU throttle doesn't slow the GPU, so only the SwiftShader runs stress the paint path. No probe ran on a real phone. The crop check is a row based heuristic. The half against full test used one scene (landscape, day, fold 0), and a person hasn't looked at its screenshots.
+
+## Final measurements
+
+These were taken on 2026-11-07, at the end of the build.
+
+The 2D module (`flat.*.js`) is 91.6 kB minified and 35.0 kB gzip, over the 30 kB gzip target by 5 kB. The charger, volume, and music chunks it loads later are 5.2, 1.7, and 1.5 kB gzip. The scripts before the first frame total 250.3 kB gzip.
+
+The charger now decodes only the set for the phone's current half, and only near a plug, during a run, or from 90% while charging. So a visit's peak at full size, day lighting, is about 563 MB in landscape and 719 MB in portrait (the larger fold version, one charger set, and 44 MB of desk), down from the 695.1 and 880.8 MB in the table above. Every visit still misses the 160 MB and 60 MB decoded budgets and the 1.2 MB and 0.6 MB download budgets, as Jason chose to build on and report.
+
+A fresh capture of the landscape set at day matched the committed one. Its corners and drag tables were identical (34,703 numbers, largest difference 0), and 119 of its 120 atlases were identical. The other differed in 137 pixels by more than 8 levels (largest 27), which is GPU render noise. So the sets weren't captured again, and each manifest's `inputsHash` was brought up to date, with every shared scene module now listed in `tools/capture-flat/inputs.json`.
+
+The Playwright prod, ship, and firefox projects passed 259 of 259 in one run with one worker. The compare project passed 23 of 23 in Task 19's last run, and its outline check measured at most 1.00 px between the 3D and 2D silhouettes. WebKit couldn't run on this machine, since it's missing system libraries (`libicu74`, `libxml2`, and `libflite1`), so the Safari checks are left for Jason's iPhone.
