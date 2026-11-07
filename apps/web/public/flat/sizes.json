@@ -1,0 +1,314 @@
+{
+  "cable-landscape-day-full": {
+    "decodedBytes": 300214080,
+    "downloadBytes": 2611144
+  },
+  "cable-landscape-day-half": {
+    "decodedBytes": 86489984,
+    "downloadBytes": 1823200
+  },
+  "cable-landscape-dusk-full": {
+    "decodedBytes": 300214080,
+    "downloadBytes": 2466944
+  },
+  "cable-landscape-dusk-half": {
+    "decodedBytes": 86489984,
+    "downloadBytes": 1733156
+  },
+  "cable-landscape-night-full": {
+    "decodedBytes": 300214080,
+    "downloadBytes": 2118026
+  },
+  "cable-landscape-night-half": {
+    "decodedBytes": 86489984,
+    "downloadBytes": 1535140
+  },
+  "cable-portrait-close-day-full": {
+    "decodedBytes": 212519488,
+    "downloadBytes": 2465639
+  },
+  "cable-portrait-close-day-half": {
+    "decodedBytes": 64130816,
+    "downloadBytes": 1770160
+  },
+  "cable-portrait-close-dusk-full": {
+    "decodedBytes": 212519488,
+    "downloadBytes": 2271111
+  },
+  "cable-portrait-close-dusk-half": {
+    "decodedBytes": 64130816,
+    "downloadBytes": 1673718
+  },
+  "cable-portrait-close-night-full": {
+    "decodedBytes": 212519488,
+    "downloadBytes": 1860591
+  },
+  "cable-portrait-close-night-half": {
+    "decodedBytes": 64130816,
+    "downloadBytes": 1442784
+  },
+  "cable-portrait-open-day-full": {
+    "decodedBytes": 226171200,
+    "downloadBytes": 2709283
+  },
+  "cable-portrait-open-day-half": {
+    "decodedBytes": 69224960,
+    "downloadBytes": 1959564
+  },
+  "cable-portrait-open-dusk-full": {
+    "decodedBytes": 226171200,
+    "downloadBytes": 2498827
+  },
+  "cable-portrait-open-dusk-half": {
+    "decodedBytes": 69224960,
+    "downloadBytes": 1848298
+  },
+  "cable-portrait-open-night-full": {
+    "decodedBytes": 226171200,
+    "downloadBytes": 2042511
+  },
+  "cable-portrait-open-night-half": {
+    "decodedBytes": 69224960,
+    "downloadBytes": 1587558
+  },
+  "charger-landscape-closed-day-full": {
+    "decodedBytes": 137743552,
+    "downloadBytes": 1212808
+  },
+  "charger-landscape-closed-day-half": {
+    "decodedBytes": 39337856,
+    "downloadBytes": 914827
+  },
+  "charger-landscape-closed-dusk-full": {
+    "decodedBytes": 137743552,
+    "downloadBytes": 1143146
+  },
+  "charger-landscape-closed-dusk-half": {
+    "decodedBytes": 39318912,
+    "downloadBytes": 871417
+  },
+  "charger-landscape-closed-night-full": {
+    "decodedBytes": 137743552,
+    "downloadBytes": 960648
+  },
+  "charger-landscape-closed-night-half": {
+    "decodedBytes": 39318912,
+    "downloadBytes": 767933
+  },
+  "charger-landscape-open-day-full": {
+    "decodedBytes": 213505472,
+    "downloadBytes": 1290683
+  },
+  "charger-landscape-open-day-half": {
+    "decodedBytes": 60459136,
+    "downloadBytes": 946846
+  },
+  "charger-landscape-open-dusk-full": {
+    "decodedBytes": 213505472,
+    "downloadBytes": 1211547
+  },
+  "charger-landscape-open-dusk-half": {
+    "decodedBytes": 60491904,
+    "downloadBytes": 897675
+  },
+  "charger-landscape-open-night-full": {
+    "decodedBytes": 213616064,
+    "downloadBytes": 1007957
+  },
+  "charger-landscape-open-night-half": {
+    "decodedBytes": 60459136,
+    "downloadBytes": 773120
+  },
+  "charger-portrait-closed-day-full": {
+    "decodedBytes": 161722368,
+    "downloadBytes": 1636010
+  },
+  "charger-portrait-closed-day-half": {
+    "decodedBytes": 45462912,
+    "downloadBytes": 1164464
+  },
+  "charger-portrait-closed-dusk-full": {
+    "decodedBytes": 161722368,
+    "downloadBytes": 1515250
+  },
+  "charger-portrait-closed-dusk-half": {
+    "decodedBytes": 45462912,
+    "downloadBytes": 1094030
+  },
+  "charger-portrait-closed-night-full": {
+    "decodedBytes": 161722368,
+    "downloadBytes": 1222082
+  },
+  "charger-portrait-closed-night-half": {
+    "decodedBytes": 45462912,
+    "downloadBytes": 930603
+  },
+  "charger-portrait-open-day-full": {
+    "decodedBytes": 236749824,
+    "downloadBytes": 1707852
+  },
+  "charger-portrait-open-day-half": {
+    "decodedBytes": 67788288,
+    "downloadBytes": 1247039
+  },
+  "charger-portrait-open-dusk-full": {
+    "decodedBytes": 234740736,
+    "downloadBytes": 1586125
+  },
+  "charger-portrait-open-dusk-half": {
+    "decodedBytes": 67666048,
+    "downloadBytes": 1178803
+  },
+  "charger-portrait-open-night-full": {
+    "decodedBytes": 234740736,
+    "downloadBytes": 1307003
+  },
+  "charger-portrait-open-night-half": {
+    "decodedBytes": 67666048,
+    "downloadBytes": 1019413
+  },
+  "desk-day-full": {
+    "decodedBytes": 43597440,
+    "downloadBytes": 302649
+  },
+  "desk-day-half": {
+    "decodedBytes": 10899360,
+    "downloadBytes": 128809
+  },
+  "desk-dusk-full": {
+    "decodedBytes": 43597440,
+    "downloadBytes": 233762
+  },
+  "desk-dusk-half": {
+    "decodedBytes": 10899360,
+    "downloadBytes": 101638
+  },
+  "desk-night-full": {
+    "decodedBytes": 43597440,
+    "downloadBytes": 194759
+  },
+  "desk-night-half": {
+    "decodedBytes": 10899360,
+    "downloadBytes": 88253
+  },
+  "landscape-day-full": {
+    "decodedBytes": 306067456,
+    "downloadBytes": 2549929
+  },
+  "landscape-day-half": {
+    "decodedBytes": 87580992,
+    "downloadBytes": 1789418
+  },
+  "landscape-dusk-full": {
+    "decodedBytes": 306067456,
+    "downloadBytes": 2412121
+  },
+  "landscape-dusk-half": {
+    "decodedBytes": 87580992,
+    "downloadBytes": 1701724
+  },
+  "landscape-night-full": {
+    "decodedBytes": 306067456,
+    "downloadBytes": 2081149
+  },
+  "landscape-night-half": {
+    "decodedBytes": 87580992,
+    "downloadBytes": 1510780
+  },
+  "portrait-close-day-full": {
+    "decodedBytes": 206448640,
+    "downloadBytes": 2264698
+  },
+  "portrait-close-day-half": {
+    "decodedBytes": 62122816,
+    "downloadBytes": 1636534
+  },
+  "portrait-close-dusk-full": {
+    "decodedBytes": 206448640,
+    "downloadBytes": 2109380
+  },
+  "portrait-close-dusk-half": {
+    "decodedBytes": 62122816,
+    "downloadBytes": 1545282
+  },
+  "portrait-close-night-full": {
+    "decodedBytes": 206448640,
+    "downloadBytes": 1737518
+  },
+  "portrait-close-night-half": {
+    "decodedBytes": 62122816,
+    "downloadBytes": 1333958
+  },
+  "portrait-open-day-full": {
+    "decodedBytes": 219876032,
+    "downloadBytes": 2507841
+  },
+  "portrait-open-day-half": {
+    "decodedBytes": 66827200,
+    "downloadBytes": 1806338
+  },
+  "portrait-open-dusk-full": {
+    "decodedBytes": 219876032,
+    "downloadBytes": 2332929
+  },
+  "portrait-open-dusk-half": {
+    "decodedBytes": 66827200,
+    "downloadBytes": 1700366
+  },
+  "portrait-open-night-full": {
+    "decodedBytes": 219876032,
+    "downloadBytes": 1916533
+  },
+  "portrait-open-night-half": {
+    "decodedBytes": 66827200,
+    "downloadBytes": 1462584
+  },
+  "volume-landscape-day-full": {
+    "decodedBytes": 6912,
+    "downloadBytes": 3523
+  },
+  "volume-landscape-day-half": {
+    "decodedBytes": 3840,
+    "downloadBytes": 3519
+  },
+  "volume-landscape-dusk-full": {
+    "decodedBytes": 6912,
+    "downloadBytes": 3553
+  },
+  "volume-landscape-dusk-half": {
+    "decodedBytes": 3840,
+    "downloadBytes": 3559
+  },
+  "volume-landscape-night-full": {
+    "decodedBytes": 6912,
+    "downloadBytes": 3563
+  },
+  "volume-landscape-night-half": {
+    "decodedBytes": 3840,
+    "downloadBytes": 3575
+  },
+  "volume-portrait-day-full": {
+    "decodedBytes": 7168,
+    "downloadBytes": 3654
+  },
+  "volume-portrait-day-half": {
+    "decodedBytes": 3072,
+    "downloadBytes": 3612
+  },
+  "volume-portrait-dusk-full": {
+    "decodedBytes": 7168,
+    "downloadBytes": 3656
+  },
+  "volume-portrait-dusk-half": {
+    "decodedBytes": 3072,
+    "downloadBytes": 3634
+  },
+  "volume-portrait-night-full": {
+    "decodedBytes": 7168,
+    "downloadBytes": 3634
+  },
+  "volume-portrait-night-half": {
+    "decodedBytes": 3072,
+    "downloadBytes": 3620
+  }
+}
