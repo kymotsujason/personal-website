@@ -38,6 +38,11 @@ const makePage = ({
   session = {},
   buildId = "abc123",
   webgl2 = true,
+  // what RENDERER names, and the name behind chrome's and safari's generic one
+  renderer = "WebKit WebGL",
+  unmasked = "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3080/PCIe/SSE2, OpenGL ES 3.2)",
+  // the browser would draw this context slowly, so it turns away failIfMajorPerformanceCaveat
+  caveat = false,
   storage = null,
   storageAccessThrows = false,
   hidden = false,
@@ -86,20 +91,34 @@ const makePage = ({
         return {};
       }
       return {
-        getContext: (kind) => {
+        getContext: (kind, attributes) => {
           if (kind !== "webgl2" || !webgl2) {
+            return null;
+          }
+          const strict = Boolean(attributes?.failIfMajorPerformanceCaveat);
+          if (strict && caveat) {
             return null;
           }
           const gl = {
             lost: false,
-            getExtension: (name) =>
-              name === "WEBGL_lose_context"
+            strict,
+            asked: [],
+            RENDERER: 7937,
+            getParameter: (name) =>
+              name === 7937 ? renderer : name === 37446 ? unmasked : null,
+            getExtension: (name) => {
+              gl.asked.push(name);
+              if (name === "WEBGL_debug_renderer_info") {
+                return { UNMASKED_RENDERER_WEBGL: 37446 };
+              }
+              return name === "WEBGL_lose_context"
                 ? {
                     loseContext: () => {
                       gl.lost = true;
                     },
                   }
-                : null,
+                : null;
+            },
           };
           contexts.push(gl);
           return gl;
@@ -453,21 +472,25 @@ describe("3d and the watchdog", () => {
     expect(page.classes.has("has-3d")).toBe(false);
   });
 
-  test("?3d clears a saved 2d choice and shows the scene", () => {
-    const local = { "2d": "1" };
+  test("?3d replaces a saved 2d choice with the 3d one and shows the scene", () => {
+    const local = { "2d": "1", "2dAuto": String(Date.now()) };
     const page = makePage({ search: "?3d", local });
     page.run();
-    expect("2d" in local).toBe(false);
+    expect(local["2d"]).toBe("0");
+    expect("2dAuto" in local).toBe(false);
     expect(page.classes.has("has-3d")).toBe(true);
     expect(page.replaced.map((entry) => entry.url)).toEqual(["/"]);
   });
 
-  test("?3d shows the scene even when storage refuses the removal", () => {
+  test("?3d shows the scene even when storage refuses the write", () => {
     const page = makePage({
       search: "?3d",
+      unmasked: "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))",
       storage: {
         getItem: (key) => (key === "2d" ? "1" : null),
-        setItem: () => {},
+        setItem: () => {
+          throw new Error("storage refused");
+        },
         removeItem: () => {
           throw new Error("storage refused");
         },
@@ -497,8 +520,8 @@ describe("3d and the watchdog", () => {
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.timers).toHaveLength(0);
     expect(page.links).toHaveLength(0);
+    expect(page.contexts).toHaveLength(0);
   });
-
   test("the watchdog fails the scene after 10 s unless it has shown", () => {
     const page = makePage({ path: "/about", navType: "reload" });
     page.run();
@@ -562,6 +585,121 @@ describe("3d and the watchdog", () => {
     expect(page.window.__uaTransition).toBe(true);
     page.listeners.popstate.forEach((fn) => fn({}));
     expect(page.window.__uaTransition).toBe(false);
+  });
+});
+
+describe("slow devices", () => {
+  const SWIFTSHADER =
+    "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)";
+  const DAY = 24 * 60 * 60 * 1000;
+
+  test("a visitor who hasn't chosen asks for webgl2 that fails on a major performance caveat", () => {
+    const page = makePage();
+    page.run();
+    expect(page.contexts).toHaveLength(1);
+    expect(page.contexts[0].strict).toBe(true);
+    expect(page.window.__chose3d).toBe(false);
+  });
+
+  test("a major performance caveat leaves the flat site", () => {
+    const page = makePage({ caveat: true });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.timers).toHaveLength(0);
+    expect(page.links).toHaveLength(0);
+  });
+
+  test("swiftshader behind chrome's generic name leaves the flat site and lets go of the context", () => {
+    const page = makePage({ unmasked: SWIFTSHADER });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.links).toHaveLength(0);
+    expect(page.contexts[0].lost).toBe(true);
+  });
+
+  test("firefox's llvmpipe is read from RENDERER without the debug extension", () => {
+    const page = makePage({ renderer: "llvmpipe (LLVM 17.0.6, 256 bits)" });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.contexts[0].asked).not.toContain("WEBGL_debug_renderer_info");
+  });
+
+  test("windows' basic render driver leaves the flat site", () => {
+    const page = makePage({
+      unmasked: "ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)",
+    });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+  });
+
+  test("a real gpu named by RENDERER shows the scene", () => {
+    const page = makePage({ renderer: "NVIDIA GeForce GTX 980, or similar" });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.contexts[0].asked).not.toContain("WEBGL_debug_renderer_info");
+  });
+
+  test("a saved 3d choice shows the scene on a software renderer and skips the strict check", () => {
+    const page = makePage({ local: { "2d": "0" }, unmasked: SWIFTSHADER });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.contexts[0].strict).toBe(false);
+    expect(page.window.__chose3d).toBe(true);
+  });
+
+  test("a saved 3d choice without webgl2 still leaves the flat site", () => {
+    const page = makePage({ local: { "2d": "0" }, webgl2: false });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+  });
+
+  test("a switch to the flat site in the last 30 days holds without asking for webgl", () => {
+    const page = makePage({
+      local: { "2dAuto": String(Date.now() - 29 * DAY) },
+    });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.contexts).toHaveLength(0);
+    expect(page.window.__chose3d).toBe(false);
+  });
+
+  test("a switch older than 30 days tries 3d again", () => {
+    const page = makePage({
+      local: { "2dAuto": String(Date.now() - 31 * DAY) },
+    });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+  });
+
+  test("a switch saved in the future or as junk doesn't hold", () => {
+    for (const value of [String(Date.now() + DAY), "junk", ""]) {
+      const page = makePage({ local: { "2dAuto": value } });
+      page.run();
+      expect(page.classes.has("has-3d"), value).toBe(true);
+    }
+  });
+
+  test("a saved 3d choice wins over a recent switch", () => {
+    const page = makePage({
+      local: { "2d": "0", "2dAuto": String(Date.now()) },
+    });
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+  });
+
+  test("a renderer that throws on the name leaves the flat site", () => {
+    const page = makePage();
+    page.window.document.createElement = () => ({
+      getContext: () => ({
+        RENDERER: 7937,
+        getParameter: () => {
+          throw new Error("lost");
+        },
+        getExtension: () => null,
+      }),
+    });
+    expect(() => page.run()).not.toThrow();
+    expect(page.classes.has("has-3d")).toBe(false);
   });
 });
 

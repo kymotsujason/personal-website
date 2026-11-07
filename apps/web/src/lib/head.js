@@ -107,20 +107,58 @@
     }
   }
 
-  function hasWebgl2() {
+  // webgl drawn on the cpu runs the scene at a few frames a second. chrome on swiftshader still answers
+  // failIfMajorPerformanceCaveat with a context, so the renderer's name is checked too
+  var SOFTWARE =
+    /swiftshader|llvmpipe|softpipe|lavapipe|software|basic render driver/i;
+
+  // firefox gives the real name as RENDERER and warns about the debug extension, while chrome and safari give a
+  // generic name there and the real one only through it
+  function softwareRenderer(gl) {
+    var name = String(gl.getParameter(gl.RENDERER) || "");
+    if (/^webkit webgl$/i.test(name)) {
+      var info = gl.getExtension("WEBGL_debug_renderer_info");
+      if (info) {
+        name = String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "");
+      }
+    }
+    return SOFTWARE.test(name);
+  }
+
+  // strict also turns away a gpu the browser falls back from and webgl drawn in software, for a visitor who hasn't
+  // asked for 3d
+  function hasWebgl2(strict) {
     try {
-      var gl = document.createElement("canvas").getContext("webgl2");
+      var gl = document
+        .createElement("canvas")
+        .getContext(
+          "webgl2",
+          strict ? { failIfMajorPerformanceCaveat: true } : undefined,
+        );
       if (!gl) {
         return false;
       }
+      var fast = !strict || !softwareRenderer(gl);
       var lose = gl.getExtension("WEBGL_lose_context");
       if (lose) {
         lose.loseContext();
       }
-      return true;
+      return fast;
     } catch (error) {
       return false;
     }
+  }
+
+  // the scene saves the time it switched a slow device to the flat site (see scene/quality.js). that holds for 30
+  // days, so a browser update or a new phone gets another try
+  var AUTO_DAYS = 30;
+  function autoFlatRecent() {
+    var saved = Number(read("local", "2dAuto"));
+    if (!saved) {
+      return false;
+    }
+    var age = new Date().getTime() - saved;
+    return age >= 0 && age < AUTO_DAYS * 24 * 60 * 60 * 1000;
   }
 
   var path = window.location.pathname.replace(/(.)\/+$/, "$1");
@@ -239,17 +277,26 @@
   }
   paintSky();
 
-  // the query wins for this load even when storage refuses to save it
+  // the query wins for this load even when storage refuses to save it. "2d" is "1" for the 2d choice and "0" for the
+  // 3d one, and with neither the site decides from the device
   var version = versionFromQuery();
   if (version === "2d") {
     write("local", "2d", "1");
   } else if (version === "3d") {
-    remove("local", "2d");
+    write("local", "2d", "0");
+    remove("local", "2dAuto");
   }
-  var chose2d =
-    version === "2d" || (version !== "3d" && read("local", "2d") === "1");
+  var saved = read("local", "2d");
+  var choice = version || (saved === "1" ? "2d" : saved === "0" ? "3d" : "");
+  // the scene only switches a slow device to the flat site when the visitor hasn't chosen 3d
+  window.__chose3d = choice === "3d";
+  var show3d =
+    !notFound &&
+    (choice === "3d"
+      ? hasWebgl2(false)
+      : choice === "" && !autoFlatRecent() && hasWebgl2(true));
 
-  if (!notFound && !chose2d && hasWebgl2()) {
+  if (show3d) {
     root.classList.add("has-3d");
     preload();
     startWatchdog();

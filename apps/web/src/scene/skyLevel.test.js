@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stepSkyLevel, stepLater, glassFor, LATER } from "./skyLevel.js";
+import { stepSkyLevel, stepLater, stepFlat, glassFor, LATER, FLAT_STEP } from "./skyLevel.js";
 
 const start = { level: 0, slow: 0, fast: 0, retried: false };
 
@@ -49,4 +49,28 @@ test("past a still sky, three slow seconds in a row take each later step, and th
     assert.equal(stepLater({ ...third, slow: 3 }).level, LATER.smallDesk);
     assert.equal(stepLater({ level: 1, slow: 2 }).level, 1);
     assert.equal(stepLater({ level: 2, slow: 0 }).level, 2);
+});
+
+test("five crawling seconds in a row past the last step switch to the flat site", () => {
+    let step = { crawl: 0, flat: false };
+    for (let i = 0; i < FLAT_STEP - 1; i++) {
+        step = stepFlat({ crawl: step.crawl, crawling: true });
+        assert.equal(step.flat, false);
+    }
+    step = stepFlat({ crawl: step.crawl, crawling: true });
+    assert.equal(step.flat, true);
+});
+
+test("a second that isn't crawling starts the count again", () => {
+    const four = stepFlat({ crawl: FLAT_STEP - 2, crawling: true });
+    assert.equal(four.crawl, FLAT_STEP - 1);
+    const reset = stepFlat({ crawl: four.crawl, crawling: false });
+    assert.equal(reset.crawl, 0);
+    assert.equal(reset.flat, false);
+});
+
+test("once reached the switch holds while it waits for the phone to settle, even through a fast second", () => {
+    const held = stepFlat({ crawl: FLAT_STEP, crawling: false });
+    assert.equal(held.flat, true);
+    assert.equal(held.crawl, FLAT_STEP);
 });

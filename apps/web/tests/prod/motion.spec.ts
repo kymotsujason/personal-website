@@ -307,7 +307,7 @@ test("the 2D version link loads the flat site and the 3D version link loads 3d a
   await Promise.all([page.waitForEvent("load"), back.click()]);
   expect(await page.evaluate(() => "__before" in window)).toBe(false);
   await expect(page.locator("html")).toHaveClass(/has-3d/);
-  expect(await page.evaluate(() => localStorage.getItem("2d"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("2d"))).toBe("0");
   await page.waitForFunction(
     () => (window as unknown as { __sceneShown?: boolean }).__sceneShown,
     null,

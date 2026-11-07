@@ -32,3 +32,16 @@ export const stepLater = ({ level, slow }) => {
     }
     return { level, slow };
 };
+
+// past the last step, a device whose frames still mostly take over FLAT_MS (under 20 fps) for FLAT_STEP seconds in a
+// row gets the flat site. once it's reached it holds, since the switch waits for the phone to settle (see quality.js)
+export const FLAT_MS = 50;
+export const FLAT_STEP = 5;
+
+export const stepFlat = ({ crawl, crawling }) => {
+    if (crawl >= FLAT_STEP) {
+        return { crawl, flat: true };
+    }
+    const next = crawling ? crawl + 1 : 0;
+    return { crawl: next, flat: next >= FLAT_STEP };
+};

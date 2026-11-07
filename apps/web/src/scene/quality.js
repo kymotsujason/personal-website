@@ -1,8 +1,9 @@
-import { stepSkyLevel, stepLater, glassFor, LATER } from "./skyLevel.js";
+import { stepSkyLevel, stepLater, stepFlat, glassFor, LATER, FLAT_MS } from "./skyLevel.js";
 import { setGlassSimple } from "./screens.js";
 import { renderer, camera, backdrop } from "./renderer.js";
 import { state } from "./state.js";
-import { signal, guard } from "./lifetime.js";
+import { signal, guard, failScene } from "./lifetime.js";
+import { write } from "../lib/storage.js";
 
 // with reduced motion the sky holds still on one frame of its weather, and it follows the setting if it changes.
 // skyMotion is how far a slow device has turned the sky down (see skyLevel.js)
@@ -42,6 +43,23 @@ const applyLater = () => {
     }
 };
 
+// a device still too slow at the last step shows the flat site from here on, and the head script keeps it there for
+// 30 days. it waits for the phone to settle, so the intro or an open never cuts off half way, and a visitor who chose
+// 3d keeps it
+let crawlSeconds = 0;
+const settled = () => state.phone !== null && !state.busy && !state.switching;
+const stepTooSlow = (p75) => {
+    if (laterLevel < LATER.smallDesk || window.__chose3d) {
+        return;
+    }
+    const step = stepFlat({ crawl: crawlSeconds, crawling: p75 > FLAT_MS });
+    crawlSeconds = step.crawl;
+    if (step.flat && settled()) {
+        write("local", "2dAuto", String(Date.now()));
+        failScene("too slow for 3d");
+    }
+};
+
 export const installQuality = () => {
     reducedMotion.addEventListener("change", guard(applyWallpaperMotion), { signal });
 };
@@ -70,7 +88,8 @@ export const stepQuality = (now) => {
         const sorted = [...frameTimes].sort((a, b) => a - b);
         const fps = (frameTimes.length * 1000) / (now - lastStats);
         const p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
-        const slow = (sorted[Math.floor(sorted.length * 0.75)] || 0) > 22;
+        const p75 = sorted[Math.floor(sorted.length * 0.75)] || 0;
+        const slow = p75 > 22;
         slowSeconds = slow ? slowSeconds + 1 : 0;
         const capCanDrop = pixelCap > 1.25 && devicePixelRatio > 1.25;
         if (slowSeconds >= 3 && capCanDrop) {
@@ -91,6 +110,8 @@ export const stepQuality = (now) => {
                 if (later.level !== laterLevel) {
                     laterLevel = later.level;
                     applyLater();
+                } else {
+                    stepTooSlow(p75);
                 }
             }
         }

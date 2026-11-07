@@ -166,10 +166,12 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         if (!(link instanceof HTMLAnchorElement)) {
           return;
         }
+        // "0" is the 3d choice, which the head script keeps over its checks of the device, as ?3d does
         if (link.dataset.version === "2d") {
           write("local", "2d", "1");
         } else {
-          remove("local", "2d");
+          write("local", "2d", "0");
+          remove("local", "2dAuto");
         }
       });
 
