@@ -31,5 +31,10 @@
   "apps/web/src/scene/volume.js",
   "apps/web/src/scene/shared/motion.js",
   "apps/web/src/scene/shared/placement.js",
+  "apps/web/src/scene/shared/charging.js",
+  "apps/web/src/scene/shared/homeDraw.js",
+  "apps/web/src/scene/shared/homeParts.js",
+  "apps/web/src/scene/shared/lookLimits.js",
+  "apps/web/src/scene/shared/volumeParts.js",
   "apps/web/src/dev/spikeApi.js"
 ]
