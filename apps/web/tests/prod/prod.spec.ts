@@ -23,6 +23,7 @@ const DEV_STRINGS = [
   "spikeApi",
   "__capture",
   "noweather",
+  "__flatNoSlowStep",
 ];
 
 const distFiles = (): URL[] =>

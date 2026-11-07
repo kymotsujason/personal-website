@@ -8,8 +8,10 @@ import {
 } from "./rest.js";
 
 test("a device through 2dAuto stays calm, and no other does, half size included", () => {
-  expect(staysCalm({ auto: "1760000000000" })).toBe(true);
+  expect(staysCalm({ auto: String(Date.now() - 1000) })).toBe(true);
   expect(staysCalm({ auto: null })).toBe(false);
+  // one older than 30 days doesn't hold, as the head script doesn't hold it
+  expect(staysCalm({ auto: "1760000000000" })).toBe(false);
 });
 
 test("the meter says fast only when most of the unfold's frames came in under 20 ms", () => {

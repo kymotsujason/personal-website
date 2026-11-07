@@ -68,6 +68,8 @@ export const createHome = ({
   root = document.documentElement,
 }) => {
   let weather = null;
+  // the graph shown, which new screens (a turn) get again
+  let shownContributions = null;
 
   const drawSky = () => {
     const { vars, fall } = skyFor(weather, hourNow());
@@ -80,6 +82,7 @@ export const createHome = ({
     const contributions = readContributions(home ? home.github : null);
     // an answer without the graph keeps what's shown
     if (contributions) {
+      shownContributions = contributions;
       screens()?.update({ contributions });
     }
     return home;
@@ -116,6 +119,11 @@ export const createHome = ({
       return guard(feed.refresh)();
     },
     drawSky,
+    // new screens and rain after a turn, with the graph and the fall the old ones had
+    restore: () => {
+      screens()?.update({ contributions: shownContributions });
+      drawSky();
+    },
     weather: () => weather,
   };
 };

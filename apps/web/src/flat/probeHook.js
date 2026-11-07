@@ -45,6 +45,8 @@ export const installFlatHook = (probe) => {
     // the charging cable's run, its sets, and the fold sets in use, and the battery's test control (ms into its cycle)
     charger: () => scene.charger.state(),
     battery: (at, speed) => probe.battery(at, speed),
+    // the last step's frame meter (meter.js): ms measured, frames counted and how many were slow, and its verdict
+    slowStep: () => scene.slowStep?.() ?? null,
     // the phone's state as the navigation reads it, with its fold
     status: () => probe.status(),
     mount: (options) => probe.mount(options),

@@ -4,13 +4,16 @@
 // meter has shown the intro's unfold, the unfold itself and not the whole intro, mostly under UNFOLD_MS per frame. this isn't the slow path
 // (index.js slowPathFor), which only decides how apps and the picture are drawn while things move
 
+import { autoRecent } from "./meter.js";
+
 export const UNFOLD_MS = 20;
 // the share of frames that must come in under UNFOLD_MS for the unfold to count as mostly under it
 export const MOSTLY = 0.75;
 // frames needed before the meter says anything
 export const MIN_FRAMES = 20;
 
-export const staysCalm = ({ auto = null } = {}) => auto !== null;
+// 2dAuto counts while it's recent, as the head script reads it
+export const staysCalm = ({ auto = null } = {}) => autoRecent(auto);
 
 // the gaps between frames, each in ms. verdict is null until there are enough, then "fast" when most were under
 // UNFOLD_MS and "slow" when not

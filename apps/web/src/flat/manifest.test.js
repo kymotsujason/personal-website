@@ -48,9 +48,19 @@ test("loadManifest fetches the set and notes its folder", async () => {
   const fetch = respond(small());
   vi.stubGlobal("fetch", fetch);
   const manifest = await loadManifest("landscape", "dusk", "half");
-  expect(fetch).toHaveBeenCalledWith("/flat/landscape-dusk-half/manifest.json");
+  expect(fetch).toHaveBeenCalledWith(
+    "/flat/landscape-dusk-half/manifest.json",
+    { signal: undefined },
+  );
   expect(manifest.base).toBe("/flat/landscape-dusk-half/");
   expect(manifest.frames).toHaveLength(1);
+  // a scene's signal goes with the request, so a scene that stops while loading ends it
+  const scene = new AbortController();
+  await loadManifest("landscape", "dusk", "half", { signal: scene.signal });
+  expect(fetch).toHaveBeenLastCalledWith(
+    "/flat/landscape-dusk-half/manifest.json",
+    { signal: scene.signal },
+  );
 });
 
 test("loadManifest rejects a failed fetch", async () => {

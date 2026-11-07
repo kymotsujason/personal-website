@@ -27,6 +27,7 @@ import { createHome } from "./home.js";
 import { createLook, motionPose } from "./look.js";
 import { createVolume, volumeSetFor } from "./volume.js";
 import { loadManifest } from "./manifest.js";
+import { autoRecent, createSlowMeter } from "./meter.js";
 import { createNavigation } from "./navigation.js";
 import { createRain } from "./rain.js";
 import {
@@ -35,6 +36,14 @@ import {
   staysCalm,
   watchFrames,
 } from "./rest.js";
+import {
+  TURN_DEADLINE_MS,
+  portraitFor,
+  resizeKind,
+  turnSetFor,
+  visibleDeadline,
+  watchResize,
+} from "./resize.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
 import { createFlatStatus } from "./status.js";
@@ -48,9 +57,9 @@ const nextFrame = () =>
 // both end on the open phone), the lighting for the visitor's hour, and the size for how many device px the open
 // phone covers
 export const chooseSet = ({ width, height, dpr, hour }) => {
-  const portrait = height > width;
+  const portrait = portraitFor({ width, height });
   return {
-    set: portrait ? "portrait-open" : "landscape",
+    set: turnSetFor({ portrait, charging: false }),
     lighting: chooseLighting(hour),
     size: sizeFor({
       phonePx: phoneHeightPx({ width, height, portrait }) * dpr,
@@ -63,10 +72,23 @@ export const closingSetFor = (set) =>
   set.endsWith("portrait-open") ? set.replace(/open$/, "close") : null;
 
 // the slow path opens apps with the crossfade and shows the screens' canvas picture while the phone moves (rulings R9
-// and R9b): a device the 2d scene found slow (flat-slow) or one the 3d scene sent here for being slow (2dAuto). half
-// size frames follow the screen's pixels, which most phones get, so they don't count
+// and R9b): a device the 2d scene found slow (flat-slow) or one the 3d scene sent here for being slow in the last 30
+// days (2dAuto, read as the head script reads it). half size frames follow the screen's pixels, which most phones get,
+// so they don't count
 export const slowPathFor = ({ flatSlow = false, auto = null } = {}) =>
-  Boolean(flatSlow) || auto !== null;
+  Boolean(flatSlow) || autoRecent(auto);
+
+// a set's atlas images, its frames' own and the shared pieces'
+const atlasesOf = (manifest) => {
+  const atlases = new Set();
+  manifest.frames.forEach((frame) => {
+    if (frame.atlas) {
+      atlases.add(frame.atlas);
+    }
+  });
+  manifest.shared.forEach(({ atlas }) => atlases.add(atlas));
+  return [...atlases];
+};
 
 // where the phone is now: the state the loop draws, or while the intro's animations still play (between its unlock
 // and its end, say), where they have it
@@ -109,6 +131,13 @@ export const startFlatScene = ({
   let stopEffects = () => flatStatus?.stop();
   // the frame meter's animation frame chain, which a failure ends too
   let stopMeter = () => {};
+  // a turn of the window in progress, { portrait }, while the old orientation has gone and the new one decodes under
+  // the black cover, and the deadline it has to be ready by
+  let turn = null;
+  let stopDeadline = () => {};
+  let blackout = null;
+  // the resize listener, from the first mount on (resize.js watchResize)
+  let resizing = null;
   // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
   const scene = {
     manifest: null,
@@ -178,8 +207,12 @@ export const startFlatScene = ({
     controller.abort();
     loop.stop();
     stopEffects();
+    stopDeadline();
+    turn = null;
     unmount();
     dropBlack();
+    blackout?.remove();
+    blackout = null;
     document.body.classList.remove(
       "closed",
       "looking",
@@ -212,6 +245,11 @@ export const startFlatScene = ({
         return undefined;
       }
     };
+
+  // the visitor's input, the navigation's moves, and the battery reach the scene only while it's mounted, so none of
+  // them lands while a turn has the old orientation gone and the new one decoding. the turn shows the address once
+  // it's done, and the navigation waits for it (rebuildPending)
+  const live = (fn) => guard((...args) => (turn ? undefined : fn(...args)));
 
   const loop = createLoop({ onError: (error) => fail(error) });
   const drift = createDrift({ scene, loop });
@@ -522,6 +560,16 @@ export const startFlatScene = ({
   };
   let shownFrosted = false;
   let shownPicture = false;
+  // what the draw last wrote, which a new mount's parts don't have yet
+  const forgetDrawn = () => {
+    placedFace = { layer: null, index: -1 };
+    shownBlur = -1;
+    shownFrosted = false;
+    shownPicture = false;
+    shownClip = "";
+    windowShown = false;
+    windowEl.style.visibility = "hidden";
+  };
   const syncAppFocus = createAppFocus({
     pageEl,
     iconOf: (name) => scene.screens.iconButton(name),
@@ -572,6 +620,7 @@ export const startFlatScene = ({
     scene.drawing = true;
     scene.moving = false;
     applyRest();
+    prefetchLater();
     // the charger's sets load once the intro is over, so their decode can't stall the unfold
     if (flatStatus) {
       charger.battery(flatStatus.status);
@@ -579,8 +628,10 @@ export const startFlatScene = ({
     draw();
   };
 
+  // the phone reads as not there yet while a turn mounts it again, as before the intro's unlock
   const status = () => ({
-    phone: scene.unlocked ? scene.phone : null,
+    phone: scene.unlocked && !turn ? scene.phone : null,
+    turning: turn !== null,
     busy: scene.busy,
     zoomed: scene.zoomed,
     app: scene.zoomed && scene.openApp ? scene.openApp.name : null,
@@ -593,7 +644,7 @@ export const startFlatScene = ({
     status,
     hasApp: (name) => Boolean(appNamed(name)),
     // with the phone closed, an app opens the phone first
-    openApp: guard((name, opts) => {
+    openApp: live((name, opts) => {
       const app = appNamed(name);
       if (!app) {
         return Promise.resolve();
@@ -602,24 +653,25 @@ export const startFlatScene = ({
         ? apps.openFromCover(app, opts)
         : apps.openApp(app, opts);
     }),
-    closeApp: guard(() => apps.closeApp()),
-    fadeTo: guard((name) => {
+    closeApp: live(() => apps.closeApp()),
+    fadeTo: live((name) => {
       const app = appNamed(name);
       return app ? apps.fadeTo(app) : Promise.resolve();
     }),
     // another app's page on its way while one is open. swapped settles once the page has swapped in (null if the
     // navigation was dropped)
-    switchTo: guard((name, opts) => {
+    switchTo: live((name, opts) => {
       const app = appNamed(name);
       return app ? switcher.switchTo(app, opts) : Promise.resolve();
     }),
     // a navigation the switcher didn't start puts the open app back at once, so it isn't held up
-    leaveSwitcher: guard(() => switcher.leave()),
-    showUrl: guard(() => {
+    leaveSwitcher: live(() => switcher.leave()),
+    showUrl: live(() => {
       switcher.dropHomeSwipe();
       return apps.showUrl(appForPage());
     }),
-    rebuildPending: () => false,
+    // a resize waiting to rebuild, or a turn mounting, sets the phone itself, so a navigation meanwhile jumps
+    rebuildPending: () => Boolean(resizing?.pending()) || turn !== null,
     fail: (error) => fail(error),
     failed: () => failed || root.classList.contains("scene-failed"),
   };
@@ -687,20 +739,15 @@ export const startFlatScene = ({
       // the mount's signal, so a remount (a turn) stops the old orientation's downloads, and so does a failure
       fetch: async (name, mountSignal) => {
         const { lighting, size } = scene.manifest;
-        const manifest = await loadManifest(name, lighting, size);
-        const atlases = new Set();
-        manifest.frames.forEach((frame) => {
-          if (frame.atlas) {
-            atlases.add(frame.atlas);
-          }
+        const manifest = await loadManifest(name, lighting, size, {
+          signal: mountSignal,
         });
-        manifest.shared.forEach(({ atlas }) => atlases.add(atlas));
         const atlasUrls = {};
         const forget = () =>
           Object.values(atlasUrls).forEach((url) => URL.revokeObjectURL(url));
         // every image settles before a failure is given, so none makes a url after the rest were let go
         const results = await Promise.allSettled(
-          [...atlases].map(async (atlas) => {
+          atlasesOf(manifest).map(async (atlas) => {
             const response = await fetch(`${manifest.base}${atlas}`, {
               signal: mountSignal,
             });
@@ -748,7 +795,7 @@ export const startFlatScene = ({
   });
 
   // a tap on an icon or a widget, or on the cover's icons
-  const onOpen = guard(({ app, face, el, path }) => {
+  const onOpen = live(({ app, face, el, path }) => {
     if (!app) {
       return undefined;
     }
@@ -766,6 +813,7 @@ export const startFlatScene = ({
     scene.intro?.cancel();
     // the stage lets the charger's sets go with the rest, so a run or a swap in flight ends here
     scene.charger?.mounted({ plugged: false });
+    scene.volume?.reset();
     scene.cardsView?.destroy();
     scene.rain?.destroy();
     scene.screens?.destroy();
@@ -785,29 +833,35 @@ export const startFlatScene = ({
       cards: null,
       rain: null,
     });
+    forgetDrawn();
   };
+
+  // a mount started after another owns the scene, so the earlier one stops wherever it is (a turn and then another)
+  let mountRun = 0;
 
   // the set's frames and the desk decode before any of it joins the page. portrait's opening set comes with its
   // closing one, since the hands take the closing path for every close, and both load up front so a close never plays
   // on the opening grip and no set lands partway through a fold
   const mount = async ({ set, lighting, size }) => {
+    const run = ++mountRun;
     unmount();
     const closingSet = closingSetFor(set);
     const [manifest, closing, volumeManifest] = await Promise.all([
-      loadManifest(set, lighting, size),
-      closingSet ? loadManifest(closingSet, lighting, size) : null,
+      loadManifest(set, lighting, size, { signal }),
+      closingSet ? loadManifest(closingSet, lighting, size, { signal }) : null,
       // the buttons are a few KB and can be left out, as 3d leaves them out when their chunk won't load
-      loadManifest(
-        volumeSetFor(!set.endsWith("landscape")),
-        lighting,
-        size,
-      ).catch((error) => {
+      loadManifest(volumeSetFor(!set.endsWith("landscape")), lighting, size, {
+        signal,
+      }).catch((error) => {
         console.warn("the volume buttons didn't load", error);
         return null;
       }),
     ]);
     if (failed) {
       throw new Error("the 2d scene stopped while loading");
+    }
+    if (run !== mountRun) {
+      throw new Error("another mount took over");
     }
     const portrait = manifest.orientation === "portrait";
     const stage = createStage({ stageEl, pageEl, manifest });
@@ -818,7 +872,7 @@ export const startFlatScene = ({
       music,
       portrait,
       onOpen,
-      onPing: guard(() => flatStatus?.showPing()),
+      onPing: live(() => flatStatus?.showPing()),
     });
     const rain = createRain({ skies: screens.skies });
     rain.setStill(scene.calm || reducedQuery.matches);
@@ -863,8 +917,75 @@ export const startFlatScene = ({
     return manifest;
   };
 
-  // the music player waits while the phone moves before it loads under has-flat-scene
-  music.waitWhile(() => scene.moving || scene.busy);
+  // the music player waits while the phone moves (or turns) before it loads under has-flat-scene
+  music.waitWhile(() => scene.moving || scene.busy || turn !== null);
+
+  // the lighting and size chosen at the start, which hold for the page load (a turn keeps them)
+  let chosen = null;
+
+  // the other orientation's frames are fetched once the page has settled, so a turn finds them in the browser's cache.
+  // they're only fetched, not decoded, and one that fails never touches the working scene (the turn fails instead)
+  const PREFETCH_AFTER_MS = 3000;
+  let prefetching = false;
+  const prefetchOther = async () => {
+    if (failed || turn || !scene.manifest) {
+      return;
+    }
+    const portrait = !scene.portrait;
+    const open = turnSetFor({
+      portrait,
+      charging: Boolean(flatStatus?.status.charging),
+    });
+    const names = [open, closingSetFor(open), volumeSetFor(portrait)].filter(
+      Boolean,
+    );
+    const { lighting, size } = chosen;
+    try {
+      for (const name of names) {
+        const manifest = await loadManifest(name, lighting, size, { signal });
+        for (const atlas of atlasesOf(manifest)) {
+          const response = await fetch(`${manifest.base}${atlas}`, {
+            signal,
+            priority: "low",
+          });
+          await response.blob();
+        }
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        console.warn("the other orientation's frames didn't load ahead", error);
+      }
+    }
+  };
+  const prefetchLater = () => {
+    if (prefetching) {
+      return;
+    }
+    prefetching = true;
+    setTimeout(guard(prefetchOther), PREFETCH_AFTER_MS);
+  };
+
+  // the black cover a turn decodes under, over the whole stage and #page, taking the pointer. it goes at once on a
+  // failure, and fades once the turned phone has drawn
+  const coverUp = () => {
+    if (blackout) {
+      blackout.classList.remove("lifting");
+      return;
+    }
+    blackout = document.createElement("div");
+    blackout.className = "flat-blackout";
+    stageEl.append(blackout);
+  };
+  const coverDown = () => {
+    const el = blackout;
+    if (!el) {
+      return;
+    }
+    blackout = null;
+    el.classList.add("lifting");
+    el.addEventListener("transitionend", () => el.remove(), { once: true });
+    setTimeout(() => el.remove(), 400);
+  };
 
   const showFirstFrame = () => {
     shown = true;
@@ -879,7 +1000,7 @@ export const startFlatScene = ({
     // the status bar first, since a visit that starts while the battery charges mounts the sets with the cable in
     flatStatus = createFlatStatus({
       screens: () => scene.screens,
-      onChange: guard((status) => charger.battery(status)),
+      onChange: live((status) => charger.battery(status)),
       bolt: (status) => charger.bolt(status),
     });
     const choice = chooseSet({
@@ -891,6 +1012,7 @@ export const startFlatScene = ({
     if (flatStatus.status.charging) {
       choice.set = `cable-${choice.set}`;
     }
+    chosen = { lighting: choice.lighting, size: choice.size };
     await mount(choice);
     flatStatus.render();
     // a scene that finished loading after its watchdog fired stops, and lets its images go
@@ -946,15 +1068,172 @@ export const startFlatScene = ({
     home.start();
     loop.onDraw(guard(volume.draw));
     // before the folds' and the look's, so a press on a button reaches neither
-    volume.install({ signal, guard });
+    volume.install({ signal, guard: live });
     folds.install({
       signal,
-      guard,
+      guard: live,
       onEscapeApp: () => apps.goHome(),
     });
-    apps.install({ signal, guard });
-    switcher.install({ signal, guard });
-    look.install({ signal, guard });
+    apps.install({ signal, guard: live });
+    switcher.install({ signal, guard: live });
+    look.install({ signal, guard: live });
+
+    // the last step for a device still too slow (meter.js): frames are measured while anything moves, the intro's from
+    // its own animation frames and every later motion's from the loop's, and a slow verdict drops the visit to the
+    // plain flat page once the phone is at rest, saving flatAuto. the capture build's tests that throttle the cpu on
+    // purpose can keep it off
+    const slowMeter = createSlowMeter();
+    const keepOnSlow =
+      __CAPTURE__ && Boolean(Reflect.get(window, "__flatNoSlowStep"));
+    let tooSlow = false;
+    const atRest = () =>
+      scene.drawing &&
+      scene.unlocked &&
+      !turn &&
+      !scene.busy &&
+      !charger.busy() &&
+      !charger.moving() &&
+      !scene.switcher &&
+      !scene.switching &&
+      scene.pageFade === null &&
+      !folds.gesture() &&
+      !look.dragging();
+    const dropWhenStill = () => {
+      const remove = loop.add(() => {
+        if (!atRest()) {
+          return;
+        }
+        remove();
+        write("local", "flatAuto", String(Date.now()));
+        // the plain flat page's footer shows the 2d link at once, as the head script shows it from the next load
+        root.classList.add("flat-slow");
+        fail("too slow for the 2d scene");
+      }, 10);
+    };
+    const noteFrame = (now, moving) => {
+      if (tooSlow || failed) {
+        return;
+      }
+      if (slowMeter.frame({ now, moving }) === "slow" && !keepOnSlow) {
+        tooSlow = true;
+        dropWhenStill();
+      }
+    };
+    if (__CAPTURE__) {
+      scene.slowStep = () => ({
+        measured: slowMeter.measured(),
+        ...slowMeter.counted(),
+        verdict: slowMeter.verdict(),
+      });
+    }
+    // the loop's first frame after it slept has no gap, and starts a motion's clock afresh
+    loop.onDraw((now, dt) => {
+      if (scene.drawing) {
+        noteFrame(now, dt > 0 && !turn && (scene.busy || charger.moving()));
+      }
+    });
+    const watchIntro = () => {
+      const tick = (now) => {
+        if (failed || scene.drawing) {
+          return;
+        }
+        noteFrame(now, true);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    // a resize or a turn shows the page the address names in the new size or orientation, as 3d's rebuild does: that
+    // app zoomed, or the home screen with the phone open, with any drag dropped. an intro still playing ends there
+    const dropHeld = () => {
+      folds.dropGesture();
+      switcher.dropHomeSwipe();
+    };
+    const showFromAddress = () => {
+      dropHeld();
+      takeOver();
+      if (!scene.unlocked) {
+        scene.unlocked = true;
+        applyInput();
+      }
+      scene.lookAhead();
+      const shownNow = apps.showUrl(appForPage());
+      nav.kick();
+      return shownNow;
+    };
+    // the old orientation's images go before the new one's decode, so only one orientation is ever decoded. the black
+    // cover hides the phone meanwhile, and a turn that isn't ready in TURN_DEADLINE_MS of visible time drops the visit
+    const turnTo = async (portrait) => {
+      const run = { portrait };
+      turn = run;
+      coverUp();
+      dropHeld();
+      takeOver();
+      scene.unlocked = true;
+      loop.cancelAll();
+      stopDeadline();
+      stopDeadline = visibleDeadline(TURN_DEADLINE_MS, () =>
+        fail(new Error("the turned window's frames weren't ready in time")),
+      );
+      try {
+        await mount({
+          set: turnSetFor({ portrait, charging: flatStatus.status.charging }),
+          ...chosen,
+        });
+      } catch (error) {
+        // a later turn took over, and its mount let this one's images go
+        if (turn !== run || failed) {
+          return;
+        }
+        throw error;
+      }
+      if (turn !== run || failed) {
+        return;
+      }
+      stopDeadline();
+      stopDeadline = () => {};
+      turn = null;
+      // the window may have changed size again while the frames decoded
+      scene.stage.fit();
+      scene.desk.fit();
+      flatStatus.render();
+      home.restore();
+      applyRest();
+      charger.battery(flatStatus.status);
+      await showFromAddress();
+      await nextFrame();
+      if (failed || turn) {
+        return;
+      }
+      await nextFrame();
+      if (!failed && !turn) {
+        coverDown();
+      }
+    };
+    const rebuild = () => {
+      // the first frame comes a few frames after the mount, and a resize before it waits for it
+      if (!shown) {
+        resizing.again();
+        return undefined;
+      }
+      const portrait = portraitFor({ width: innerWidth, height: innerHeight });
+      if (turn) {
+        return portrait === turn.portrait ? undefined : turnTo(portrait);
+      }
+      if (
+        resizeKind({
+          portrait: scene.portrait,
+          width: innerWidth,
+          height: innerHeight,
+        }) === "turn"
+      ) {
+        return turnTo(portrait);
+      }
+      scene.stage.fit();
+      scene.desk.fit();
+      return showFromAddress();
+    };
+    resizing = watchResize(guard(rebuild), { signal });
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,
@@ -991,6 +1270,7 @@ export const startFlatScene = ({
       return;
     }
     intro.start();
+    watchIntro();
     if (!rest.judged) {
       // only the frames while the phone unfolds count, and the verdict comes when the unfold ends
       const foldNow = () =>

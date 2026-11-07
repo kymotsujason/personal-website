@@ -6,6 +6,10 @@ test("the slow path is a device found slow, not half size frames", () => {
   expect(slowPathFor({})).toBe(false);
   expect(slowPathFor({ flatSlow: true })).toBe(true);
   expect(slowPathFor({ auto: String(Date.now()) })).toBe(true);
+  // a 2dAuto past its 30 days isn't how this device got here, as the head script only honors a recent one
+  const day = 24 * 60 * 60 * 1000;
+  expect(slowPathFor({ auto: String(Date.now() - 31 * day) })).toBe(false);
+  expect(slowPathFor({ auto: "junk" })).toBe(false);
   // half size follows the screen's pixels, so a phone with half size frames isn't slow by that alone
   expect(slowPathFor({ flatSlow: false, auto: null, size: "half" })).toBe(
     false,

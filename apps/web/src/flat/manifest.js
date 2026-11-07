@@ -61,7 +61,8 @@ export const checkManifest = (manifest, set, lighting, size) => {
   return manifest;
 };
 
-export const loadManifest = async (set, lighting, size) => {
+// signal ends the request with the scene, so a scene that stopped while loading doesn't wait on it
+export const loadManifest = async (set, lighting, size, { signal } = {}) => {
   if (
     !SET_NAME.test(set) ||
     !LIGHTINGS.includes(lighting) ||
@@ -70,7 +71,7 @@ export const loadManifest = async (set, lighting, size) => {
     throw new Error(`no frame set ${set} ${lighting} ${size}`);
   }
   const base = manifestFolder(set, lighting, size);
-  const response = await fetch(`${base}manifest.json`);
+  const response = await fetch(`${base}manifest.json`, { signal });
   if (!response.ok) {
     throw new Error(`the ${set} manifest didn't load (${response.status})`);
   }

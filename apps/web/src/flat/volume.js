@@ -389,6 +389,26 @@ export const createVolume = ({
     addEventListener("pointermove", guard(hover), { signal });
   };
 
+  // a new mount (a turn) has new screens and frames, so the bar, the sink, and the press start over, and the loop can
+  // sleep again
+  const reset = () => {
+    releaseCut();
+    sunk.near = false;
+    sunk.far = false;
+    pressedAt.near = -Infinity;
+    pressedAt.far = -Infinity;
+    shownAt = -Infinity;
+    shownLevel = null;
+    levelStart = -Infinity;
+    drawnKey = null;
+    opacity = 0;
+    bars = null;
+    if (awake !== null) {
+      awake();
+      awake = null;
+    }
+  };
+
   const state = () => ({
     up: scene.volumeSet?.manifest.volume.up ?? null,
     areas: usable() ? areasNow() : null,
@@ -398,5 +418,5 @@ export const createVolume = ({
     cut: cut !== null,
   });
 
-  return { install, draw, pressAt, over, state };
+  return { install, draw, pressAt, over, state, reset };
 };

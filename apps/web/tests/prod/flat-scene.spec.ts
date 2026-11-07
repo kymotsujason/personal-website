@@ -589,7 +589,11 @@ test.describe("continuous effects", () => {
     test("a full size device stays calm when the unfold is slow", async ({
       page,
     }) => {
-      await page.addInitScript(() => localStorage.removeItem("introSeen"));
+      await page.addInitScript(() => {
+        localStorage.removeItem("introSeen");
+        // the throttle is this test's slow device, which the last step would otherwise send to the flat page
+        Object.assign(window, { __flatNoSlowStep: true });
+      });
       await stubHome(page, RAIN);
       const client = await page.context().newCDPSession(page);
       await client.send("Emulation.setCPUThrottlingRate", { rate: 20 });
@@ -1239,5 +1243,222 @@ test.describe("the charger", () => {
     await expect
       .poll(() => flatStatus(page))
       .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  });
+});
+
+test.describe("failure, resizing, and turning", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  // what the scene left behind in the stage and on #page and the root
+  const leftovers = (page: Page) =>
+    page.evaluate(() => {
+      const root = document.documentElement;
+      return {
+        parts: document.querySelectorAll(
+          "#stage .flat-layer, #stage .flat-desk, #stage .flat-black, #stage .flat-blackout, #stage .flat-window, #stage .flat-cards",
+        ).length,
+        pageStyle: document.getElementById("page")!.getAttribute("style"),
+        pageAnimations: document.getElementById("page")!.getAnimations().length,
+        hasScene: root.classList.contains("has-flat-scene"),
+        ready: root.classList.contains("flat-ready"),
+        failed: root.classList.contains("scene-failed"),
+      };
+    });
+
+  const gone = {
+    parts: 0,
+    pageStyle: null,
+    pageAnimations: 0,
+    hasScene: false,
+    ready: false,
+    failed: true,
+  };
+
+  // each frame's orientations among the frames in the stage, and whether the black cover was up
+  const watchTurn = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      w.__turn = { both: 0, covered: 0, frames: 0 };
+      const sample = () => {
+        const sets = [
+          ...document.querySelectorAll<HTMLElement>(".flat-frame"),
+        ].map((el) => el.dataset.set ?? "");
+        const portrait = sets.some((s) => s.includes("portrait"));
+        const landscape = sets.some((s) => s.includes("landscape"));
+        w.__turn.frames += 1;
+        if (portrait && landscape) {
+          w.__turn.both += 1;
+        }
+        if (document.querySelector(".flat-blackout")) {
+          w.__turn.covered += 1;
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+
+  const turnSeen = (page: Page) =>
+    page.evaluate(() => ({ ...(window as any).__turn }));
+
+  const frameSets = (page: Page) =>
+    page.evaluate(() => [
+      ...new Set(
+        [...document.querySelectorAll<HTMLElement>(".flat-frame")].map(
+          (el) => el.dataset.set,
+        ),
+      ),
+    ]);
+
+  test("resize mid motion", async ({ page }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    // a resize partway through a close shows the address again, which on the home screen is the phone open
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await flatStatus(page))?.busy).toBe(true);
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await settledOn(page, "/", null);
+    expect(await flatStatus(page)).toMatchObject({ fold: 0 });
+    const fitted = () =>
+      page.evaluate(() => {
+        const { width, height } = (window as any).__flat.stage.geometry;
+        return { width, height };
+      });
+    await expect.poll(fitted).toEqual({ width: 1100, height: 760 });
+
+    // and partway through an open, it's the app at full zoom
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await expect
+      .poll(async () => {
+        const s = await flatStatus(page);
+        return s?.busy && s.path === "/about";
+      })
+      .toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await settledOn(page, "/about", "About");
+    await expect.poll(fitted).toEqual({ width: 1280, height: 800 });
+    const shown = await page.evaluate(() => {
+      const el = document.getElementById("page")!;
+      const cs = getComputedStyle(el);
+      return { transform: cs.transform, clip: cs.clipPath };
+    });
+    expect(shown).toEqual({ transform: "none", clip: "none" });
+    await expect(page.locator("#page h1")).toBeVisible();
+    // the folds work in the new size
+    await page.goBack();
+    await settledOn(page, "/", null);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  });
+
+  test("turning holds one orientation", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await settledOn(page, "/about", "About");
+    await watchTurn(page);
+    await page.setViewportSize({ width: 600, height: 900 });
+    // the turn starts once the resizes have stopped for a moment, and the phone was already settled before it
+    await expect
+      .poll(async () => (await turnSeen(page)).covered)
+      .toBeGreaterThan(0);
+    await settledOn(page, "/about", "About");
+    await expect(page.locator(".flat-blackout")).toHaveCount(0);
+    let seen = await turnSeen(page);
+    expect(seen.both, "frames when both orientations were in the stage").toBe(
+      0,
+    );
+    expect(seen.covered).toBeGreaterThan(0);
+    expect(await frameSets(page)).not.toContain("landscape");
+    expect(await frameSets(page)).toContain("portrait-open");
+    await expect(page.locator("#page h1")).toBeVisible();
+
+    // back on the home screen with the phone closed, a turn shows the phone open
+    await page.goBack();
+    await settledOn(page, "/", null);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false });
+    await page.evaluate(() =>
+      Object.assign((window as any).__turn, { covered: 0 }),
+    );
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect
+      .poll(async () => (await turnSeen(page)).covered)
+      .toBeGreaterThan(0);
+    await settledOn(page, "/", null);
+    seen = await turnSeen(page);
+    expect(seen.both).toBe(0);
+    expect(await frameSets(page)).toContain("landscape");
+    expect(
+      (await frameSets(page)).filter((s) => s?.includes("portrait")),
+    ).toEqual([]);
+    await expect(page.locator(".flat-home .flat-body")).toBeVisible();
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+    // the turned phone folds
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  });
+
+  test("a blocked frame image drops to the plain flat page", async ({
+    page,
+  }) => {
+    await page.route(/\/flat\/landscape-[^/]+\/a\d+\.webp$/, (route) =>
+      route.abort(),
+    );
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveClass(/scene-failed/);
+    expect(await leftovers(page)).toEqual(gone);
+    await expect(page.locator("#page h1")).toBeVisible();
+    await expect(page.locator("#page h1")).toHaveText("Jason Yue");
+  });
+
+  test("the watchdog drops a 2D scene that never shows", async ({ page }) => {
+    test.setTimeout(60000);
+    // every animation frame the page asks for, so a scene that keeps running shows up as a growing count
+    await page.addInitScript(() => {
+      const w = window as unknown as { __frames: number };
+      w.__frames = 0;
+      const ask = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) => {
+        w.__frames += 1;
+        return ask(callback);
+      };
+    });
+    const held: (() => Promise<void>)[] = [];
+    await page.route(/\/flat\/landscape-[^/]+\/a\d+\.webp$/, (route) => {
+      held.push(() => route.continue());
+    });
+    await page.goto("/about");
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    await expect(page.locator("html")).toHaveClass(/scene-failed/, {
+      timeout: 12000,
+    });
+    // the images arrive after the watchdog, and the scene that waited for them stays stopped
+    await Promise.all(held.map((release) => release()));
+    await page.waitForTimeout(1500);
+    const frames = () =>
+      page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+    const before = await frames();
+    await page.waitForTimeout(1000);
+    expect(await frames(), "no frames asked for after the release").toBe(
+      before,
+    );
+    expect(await leftovers(page)).toEqual(gone);
+    expect(
+      await page.evaluate(() => Boolean((window as any).__flatShown)),
+    ).toBe(false);
+    await expect(page.locator("#page h1")).toHaveText("About");
+    await expect(page.locator("#page h1")).toBeVisible();
   });
 });
