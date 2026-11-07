@@ -27,6 +27,16 @@ The raw output lands in `.media/flat/<SET>-<LIGHTING>/`, which git ignores, and 
 - `meta.json` with the set, the lighting, the window, the margin, `foldStartTime`, `dragTable` (for `close` and `open`: the axis, the sign, the 481 samples as `[fold, x, y]` of the flap's outer edge, and the built table of progress through the fold for each px of pointer travel, as `fold.js` builds it, which `foldPoseAt` turns into the fold and the move), the desk faces, and `inputsHash`
 - `desk-<FACE>-<sharp|blur>.png` for each cube face the desk photo reaches, rendered through a 90 degree camera
 
+## Packing a set
+
+`pack.mjs` turns a captured set into what the page loads, at full size and half size (the capture scaled to half in each direction before it's cut):
+
+```sh
+node tools/capture-flat/pack.mjs --set <SET> --lighting <day|dusk|night> [--size full|half]
+```
+
+It writes `apps/web/public/flat/<SET>-<LIGHTING>-<SIZE>/` with an `a###.webp` atlas for each frame that has new pieces, the desk faces as `desk-<FACE>-<sharp|blur>.webp`, and `manifest.json`. The manifest carries `meta.json`'s fields, with every px value (the window, the margin, the corners, and the drag's samples, span, and table) in the packed set's own px, and `scale` says how that relates to the capture. Each frame lists its `pieces` as `[x, y, w, h, sx, sy]` (the piece's place in the frame and its top left in the frame's atlas) and its `shared` pieces as indexes into the top level `shared` list, each an atlas and a piece. Show each piece `overlap` px larger on every side. Every image goes on `privacy-allowlist.json` before it's written, and outputs left over from an earlier pack are taken off the list and deleted.
+
 ## Checks
 
 The capture fails if the light isn't the pinned hour with the default sunrise and sunset, if the hands in the first pass aren't at the pose the scene reports for that step, or if a frame's screen corners, halves' corners, or hands land more than 2 px from where the first pass saw them. It also fails if the scene failed or the battery moved during the run.
@@ -36,5 +46,5 @@ The capture fails if the light isn't the pinned hour with the default sunrise an
 The pure parts have tests:
 
 ```sh
-node --test tools/capture-flat/capture.test.mjs
+node --test tools/capture-flat/capture.test.mjs tools/capture-flat/pack.test.mjs
 ```

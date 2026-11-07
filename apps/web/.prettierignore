@@ -8,6 +8,7 @@ src/scene/
 src/dev/
 public/keys/
 public/models/
+public/flat/
 src/data/*.json
 tests/fixtures/
 tools/REBAKE.md
