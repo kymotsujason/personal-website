@@ -1,11 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const devServer = {
-  command: "pnpm dev --host 127.0.0.1",
-  env: { ASTRO_DEV_BACKGROUND: "0" },
-  url: "http://127.0.0.1:4321",
-  reuseExistingServer: false,
-};
+// PW_DEV_PORT moves the dev server off 4321 for a run beside a dev server that is already up, which needs the lock
+// check off since astro allows one dev server a project
+const devPort = process.env.PW_DEV_PORT ?? "4321";
+const devLock = process.env.PW_DEV_PORT ? " --ignore-lock" : "";
+const devOrigin = `http://127.0.0.1:${devPort}`;
 
 // the prod preview is a capture build (window.__capture, see src/scene/capture.js), built into dist-capture so that dist
 // stays the build that ships. the ship project builds the way a deploy does, with pnpm build and no CAPTURE, and checks
@@ -48,6 +47,19 @@ function selectedProjects(): string[] {
 // COMPARE_CAPTURE=1 runs the compare project against the capture build's preview instead of the dev server
 const compareCapture = process.env.COMPARE_CAPTURE === "1";
 const selected = selectedProjects();
+// the compare project's dev server is also a capture build, so the 2d scene's window.__flat is there next to
+// window.spike (src/flat/probeHook.js), which tests/compare/flat-compare.spec.ts reads
+const devServer = {
+  command: `pnpm dev --host 127.0.0.1 --port ${devPort}${devLock}`,
+  env: {
+    ASTRO_DEV_BACKGROUND: "0",
+    ...(selected.includes("compare") && !selected.includes("dev")
+      ? { CAPTURE: "1" }
+      : {}),
+  },
+  url: devOrigin,
+  reuseExistingServer: false,
+};
 const compareOnDev = selected.includes("compare") && !compareCapture;
 const compareOnProd = selected.includes("compare") && compareCapture;
 // the builds go first, since an astro build while the dev server is up breaks the dev server's dynamic imports
@@ -82,7 +94,7 @@ const compareProject = {
   use: {
     ...devices["Desktop Chrome"],
     ...gpuLaunch,
-    baseURL: compareCapture ? "http://127.0.0.1:4173" : "http://127.0.0.1:4321",
+    baseURL: compareCapture ? "http://127.0.0.1:4173" : devOrigin,
   },
 };
 
@@ -95,7 +107,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         ...gpuLaunch,
-        baseURL: "http://127.0.0.1:4321",
+        baseURL: devOrigin,
       },
     },
     {
