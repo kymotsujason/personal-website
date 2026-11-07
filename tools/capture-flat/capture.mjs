@@ -2,7 +2,8 @@
 // a set needs, plus where the screens' and halves' corners land, the drag's table, and the desk's cube faces. it
 // drives the dev server (pnpm --dir apps/web dev, port 4321) in headless chromium on the gpu. run it from site/:
 //   node tools/capture-flat/capture.mjs --set <SET> --lighting <day|dusk|night>
-// the raw output lands in .media/flat/<SET>-<LIGHTING>/ for the packer. every odd step below fixed a real bug in the
+// the raw output lands in .media/flat/<SET>-<LIGHTING>/ for the packer. the set "desk" captures only the desk's faces,
+// which every set at that lighting shares. every odd step below fixed a real bug in the
 // spike (spikes/flat-intro/capture.mjs in the workshop repo), so read the spec's lessons before changing one
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,11 +16,14 @@ import { NIGHT, wallpaperAt } from "../../apps/web/src/scene/monitors.js";
 import {
   FOLD_SAMPLES,
   FOLD_TIME,
+  LEAD,
   MAX_FOLLOW,
+  PRESS_DEPTH,
   ease,
   foldPoseAt,
 } from "../../apps/web/src/scene/shared/motion.js";
 import { DUO } from "../../apps/web/src/scene/state.js";
+import { BATTERY_DRAIN } from "../../apps/web/src/scene/status.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.join(HERE, "..", "..");
@@ -107,16 +111,142 @@ export const foldList = () => {
   return list;
 };
 
-// the sets the tool can capture. a set is its orientation, the window shape it's captured at, its steps (each the
-// phone's fold, the lead, the hands' fold, and t for a timeline), and whether the desk's faces come with it
+const LANDSCAPE = { width: 1280, height: 800 };
+// an ipad held upright (768 by 1024) at the landscape set's 800 px height. the phone fits that window's height as it
+// does in landscape's, so both orientations draw the phone at the same px per cm
+const PORTRAIT = { width: 600, height: 800 };
+// the charger's plug run is stepped at one 60 hz refresh at a time
+export const CHARGER_STEP = 1 / 60;
+
+// device.js handFold: on portrait's opening path the hands go ahead of the fold by the lead
+const handFoldOf = (fold, lead, path) =>
+  path === "open" ? Math.min(fold, 1 - LEAD.fold * lead) : fold;
+
+// device.js leadTo from 0 to 1: a linear tween over LEAD.time whose progress is eased with inOutSine, at the closed
+// phone's fold, spaced evenly in time about one a 60 hz refresh. t is the ms since the lead started
+export const leadSteps = () => {
+  const count = Math.ceil(LEAD.time / REFRESH);
+  return Array.from({ length: count + 1 }, (_, k) => {
+    const lead = ease.inOutSine(k / count);
+    return {
+      fold: 1,
+      lead,
+      hand: handFoldOf(1, lead, "open"),
+      t: (k * LEAD.time) / count,
+      path: "open",
+    };
+  });
+};
+
+// the fold frames on a path (null in landscape, which has one). the opening path starts with the lead, and leaves out
+// the folds above 1 - LEAD.fold, where the hands hold at the lead's end and its last frame stands in for them
+const foldSteps = (path) => {
+  if (path !== "open") {
+    return foldList().map((fold) => ({
+      fold,
+      lead: 0,
+      hand: fold,
+      t: null,
+      path,
+    }));
+  }
+  const folds = foldList().filter((fold) => fold <= 1 - LEAD.fold);
+  return [
+    ...leadSteps(),
+    ...folds.map((fold) => ({
+      fold,
+      lead: 1,
+      hand: handFoldOf(fold, 1, path),
+      t: null,
+      path,
+    })),
+  ];
+};
+
+// the phone at rest open or closed. in portrait the hands are on the opening path once it has opened (with the lead
+// still at its end) and on the closing path once it has closed (loop.js picks the path as the fold leaves either end)
+const restStep = (orientation, closed) => {
+  const fold = closed ? 1 : 0;
+  if (orientation !== "portrait") {
+    return { fold, lead: 0, hand: fold, path: null };
+  }
+  return closed
+    ? { fold, lead: 0, hand: fold, path: "close" }
+    : { fold, lead: 1, hand: handFoldOf(fold, 1, "open"), path: "open" };
+};
+
+// the charger's plug run (charger.js step) at CHARGER_STEP from 0 to `total` seconds, which depends on whether the
+// right hand has a one handed grip to take, so it's measured from the page. the last step is the run's end, with the
+// plug in and the hands back. t is the ms since the run started
+export const chargerSteps = (total, rest) => {
+  const count = Math.ceil(total / CHARGER_STEP - 1e-9);
+  return Array.from({ length: count + 1 }, (_, k) => ({
+    ...rest,
+    t: k * CHARGER_STEP * 1000,
+    charger: { at: k * CHARGER_STEP, end: k === count },
+  }));
+};
+
+// a volume button pressed all the way in (volume.js update at PRESS_IN) with the phone at rest, open and closed
+const volumeSteps = (orientation) =>
+  ["open", "closed"].flatMap((pose) =>
+    ["near", "far"].map((press) => ({
+      ...restStep(orientation, pose === "closed"),
+      t: null,
+      press,
+      pose,
+    })),
+  );
+
+const describe = (orientation, more) => ({
+  orientation,
+  window: orientation === "portrait" ? PORTRAIT : LANDSCAPE,
+  // "plug" runs the charger's plug, "in" has the cable in at rest
+  charger: null,
+  path: null,
+  drag: false,
+  deskOnly: false,
+  ...more,
+});
+
+const chargerSet = (orientation, closed) =>
+  describe(orientation, {
+    charger: "plug",
+    steps: ({ chargerTotal }) =>
+      chargerSteps(chargerTotal, restStep(orientation, closed)),
+  });
+
+const foldSet = (orientation, path, charger = null) =>
+  describe(orientation, {
+    charger,
+    path,
+    drag: true,
+    steps: () => foldSteps(path),
+  });
+
+// the sets the tool can capture. a set is its orientation, the window shape it's captured at, the charger's part in
+// it, and its steps (each the phone's fold, the lead, the hands' fold, portrait's path, and t for a timeline). the
+// fold sets also measure the drag's tables, and the desk set captures only the desk's cube faces
 export const SETS = {
-  landscape: {
-    orientation: "landscape",
-    window: { width: 1280, height: 800 },
-    desk: true,
-    steps: () =>
-      foldList().map((fold) => ({ fold, lead: 0, hand: fold, t: null })),
-  },
+  landscape: foldSet("landscape", null),
+  "portrait-open": foldSet("portrait", "open"),
+  "portrait-close": foldSet("portrait", "close"),
+  "charger-landscape-open": chargerSet("landscape", false),
+  "charger-landscape-closed": chargerSet("landscape", true),
+  "charger-portrait-open": chargerSet("portrait", false),
+  "charger-portrait-closed": chargerSet("portrait", true),
+  "cable-landscape": foldSet("landscape", null, "in"),
+  "cable-portrait-open": foldSet("portrait", "open", "in"),
+  "cable-portrait-close": foldSet("portrait", "close", "in"),
+  "volume-landscape": describe("landscape", {
+    volume: true,
+    steps: () => volumeSteps("landscape"),
+  }),
+  "volume-portrait": describe("portrait", {
+    volume: true,
+    steps: () => volumeSteps("portrait"),
+  }),
+  desk: describe("landscape", { deskOnly: true, steps: () => [] }),
 };
 
 // the frame from two reads of the gl buffer (bottom row first, premultiplied), one with the screens drawn solid
@@ -155,6 +285,60 @@ export const matte = (magenta, green, width, height) => {
     }
   }
   return out;
+};
+
+// the box [x, y, w, h] (top row first) around every pixel where two gl reads differ, grown by `grow` px and kept
+// inside the frame, or null when they're the same
+export const changedBox = (a, b, width, height, grow) => {
+  let x0 = width;
+  let y0 = height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === b[i]) {
+      continue;
+    }
+    const p = i >> 2;
+    const x = p % width;
+    const y = height - 1 - Math.floor(p / width);
+    x0 = Math.min(x0, x);
+    x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y);
+    y1 = Math.max(y1, y);
+  }
+  if (x1 < 0) {
+    return null;
+  }
+  x0 = Math.max(0, x0 - grow);
+  y0 = Math.max(0, y0 - grow);
+  x1 = Math.min(width - 1, x1 + grow);
+  y1 = Math.min(height - 1, y1 + grow);
+  return [x0, y0, x1 - x0 + 1, y1 - y0 + 1];
+};
+
+// volume.js upButton: the button that turns the volume up, by how the phone is held
+const upFor = (orientation) => (orientation === "portrait" ? "near" : "far");
+
+// the convex hull of some points, clockwise on screen from the leftmost (monotone chain)
+export const hull = (points) => {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (
+        out.length >= 2 &&
+        cross(out[out.length - 2], out[out.length - 1], p) <= 0
+      ) {
+        out.pop();
+      }
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(sorted), ...half([...sorted].reverse())];
 };
 
 // the largest distance between matching points, the first pass's moved by `shift`
@@ -344,6 +528,31 @@ const installHelpers = (page, duo) =>
         flap: box(s.flap, -duo.halfW, 0, -h, h, 0).map(toWindow),
       };
     };
+    // each volume button's hit box (volume.js, REACH) seen from the camera: the four corners of its face toward the
+    // camera, in the order top left, top right, bottom right, bottom left of the body's frame, and the outline of all
+    // eight corners, which is the whole area a press lands on
+    cap.hits = () => {
+      spike.state.root.updateMatrixWorld(true);
+      return spike.state.volume.hits.map((hit) => {
+        hit.geometry.computeBoundingBox();
+        const { min, max } = hit.geometry.boundingBox;
+        const faces = [min.z, max.z].map((z) =>
+          box(hit, min.x, max.x, min.y, max.y, z),
+        );
+        const depth = (face) =>
+          face.reduce(
+            (sum, w) => sum + w.clone().applyMatrix4(cam.matrixWorldInverse).z,
+            0,
+          );
+        const near = depth(faces[0]) > depth(faces[1]) ? faces[0] : faces[1];
+        return {
+          name: hit.userData.volume,
+          // project moves a vector in place, so each corner is projected from a copy
+          face: near.map((v) => toWindow(v.clone())),
+          all: [...faces[0], ...faces[1]].map((v) => toWindow(v.clone())),
+        };
+      });
+    };
     cap.bones = () => {
       const bones = spike.state.handModel.bones;
       return Object.keys(bones)
@@ -361,20 +570,88 @@ const installHelpers = (page, duo) =>
 
 // the phone in a step's pose, held there. the frost wallpaper and the pinned html take a few frames to follow. the
 // phone also trails the desk view by the view's distance from its target, and the target depends on the window's
-// shape, so the view is put on its target
-const settle = (page, values, lead) =>
+// shape, so the view is put on its target. a charger step is stepped there from the frame before with the charger's
+// own step, then frozen, since the loop steps it too, by the real time between frames. gives back how far the stepped
+// hands landed from the frozen ones, or null when nothing was stepped
+const settle = (page, values, step, charger) =>
   page.evaluate(
-    async ({ values, lead }) => {
-      window.spike.freeze(values);
-      window.spike.state.lead = lead;
+    async ({ values, step, charger, dt }) => {
+      const spike = window.spike;
+      const s = spike.state;
+      const frames = (n) =>
+        new Promise((done) => {
+          const next = (k) =>
+            k === 0 ? done() : requestAnimationFrame(() => next(k - 1));
+          next(n);
+        });
+      spike.freeze(values);
+      s.lead = step.lead;
+      if (step.path && s.foldPath !== step.path) {
+        s.foldPath = step.path;
+        spike.rekey();
+      }
+      // loop.js picks portrait's path as the fold leaves either end, so it's told the fold didn't move
+      s.lastFold = values.fold;
+      let stepped = null;
+      if (charger) {
+        const c = s.charger;
+        if (!c) {
+          throw new Error("the charger isn't loaded");
+        }
+        // loop.js reads these for the phone's own move during a run (fitInView, the tilt, the shake, the sag, and the
+        // bump), which the 2d scene makes with css, so the frames hold the phone at rest
+        c.lift = () => 0;
+        c.bump = () => 0;
+        c.handOff = () => 0;
+        // the hands measure their grip on the plug when a run starts, so they're at this fold first
+        await frames(2);
+        s.lastFold = values.fold;
+        if (charger === "in") {
+          if (c.busy() || !c.plugged()) {
+            c.snap(true);
+          }
+        } else {
+          const { at, end } = step.charger;
+          const from = at - dt;
+          let before = null;
+          if (
+            c.busy() &&
+            c.heldAt !== undefined &&
+            Math.abs(c.heldAt - from) < 1e-9
+          ) {
+            c.release();
+            c.step(dt);
+            s.hands.update(step.hand);
+            before = window.__cap.bones();
+          }
+          if (end) {
+            c.snap(true);
+            c.heldAt = undefined;
+          } else {
+            c.debugAt(at, true);
+            c.heldAt = at;
+          }
+          s.hands.update(step.hand);
+          if (before) {
+            const after = window.__cap.bones();
+            stepped = Math.max(
+              ...before.map(([x, y], k) =>
+                Math.hypot(x - after[k][0], y - after[k][1]),
+              ),
+            );
+          }
+        }
+      }
       for (let k = 0; k < 4; k++) {
-        const look = window.spike.backdrop.look;
+        const look = spike.backdrop.look;
         look.yaw = look.targetYaw;
         look.pitch = look.targetPitch;
-        await new Promise((done) => requestAnimationFrame(done));
+        s.lastFold = values.fold;
+        await frames(1);
       }
+      return { stepped, total: s.charger ? s.charger.total : null };
     },
-    { values, lead },
+    { values, step, charger, dt: CHARGER_STEP },
   );
 
 const waitForPhone = (page) =>
@@ -423,14 +700,25 @@ const prepare = async (page, set, hour) => {
     throw new Error(`the phone isn't in ${set.orientation}`);
   }
 
-  // the hour goes before the panel it updates is removed
-  const light = await page.evaluate((hour) => {
-    window.spike.statusBar.setBattery(0, 0.001);
-    return {
-      ...window.spike.daylight(hour),
-      weather: window.spike.weather().data,
-    };
-  }, hour);
+  // the hour goes before the panel it updates is removed. the battery is held still, full, or just past the plug in
+  // for the charger's sets, which loads the charger with the cable in (device.js watchCharger and buildCharger)
+  const light = await page.evaluate(
+    ({ hour, at }) => {
+      window.spike.statusBar.setBattery(at, 0.001);
+      return {
+        ...window.spike.daylight(hour),
+        weather: window.spike.weather().data,
+      };
+    },
+    { hour, at: set.charger ? BATTERY_DRAIN + 1000 : 0 },
+  );
+  if (set.charger) {
+    await page.waitForFunction(
+      () => window.spike.charger() && window.spike.charger().plugged(),
+      null,
+      { timeout: 30000 },
+    );
+  }
   const expected = daylight(hour, SUN.sunrise, SUN.sunset);
   if (
     light.weather !== null ||
@@ -618,6 +906,13 @@ const captureDrag = async (page, orientation, rest, stage) => {
   return result;
 };
 
+// the frame's pixels with the screens cut out, from a read's two key colors
+const frameFrom = (read, magenta, green) =>
+  matte(fromBase64(magenta), fromBase64(green), read.w, read.h);
+
+// how far around a press's changed pixels its picture reaches, so it covers their soft edges
+const PRESS_GROW = 2;
+
 export const capture = async ({ setName, lighting }) => {
   const set = SETS[setName];
   const hour = LIGHTING[lighting];
@@ -629,7 +924,6 @@ export const capture = async ({ setName, lighting }) => {
   const out = path.join(SITE, ".media", "flat", `${setName}-${lighting}`);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  const steps = set.steps();
   const started = Date.now();
 
   const require = createRequire(path.join(SITE, "apps", "web", "package.json"));
@@ -649,20 +943,44 @@ export const capture = async ({ setName, lighting }) => {
         console.log("console error:", m.text().slice(0, 300)),
     );
     const light = await prepare(page, set, hour);
+    const pinned = await page.evaluate(() => ({
+      ...window.spike.statusBar.status,
+    }));
     await installHelpers(page, DUO);
     await waitForDesk(page, hour);
+    const lightMeta = { hour, ...SUN, day: light.day, warm: light.warm };
+
+    if (set.deskOnly) {
+      const desk = await captureDesk(page, out, height);
+      writeFileSync(
+        path.join(out, "meta.json"),
+        JSON.stringify({
+          set: setName,
+          lighting,
+          window: { width, height },
+          light: lightMeta,
+          desk,
+          inputsHash: inputsHash(),
+        }),
+      );
+      return {
+        out,
+        frames: 0,
+        retries: 0,
+        worst: 0,
+        stepped: { count: 0, worst: 0 },
+        desk: Object.keys(desk.faces),
+        seconds: Math.round((Date.now() - started) / 1000),
+      };
+    }
 
     const timeline = await page.evaluate(() => ({
       ...window.spike.timeline(false),
       foldStartTime: window.spike.foldStartTime(),
     }));
-    const desk = set.desk ? await captureDesk(page, out, height) : null;
-    const drag = await captureDrag(
-      page,
-      set.orientation,
-      timeline.rest,
-      timeline.stage,
-    );
+    const drag = set.drag
+      ? await captureDrag(page, set.orientation, timeline.rest, timeline.stage)
+      : null;
 
     // the desk is left out of the frames, so the loop stops drawing it
     await page.evaluate(() => {
@@ -683,23 +1001,46 @@ export const capture = async ({ setName, lighting }) => {
       blur: 0,
     });
 
+    // a plug run's length depends on the right hand's grip at this fold, so it's read once a run has started there
+    let chargerTotal = null;
+    if (set.charger === "plug") {
+      const probe = set.steps({ chargerTotal: 1 })[0];
+      ({ total: chargerTotal } = await settle(
+        page,
+        valuesAt(probe),
+        probe,
+        set.charger,
+      ));
+    }
+    const steps = set.steps({ chargerTotal });
+
     // first, at the window's own size: where the corners land, and the hands checked against the pose the scene
-    // reports for the step's hand fold
+    // reports for the step's hand fold. a charger step is also checked against stepping the charger from the frame
+    // before
     const first = [];
+    const stepped = { count: 0, worst: 0 };
     for (const [i, step] of steps.entries()) {
       let off = Infinity;
       let pass = null;
       for (let tries = 0; tries < POSE_TRIES && off > POSE_LIMIT; tries++) {
-        await settle(page, valuesAt(step), step.lead);
-        pass = await page.evaluate((hand) => {
-          const drawn = window.__cap.bones();
-          window.spike.state.hands.update(hand);
-          return {
-            drawn,
-            bones: window.__cap.bones(),
-            corners: window.__cap.corners(),
-          };
-        }, step.hand);
+        const settled = await settle(page, valuesAt(step), step, set.charger);
+        if (settled.stepped !== null) {
+          stepped.count++;
+          stepped.worst = Math.max(stepped.worst, settled.stepped);
+        }
+        pass = await page.evaluate(
+          ({ hand, volume }) => {
+            const drawn = window.__cap.bones();
+            window.spike.state.hands.update(hand);
+            return {
+              drawn,
+              bones: window.__cap.bones(),
+              corners: window.__cap.corners(),
+              hits: volume ? window.__cap.hits() : null,
+            };
+          },
+          { hand: step.hand, volume: Boolean(step.press) },
+        );
         off = largestOffset(pass.drawn, pass.bones, [0, 0]);
       }
       if (off > POSE_LIMIT) {
@@ -708,6 +1049,17 @@ export const capture = async ({ setName, lighting }) => {
         );
       }
       first.push(pass);
+    }
+    // stepping the charger's own clock and freezing it at the same time land the hands in the same place
+    if (stepped.worst > 0.05) {
+      throw new Error(
+        `stepping the charger by ${CHARGER_STEP} s landed the hands ${stepped.worst.toFixed(3)} px from its frozen pose`,
+      );
+    }
+    if (set.charger === "plug" && stepped.count < steps.length - 1) {
+      throw new Error(
+        `only ${stepped.count} of ${steps.length - 1} charger steps were stepped from the frame before`,
+      );
     }
 
     // then the frames in the wider view, with the camera's framing of the window kept by a view offset, so the
@@ -719,18 +1071,20 @@ export const capture = async ({ setName, lighting }) => {
     });
     await page.setViewportSize(wide);
     await page.waitForFunction(
-      () => {
+      (charger) => {
         const cap = window.__cap;
         const names = cap.discover();
+        const s = window.spike.state;
         return (
           names.length === 3 &&
           cap.meshes().every((m) => m && !cap.old.includes(m)) &&
-          window.spike.state.phone === "open" &&
-          !window.spike.state.busy &&
-          window.spike.state.volume
+          s.phone === "open" &&
+          !s.busy &&
+          s.volume &&
+          (!charger || (s.charger && s.charger.plugged()))
         );
       },
-      null,
+      set.charger,
       { timeout: 30000 },
     );
     console.log("the phone was built again for the wider view");
@@ -759,6 +1113,9 @@ export const capture = async ({ setName, lighting }) => {
 
     const shift = [MARGIN.x, MARGIN.top];
     const frames = [];
+    const volume = set.volume
+      ? { up: upFor(set.orientation), poses: {} }
+      : null;
     let retries = 0;
     let worst = 0;
     for (const [i, step] of steps.entries()) {
@@ -766,49 +1123,74 @@ export const capture = async ({ setName, lighting }) => {
       let off = Infinity;
       for (let tries = 0; tries < POSE_TRIES && off > POSE_LIMIT; tries++) {
         retries += tries > 0 ? 1 : 0;
-        await settle(page, valuesAt(step), step.lead);
+        const settled = await settle(page, valuesAt(step), step, set.charger);
+        if (set.charger === "plug" && settled.total !== chargerTotal) {
+          throw new Error(
+            `the rebuilt charger's run is ${settled.total} s, the first pass's ${chargerTotal} s`,
+          );
+        }
         // the pose is measured and the frame read in one step, so nothing moves the phone between them. each frame
         // is drawn twice with the screens in two solid key colors and read straight from the drawing buffer, since
-        // toDataURL on the webgl canvas gave an earlier frame and a screenshot shows the pinned html through the holes
-        read = await page.evaluate(async () => {
-          const cap = window.__cap;
-          const spike = window.spike;
-          cap.wide();
-          const corners = cap.corners();
-          const bones = cap.bones();
-          const r = spike.renderer();
-          const gl = r.getContext();
-          const w = gl.drawingBufferWidth;
-          const h = gl.drawingBufferHeight;
-          const Basic = cap.found[0].material.constructor;
-          cap.keys = cap.keys || [
-            new Basic({ color: 0xff00ff, toneMapped: false }),
-            new Basic({ color: 0x00ff00, toneMapped: false }),
-          ];
-          const reads = cap.keys.map((key) => {
+        // toDataURL on the webgl canvas gave an earlier frame and a screenshot shows the pinned html through the holes.
+        // a press is drawn again with its button sunk in, which the loop puts back on its next frame
+        read = await page.evaluate(
+          async ({ press, depth }) => {
+            const cap = window.__cap;
+            const spike = window.spike;
+            cap.wide();
+            const corners = cap.corners();
+            const bones = cap.bones();
+            const r = spike.renderer();
+            const gl = r.getContext();
+            const w = gl.drawingBufferWidth;
+            const h = gl.drawingBufferHeight;
+            const Basic = cap.found[0].material.constructor;
+            cap.keys = cap.keys || [
+              new Basic({ color: 0xff00ff, toneMapped: false }),
+              new Basic({ color: 0x00ff00, toneMapped: false }),
+            ];
+            const drawKeys = () =>
+              cap.keys.map((key) => {
+                cap.found.forEach((s) => {
+                  s.mesh.material = key;
+                });
+                r.setRenderTarget(null);
+                r.setClearColor(0x000000, 0);
+                r.clear(true, true, true);
+                r.render(cap.main, spike.camera());
+                const raw = new Uint8Array(w * h * 4);
+                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+                return raw;
+              });
+            const reads = drawKeys();
+            let pressed = null;
+            if (press) {
+              const button = spike.state.body.getObjectByName(
+                `Volume ${press}`,
+              );
+              const was = button.position.y;
+              button.position.y = -depth;
+              pressed = drawKeys();
+              button.position.y = was;
+            }
             cap.found.forEach((s) => {
-              s.mesh.material = key;
+              s.mesh.material = s.material;
             });
-            r.setRenderTarget(null);
-            r.setClearColor(0x000000, 0);
-            r.clear(true, true, true);
-            r.render(cap.main, spike.camera());
-            const raw = new Uint8Array(w * h * 4);
-            gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-            return raw;
-          });
-          cap.found.forEach((s) => {
-            s.mesh.material = s.material;
-          });
-          return {
-            w,
-            h,
-            corners,
-            bones,
-            magenta: await cap.toBase64(reads[0]),
-            green: await cap.toBase64(reads[1]),
-          };
-        });
+            return {
+              w,
+              h,
+              corners,
+              bones,
+              magenta: await cap.toBase64(reads[0]),
+              green: await cap.toBase64(reads[1]),
+              pressed: pressed && {
+                magenta: await cap.toBase64(pressed[0]),
+                green: await cap.toBase64(pressed[1]),
+              },
+            };
+          },
+          { press: step.press ?? null, depth: PRESS_DEPTH },
+        );
         const cornerPoints = (c) => [...c.screens.flat(), ...c.body, ...c.flap];
         off = Math.max(
           largestOffset(
@@ -828,12 +1210,39 @@ export const capture = async ({ setName, lighting }) => {
       if (read.w !== wide.width || read.h !== wide.height) {
         throw new Error(`frame ${i} was drawn at ${read.w} x ${read.h}`);
       }
-      const rgba = matte(
-        fromBase64(read.magenta),
-        fromBase64(read.green),
-        read.w,
-        read.h,
-      );
+      let rgba = frameFrom(read, read.magenta, read.green);
+      if (step.press) {
+        // the picture is the whole box around what the press changed, transparent outside it, and it takes that
+        // box's place over the rest frame, since the sunk button also uncovers what was behind its edge
+        const box = changedBox(
+          fromBase64(read.magenta),
+          fromBase64(read.pressed.magenta),
+          read.w,
+          read.h,
+          PRESS_GROW,
+        );
+        const pressed = frameFrom(
+          read,
+          read.pressed.magenta,
+          read.pressed.green,
+        );
+        rgba = new Uint8Array(pressed.length);
+        if (box) {
+          const [bx, by, bw, bh] = box;
+          for (let y = by; y < by + bh; y++) {
+            const at = (y * read.w + bx) * 4;
+            rgba.set(pressed.subarray(at, at + bw * 4), at);
+          }
+        }
+        const hit = first[i].hits.find((h) => h.name === step.press);
+        volume.poses[step.pose] ??= {};
+        volume.poses[step.pose][step.press] = {
+          frame: i,
+          box,
+          hit: roundPoints(hit.face),
+          hull: roundPoints(hull(hit.all)),
+        };
+      }
       writeFileSync(
         path.join(out, `${pad(i, steps.length)}.png`),
         encodePng(rgba, read.w, read.h),
@@ -843,7 +1252,8 @@ export const capture = async ({ setName, lighting }) => {
         fold: step.fold,
         lead: step.lead,
         hand: step.hand,
-        t: step.t,
+        t: step.t === null ? null : round(step.t, 3),
+        ...(step.press ? { press: step.press } : {}),
         corners: {
           screens: c.screens.map(roundPoints),
           depths: c.depths.map((d) => round(d, 4)),
@@ -858,7 +1268,7 @@ export const capture = async ({ setName, lighting }) => {
 
     const after = await page.evaluate(() => ({
       failed: document.documentElement.classList.contains("scene-failed"),
-      battery: window.spike.statusBar.status,
+      battery: { ...window.spike.statusBar.status },
       charger: Boolean(window.spike.charger()),
     }));
     if (after.failed || pageErrors.length) {
@@ -866,9 +1276,14 @@ export const capture = async ({ setName, lighting }) => {
         `the scene failed during the capture: ${pageErrors.join(" | ")}`,
       );
     }
-    if (after.battery.charging || after.battery.level < 100 || after.charger) {
+    if (
+      after.battery.charging !== pinned.charging ||
+      after.battery.level !== pinned.level ||
+      after.battery.charging !== Boolean(set.charger) ||
+      after.charger !== Boolean(set.charger)
+    ) {
       throw new Error(
-        `the battery moved during the capture: ${JSON.stringify(after)}`,
+        `the battery moved during the capture: ${JSON.stringify({ pinned, after })}`,
       );
     }
 
@@ -881,11 +1296,21 @@ export const capture = async ({ setName, lighting }) => {
         orientation: set.orientation,
         window: { width, height },
         margin: MARGIN,
-        light: { hour, ...SUN, day: light.day, warm: light.warm },
+        light: lightMeta,
         screens: SCREEN_NAMES,
+        path: set.path,
         foldStartTime: timeline.foldStartTime,
         dragTable: drag,
-        desk,
+        charger:
+          set.charger === "plug"
+            ? {
+                total: round(chargerTotal * 1000, 3),
+                step: CHARGER_STEP * 1000,
+              }
+            : set.charger === "in"
+              ? { in: true }
+              : null,
+        volume,
         inputsHash: inputsHash(),
       }),
     );
@@ -894,7 +1319,8 @@ export const capture = async ({ setName, lighting }) => {
       frames: frames.length,
       retries,
       worst,
-      desk: desk ? Object.keys(desk.faces) : [],
+      stepped,
+      desk: [],
       seconds: Math.round((Date.now() - started) / 1000),
     };
   } finally {
@@ -927,5 +1353,10 @@ if (
   console.log(
     `frames that needed another settle: ${result.retries}, largest pose offset accepted: ${result.worst.toFixed(2)} px`,
   );
+  if (result.stepped.count > 0) {
+    console.log(
+      `charger steps checked against stepping: ${result.stepped.count}, largest gap: ${result.stepped.worst.toFixed(4)} px`,
+    );
+  }
   console.log(`desk faces: ${result.desk.join(", ") || "none"}`);
 }

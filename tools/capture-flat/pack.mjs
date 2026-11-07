@@ -2,8 +2,9 @@
 // those are packed into one webp atlas per frame, with a manifest saying where each piece goes. a piece that's the
 // same as the same rectangle in the previous frame is stored once and listed in shared. reads
 // .media/flat/<SET>-<LIGHTING>/ (capture.mjs writes it) and writes apps/web/public/flat/<SET>-<LIGHTING>-<SIZE>/,
-// each image put on the privacy allowlist. run it from site/:
-//   node tools/capture-flat/pack.mjs --set <SET> --lighting <LIGHTING> [--size full|half]
+// each image put on the privacy allowlist. the set "desk" packs the desk's cube faces instead, once per lighting,
+// and every set's manifest names that folder. run it from site/:
+//   node tools/capture-flat/pack.mjs --set <SET|desk> --lighting <LIGHTING> [--size full|half]
 import {
   existsSync,
   mkdirSync,
@@ -38,6 +39,7 @@ export const SIZES = { full: 1, half: 0.5 };
 const ATLAS_WEBP = { quality: 80, alphaQuality: 90, effort: 6 };
 const DESK_WEBP = { quality: 80, effort: 6 };
 const NAME = /^[a-z0-9-]+$/;
+export const DESK = "desk";
 const FRAME_FILE = /^\d+\.png$/;
 const DESK_FILE = /^desk-([a-z]+)-(sharp|blur)\.png$/;
 const OUTPUT_NAME =
@@ -243,16 +245,58 @@ const alike = (a, b) => {
   return true;
 };
 
-const readImage = async (file, scale) => {
-  let image = sharp(file).ensureAlpha();
-  if (scale !== 1) {
-    const { width, height } = await sharp(file).metadata();
-    image = image.resize(Math.round(width * scale), Math.round(height * scale));
+// the half size mask: a half pixel is drawn when any of the 2 by 2 full size pixels under it is
+export const halfMask = (alpha, width, height) => {
+  const w = Math.ceil(width / 2);
+  const h = Math.ceil(height / 2);
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const out = (y >> 1) * w;
+    for (let x = 0; x < width; x++) {
+      if (alpha[row + x] > 0) data[out + (x >> 1)] = 1;
+    }
   }
-  const { data, info } = await image
+  return { data, width: w, height: h };
+};
+
+// a frame and its mask of drawn pixels. at half size the mask comes from the full size drawing, and the resize's soft
+// ring past it (alpha a few levels over 0 where the capture had none) is cleared, so pieces don't grow to hold it
+const readFrame = async (file, scale) => {
+  const full = await sharp(file)
+    .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  return { data, width: info.width, height: info.height };
+  const width = full.info.width;
+  const height = full.info.height;
+  if (scale === 1) {
+    const mask = new Uint8Array(width * height);
+    for (let p = 0; p < mask.length; p++) {
+      mask[p] = full.data[p * 4 + 3] > 0 ? 1 : 0;
+    }
+    return {
+      image: { data: full.data, width, height },
+      mask: { data: mask, width, height },
+    };
+  }
+  if (scale !== 0.5) {
+    throw new Error(`frames only scale to half, not ${scale}`);
+  }
+  const alpha = new Uint8Array(width * height);
+  for (let p = 0; p < alpha.length; p++) alpha[p] = full.data[p * 4 + 3];
+  const mask = halfMask(alpha, width, height);
+  const { data, info } = await sharp(file)
+    .ensureAlpha()
+    .resize(mask.width, mask.height)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (info.width !== mask.width || info.height !== mask.height) {
+    throw new Error(`${file} resized to ${info.width} x ${info.height}`);
+  }
+  for (let p = 0; p < mask.data.length; p++) {
+    if (!mask.data[p]) data.fill(0, p * 4, p * 4 + 4);
+  }
+  return { image: { data, width: mask.width, height: mask.height }, mask };
 };
 
 const round = (value, places) => Number(value.toFixed(places));
@@ -293,6 +337,38 @@ const scaleDrag = (drag, scale) => {
   };
 };
 
+// a box [x, y, w, h] in frame px, grown outward to whole px at the new scale
+const scaleBox = ([x, y, w, h], scale) => {
+  const x0 = Math.floor(x * scale);
+  const y0 = Math.floor(y * scale);
+  return [
+    x0,
+    y0,
+    Math.ceil((x + w) * scale) - x0,
+    Math.ceil((y + h) * scale) - y0,
+  ];
+};
+
+const scaleVolume = (volume, scale) => ({
+  ...volume,
+  poses: Object.fromEntries(
+    Object.entries(volume.poses).map(([name, buttons]) => [
+      name,
+      Object.fromEntries(
+        Object.entries(buttons).map(([which, button]) => [
+          which,
+          button && {
+            ...button,
+            box: button.box && scaleBox(button.box, scale),
+            hit: button.hit.map((p) => scalePoint(p, scale)),
+            hull: button.hull.map((p) => scalePoint(p, scale)),
+          },
+        ]),
+      ),
+    ]),
+  ),
+});
+
 // meta.json's fields carried over, with every px value in the packed set's own px
 const scaleMeta = (meta, scale) => {
   if (scale === 1) return meta;
@@ -302,25 +378,32 @@ const scaleMeta = (meta, scale) => {
       width: round(meta.window.width * scale, 2),
       height: round(meta.window.height * scale, 2),
     },
-    margin: {
+  };
+  if (meta.margin) {
+    scaled.margin = {
       x: round(meta.margin.x * scale, 2),
       top: round(meta.margin.top * scale, 2),
       bottom: round(meta.margin.bottom * scale, 2),
-    },
-    dragTable: Object.fromEntries(
+    };
+  }
+  if (meta.dragTable) {
+    scaled.dragTable = Object.fromEntries(
       Object.entries(meta.dragTable).map(([key, drag]) => [
         key,
         scaleDrag(drag, scale),
       ]),
-    ),
-  };
+    );
+  }
   if (meta.desk) {
     scaled.desk = { ...meta.desk, size: Math.round(meta.desk.size * scale) };
+  }
+  if (meta.volume) {
+    scaled.volume = scaleVolume(meta.volume, scale);
   }
   return scaled;
 };
 
-const listInputs = (raw, meta, frameCount) => {
+const listFrames = (raw, frameCount) => {
   const frames = readdirSync(raw)
     .filter((name) => FRAME_FILE.test(name))
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
@@ -334,19 +417,27 @@ const listInputs = (raw, meta, frameCount) => {
       throw new Error(`${raw} is missing frame ${i}, so capture the set again`);
     }
   }
+  return frames;
+};
+
+const listDesk = (raw, meta) => {
   const desks = readdirSync(raw)
     .filter((name) => DESK_FILE.test(name))
     .sort();
-  for (const face of Object.keys(meta.desk?.faces ?? {})) {
+  const faces = Object.keys(meta.desk?.faces ?? {});
+  if (faces.length === 0) {
+    throw new Error(`${raw}/meta.json lists no desk faces`);
+  }
+  for (const face of faces) {
     for (const look of ["sharp", "blur"]) {
       if (!desks.includes(`desk-${face}-${look}.png`)) {
         throw new Error(
-          `${raw} has no desk-${face}-${look}.png, so capture the set again`,
+          `${raw} has no desk-${face}-${look}.png, so capture the desk again`,
         );
       }
     }
   }
-  return { frames, desks };
+  return desks;
 };
 
 const encodeAtlas = (pieces, size) => {
@@ -383,6 +474,117 @@ const encodeDesk = async (file, scale) => {
   return { bytes, width: info.width, height: info.height };
 };
 
+// the images go on the allowlist first, then they're written, then the manifest, and stale outputs are deleted last
+const writeOutputs = ({
+  site,
+  out,
+  made,
+  manifestBytes,
+  onWrite,
+  onRemove,
+}) => {
+  const allowlistPath = path.join(site, "privacy-allowlist.json");
+  const allowlist = JSON.parse(readFileSync(allowlistPath, "utf8"));
+  made.sort((a, b) => a.name.localeCompare(b.name));
+  const keep = new Set([...made.map(({ name }) => name), "manifest.json"]);
+  const stale = (name) => OUTPUT_NAME.test(name) && !keep.has(name);
+  const prefix = `${path.relative(site, out)}/`;
+  // nothing is written until every image is made, and the allowlist goes first, so a crash part way never leaves a
+  // written image off it
+  for (const key of Object.keys(allowlist)) {
+    if (key.startsWith(prefix) && stale(key.slice(prefix.length))) {
+      delete allowlist[key];
+    }
+  }
+  for (const { bytes, name } of made) {
+    allowlist[prefix + name] = sha256(bytes);
+  }
+  const sorted = Object.fromEntries(
+    Object.entries(allowlist).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  writeFileSync(`${allowlistPath}.tmp`, `${JSON.stringify(sorted, null, 2)}\n`);
+  renameSync(`${allowlistPath}.tmp`, allowlistPath);
+  mkdirSync(out, { recursive: true });
+  for (const { bytes, name } of made) {
+    onWrite?.(path.join(out, name));
+    writeFileSync(path.join(out, name), bytes);
+  }
+  // the manifest goes last, so a page never reads one that names atlases not yet written
+  writeFileSync(path.join(out, "manifest.json.tmp"), manifestBytes);
+  renameSync(
+    path.join(out, "manifest.json.tmp"),
+    path.join(out, "manifest.json"),
+  );
+  // stale outputs leave the allowlist in the write above and are deleted last, so a crash between leaves an unlisted
+  // file that the privacy check refuses
+  const leftover = readdirSync(out, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && stale(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of leftover) {
+    onRemove?.(path.join(out, name));
+    rmSync(path.join(out, name));
+  }
+};
+
+// sizes.json keeps each packed folder's decoded bytes (every image at 4 bytes a px) and download bytes (every file in
+// the folder, the manifest included)
+const recordSize = (site, folder, decodedBytes, downloadBytes) => {
+  const file = path.join(site, "apps/web/public/flat/sizes.json");
+  const sizes = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+  sizes[folder] = { decodedBytes, downloadBytes };
+  const sorted = Object.fromEntries(
+    Object.entries(sizes).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(`${file}.tmp`, `${JSON.stringify(sorted, null, 2)}\n`);
+  renameSync(`${file}.tmp`, file);
+};
+
+const bytesOf = (made, test) =>
+  made
+    .filter(({ name }) => test(name))
+    .reduce((sum, { bytes }) => sum + bytes.length, 0);
+
+const packDesk = async ({
+  site,
+  raw,
+  out,
+  meta,
+  scale,
+  size,
+  onWrite,
+  onRemove,
+}) => {
+  const made = [];
+  let deskDecoded = 0;
+  for (const name of listDesk(raw, meta)) {
+    const desk = await encodeDesk(path.join(raw, name), scale);
+    const output = name.replace(/\.png$/, ".webp");
+    made.push({ name: output, bytes: stripAndVerify(desk.bytes, output) });
+    deskDecoded += desk.width * desk.height * 4;
+  }
+  const manifest = { ...scaleMeta(meta, scale), size, scale };
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+  writeOutputs({ site, out, made, manifestBytes, onWrite, onRemove });
+  const deskBytes = bytesOf(made, (name) => name.startsWith("desk-"));
+  return {
+    out,
+    frames: 0,
+    pieces: 0,
+    stored: 0,
+    shared: 0,
+    atlases: 0,
+    atlasDecoded: 0,
+    deskDecoded,
+    atlasBytes: 0,
+    deskBytes,
+    manifestBytes: manifestBytes.length,
+    decodedBytes: deskDecoded,
+    downloadBytes: deskBytes + manifestBytes.length,
+  };
+};
+
 export const packSet = async ({
   site,
   set,
@@ -402,6 +604,10 @@ export const packSet = async ({
     );
   }
   const scale = SIZES[size];
+  const folder = `${set}-${lighting}-${size}`;
+  const out = path.join(site, "apps/web/public/flat", folder);
+  // a run that stopped part way leaves its temp manifest, which nothing reads and the build would copy out
+  rmSync(path.join(out, "manifest.json.tmp"), { force: true });
   const raw = path.join(site, ".media/flat", `${set}-${lighting}`);
   if (!existsSync(path.join(raw, "meta.json"))) {
     throw new Error(
@@ -409,15 +615,22 @@ export const packSet = async ({
     );
   }
   const meta = JSON.parse(readFileSync(path.join(raw, "meta.json"), "utf8"));
+  if (set === DESK) {
+    const result = await packDesk({
+      site,
+      raw,
+      out,
+      meta,
+      scale,
+      size,
+      onWrite,
+      onRemove,
+    });
+    recordSize(site, folder, result.decodedBytes, result.downloadBytes);
+    return result;
+  }
   const list = JSON.parse(readFileSync(path.join(raw, "frames.json"), "utf8"));
-  const inputs = listInputs(raw, meta, list.length);
-  const out = path.join(
-    site,
-    "apps/web/public/flat",
-    `${set}-${lighting}-${size}`,
-  );
-  const allowlistPath = path.join(site, "privacy-allowlist.json");
-  const allowlist = JSON.parse(readFileSync(allowlistPath, "utf8"));
+  const frameFiles = listFrames(raw, list.length);
 
   const made = [];
   const stored = [];
@@ -426,15 +639,10 @@ export const packSet = async ({
   let atlasDecoded = 0;
   const digits = Math.max(3, String(list.length - 1).length);
   for (const [i, entry] of list.entries()) {
-    const image = await readImage(path.join(raw, inputs.frames[i]), scale);
-    const mask = {
-      data: new Uint8Array(image.width * image.height),
-      width: image.width,
-      height: image.height,
-    };
-    for (let p = 0; p < mask.data.length; p++) {
-      mask.data[p] = image.data[p * 4 + 3] > 0 ? 1 : 0;
-    }
+    const { image, mask } = await readFrame(
+      path.join(raw, frameFiles[i]),
+      scale,
+    );
     const box = trim(mask, 0, 0, mask.width, mask.height);
     const rects = box === null ? [] : cover(mask, box);
     const shown = new Map();
@@ -494,16 +702,10 @@ export const packSet = async ({
     corners: scale === 1 ? corners : scaleCorners(corners, scale),
   }));
 
-  let deskDecoded = 0;
-  for (const name of inputs.desks) {
-    const desk = await encodeDesk(path.join(raw, name), scale);
-    const output = name.replace(/\.png$/, ".webp");
-    made.push({ name: output, bytes: stripAndVerify(desk.bytes, output) });
-    deskDecoded += desk.width * desk.height * 4;
-  }
-
   const manifest = {
     ...scaleMeta(meta, scale),
+    // the desk's faces are packed once per lighting and size, and every set at that lighting shows them
+    desk: `${DESK}-${lighting}-${size}`,
     size,
     scale,
     pad: PAD,
@@ -512,56 +714,11 @@ export const packSet = async ({
     shared,
   };
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+  writeOutputs({ site, out, made, manifestBytes, onWrite, onRemove });
 
-  made.sort((a, b) => a.name.localeCompare(b.name));
-  const keep = new Set([...made.map(({ name }) => name), "manifest.json"]);
-  const stale = (name) => OUTPUT_NAME.test(name) && !keep.has(name);
-  const prefix = `${path.relative(site, out)}/`;
-  // nothing is written until every image is made, and the allowlist goes first, so a crash part way never leaves a
-  // written image off it
-  for (const key of Object.keys(allowlist)) {
-    if (key.startsWith(prefix) && stale(key.slice(prefix.length))) {
-      delete allowlist[key];
-    }
-  }
-  for (const { bytes, name } of made) {
-    allowlist[prefix + name] = sha256(bytes);
-  }
-  const sorted = Object.fromEntries(
-    Object.entries(allowlist).sort(([a], [b]) => a.localeCompare(b)),
-  );
-  writeFileSync(`${allowlistPath}.tmp`, `${JSON.stringify(sorted, null, 2)}\n`);
-  renameSync(`${allowlistPath}.tmp`, allowlistPath);
-  mkdirSync(out, { recursive: true });
-  for (const { bytes, name } of made) {
-    onWrite?.(path.join(out, name));
-    writeFileSync(path.join(out, name), bytes);
-  }
-  // the manifest goes last, so a page never reads one that names atlases not yet written
-  writeFileSync(path.join(out, "manifest.json.tmp"), manifestBytes);
-  renameSync(
-    path.join(out, "manifest.json.tmp"),
-    path.join(out, "manifest.json"),
-  );
-  // stale outputs leave the allowlist in the write above and are deleted last, so a crash between leaves an unlisted
-  // file that the privacy check refuses
-  const leftover = readdirSync(out, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && stale(entry.name))
-    .map((entry) => entry.name)
-    .sort();
-  for (const name of leftover) {
-    onRemove?.(path.join(out, name));
-    rmSync(path.join(out, name));
-  }
-
-  const atlasBytes = made
-    .filter(({ name }) => name.startsWith("a"))
-    .reduce((sum, { bytes }) => sum + bytes.length, 0);
-  const deskBytes = made
-    .filter(({ name }) => name.startsWith("desk-"))
-    .reduce((sum, { bytes }) => sum + bytes.length, 0);
+  const atlasBytes = bytesOf(made, (name) => name.startsWith("a"));
   const pieceCount = frames.reduce((sum, frame) => sum + frame.shown.length, 0);
-  return {
+  const result = {
     out,
     frames: frames.length,
     pieces: pieceCount,
@@ -569,11 +726,15 @@ export const packSet = async ({
     shared: shared.length,
     atlases: made.filter(({ name }) => name.startsWith("a")).length,
     atlasDecoded,
-    deskDecoded,
+    deskDecoded: 0,
     atlasBytes,
-    deskBytes,
+    deskBytes: 0,
     manifestBytes: manifestBytes.length,
+    decodedBytes: atlasDecoded,
+    downloadBytes: atlasBytes + manifestBytes.length,
   };
+  recordSize(site, folder, result.decodedBytes, result.downloadBytes);
+  return result;
 };
 
 const usage =
@@ -618,9 +779,8 @@ if (
           console.log(`removed ${path.relative(site, removed)}`);
         },
       });
-      const decoded = result.atlasDecoded + result.deskDecoded;
-      const download =
-        result.atlasBytes + result.deskBytes + result.manifestBytes;
+      const decoded = result.decodedBytes;
+      const download = result.downloadBytes;
       console.log(
         [
           `${path.relative(site, result.out)}: ${result.frames} frames, ${result.pieces} pieces shown (${(result.pieces / result.frames).toFixed(1)} a frame), ${result.stored} stored, ${result.shared} shared, ${result.atlases} atlases`,

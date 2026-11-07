@@ -4,14 +4,21 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { inflateSync } from "node:zlib";
 import {
+  CHARGER_STEP,
   MERGE,
+  SETS,
+  changedBox,
+  hull,
+  chargerSteps,
   dragTable,
   encodePng,
   foldCurves,
   foldList,
   largestOffset,
+  leadSteps,
   matte,
 } from "./capture.mjs";
+import { LEAD } from "../../apps/web/src/scene/shared/motion.js";
 
 const SITE = join(import.meta.dirname, "..", "..");
 
@@ -31,6 +38,8 @@ test("inputs.json lists files that exist, the modules that pose a frame among th
     "apps/web/src/scene/hands.js",
     "apps/web/src/scene/renderer.js",
     "apps/web/src/scene/shared/motion.js",
+    "apps/web/src/scene/charger.js",
+    "apps/web/src/scene/volume.js",
     "apps/web/src/dev/spikeApi.js",
   ]) {
     assert.ok(inputs.includes(file), `inputs.json leaves out ${file}`);
@@ -250,4 +259,147 @@ test("encodePng writes rows a png decoder reads back", () => {
   const raw = inflateSync(png.subarray(idat + 4, idat + 4 + length));
   // each row starts with filter type 0
   assert.deepEqual([...raw], [0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0, 9, 10, 11, 12]);
+});
+
+test("lead frames run from hand fold 1 to 0.99 at phone fold 1", () => {
+  const lead = leadSteps();
+  // about one a 60 Hz refresh across the lead's 300 ms
+  assert.equal(lead.length, Math.ceil(LEAD.time / (1000 / 60)) + 1);
+  assert.deepEqual(
+    [lead[0].hand, lead[lead.length - 1].hand],
+    [1, 1 - LEAD.fold],
+  );
+  // inOutSine(0) is -0, which the 3d lead starts at too
+  assert.ok(lead[0].lead === 0 && lead[lead.length - 1].lead === 1);
+  for (const [k, step] of lead.entries()) {
+    assert.equal(step.fold, 1);
+    assert.equal(step.path, "open");
+    // device.js leadTo: a linear tween over LEAD.time, eased with inOutSine, and handFold takes the lesser fold
+    const u = step.t / LEAD.time;
+    assert.ok(Math.abs(step.lead - (1 - Math.cos(Math.PI * u)) / 2) < 1e-12);
+    assert.ok(Math.abs(step.hand - (1 - LEAD.fold * step.lead)) < 1e-12);
+    if (k > 0) {
+      assert.ok(Math.abs(step.t - lead[k - 1].t - LEAD.time / 18) < 1e-9);
+      assert.ok(step.hand < lead[k - 1].hand, `hand fold ${k} doesn't go down`);
+    }
+  }
+});
+
+test("portrait-open's folds follow the lead's end, and the closing path has no lead", () => {
+  const open = SETS["portrait-open"].steps();
+  const lead = leadSteps();
+  assert.deepEqual(open.slice(0, lead.length), lead);
+  const folds = open.slice(lead.length);
+  assert.ok(folds.length > 100);
+  for (const step of folds) {
+    // above 1 - LEAD.fold the hands hold at the lead's end, which the lead's last frame already shows
+    assert.ok(step.fold <= 1 - LEAD.fold);
+    assert.equal(step.lead, 1);
+    assert.equal(step.hand, step.fold);
+    assert.equal(step.t, null);
+  }
+  assert.equal(folds[folds.length - 1].fold, 0);
+  for (const step of SETS["portrait-close"].steps()) {
+    assert.equal(step.lead, 0);
+    assert.equal(step.hand, step.fold);
+    assert.equal(step.path, "close");
+  }
+});
+
+test("charger frames are spaced 1/60 s", () => {
+  assert.equal(CHARGER_STEP, 1 / 60);
+  // with the right hand's one handed grip the run is 2.7 s, without it 2 s (charger.js runTotal)
+  for (const total of [2.7, 2]) {
+    const rest = { fold: 0, lead: 0, hand: 0, path: null };
+    const steps = chargerSteps(total, rest);
+    assert.equal(steps.length, Math.round(total * 60) + 1);
+    for (const [k, step] of steps.entries()) {
+      assert.ok(Math.abs(step.charger.at - k / 60) < 1e-12);
+      assert.ok(Math.abs(step.t - (k * 1000) / 60) < 1e-9);
+      assert.equal(step.charger.end, k === steps.length - 1);
+      assert.equal(step.fold, 0);
+    }
+    assert.ok(steps[steps.length - 1].charger.at >= total - 1e-12);
+    assert.ok(steps[steps.length - 2].charger.at < total);
+  }
+});
+
+test("every set in the brief has a description", () => {
+  const names = [
+    "landscape",
+    "portrait-open",
+    "portrait-close",
+    "charger-landscape-open",
+    "charger-landscape-closed",
+    "charger-portrait-open",
+    "charger-portrait-closed",
+    "cable-landscape",
+    "cable-portrait-open",
+    "cable-portrait-close",
+    "volume-landscape",
+    "volume-portrait",
+    "desk",
+  ];
+  assert.deepEqual(Object.keys(SETS).sort(), names.sort());
+  for (const name of names.filter((n) => n.startsWith("charger-"))) {
+    const set = SETS[name];
+    assert.equal(set.charger, "plug");
+    const closed = name.endsWith("-closed");
+    const steps = set.steps({ chargerTotal: 2 });
+    assert.ok(steps.every((step) => step.fold === (closed ? 1 : 0)));
+  }
+  for (const name of names.filter((n) => n.startsWith("cable-"))) {
+    assert.equal(SETS[name].charger, "in");
+    // the same folds as the set without the cable
+    const twin = name.slice("cable-".length);
+    assert.deepEqual(SETS[name].steps(), SETS[twin].steps());
+  }
+  for (const name of ["volume-landscape", "volume-portrait"]) {
+    const steps = SETS[name].steps();
+    assert.deepEqual(
+      steps.map((step) => [step.fold, step.press]),
+      [
+        [0, "near"],
+        [0, "far"],
+        [1, "near"],
+        [1, "far"],
+      ],
+    );
+  }
+  assert.equal(SETS["portrait-open"].orientation, "portrait");
+  assert.equal(SETS.desk.deskOnly, true);
+});
+
+test("changedBox finds where a press changed the frame, grown a little and kept inside it", () => {
+  // two 6 by 4 reads, bottom row first as the gl buffer has them, that differ at (2, 1) and (3, 1) top down
+  const width = 6;
+  const height = 4;
+  const a = new Uint8Array(width * height * 4).fill(9);
+  const b = Uint8Array.from(a);
+  for (const x of [2, 3]) {
+    b[((height - 1 - 1) * width + x) * 4 + 1] = 200;
+  }
+  assert.deepEqual(changedBox(a, b, width, height, 1), [1, 0, 4, 3]);
+  assert.equal(changedBox(a, a, width, height, 1), null);
+});
+
+test("hull keeps the outline of a box's corners and drops the ones inside it", () => {
+  const outline = hull([
+    [0, 0],
+    [10, 0],
+    [10, 6],
+    [0, 6],
+    [3, 2],
+    [7, 4],
+    [10, 3],
+  ]);
+  assert.equal(outline.length, 4);
+  for (const corner of [
+    [0, 0],
+    [10, 0],
+    [10, 6],
+    [0, 6],
+  ]) {
+    assert.ok(outline.some((p) => p[0] === corner[0] && p[1] === corner[1]));
+  }
 });

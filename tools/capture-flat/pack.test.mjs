@@ -13,7 +13,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { sha256 } from "../privacy/allowlist.mjs";
-import { OVERLAP, chooseAtlas, cover, packSet, trim } from "./pack.mjs";
+import {
+  OVERLAP,
+  chooseAtlas,
+  cover,
+  halfMask,
+  packSet,
+  trim,
+} from "./pack.mjs";
 
 const siteDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -112,6 +119,15 @@ const meta = {
       table: [0, 0.5, 0.75, 1],
     },
   },
+  desk: null,
+  inputsHash: "0".repeat(64),
+};
+
+const deskMeta = {
+  set: "desk",
+  lighting: "day",
+  window: { width: 160, height: 100 },
+  light: meta.light,
   desk: {
     size: 32,
     fov: 90,
@@ -126,8 +142,9 @@ const png = (pixels, width = FRAME_W, height = FRAME_H) =>
     .png()
     .toBuffer();
 
-// a throwaway site under .media (which git ignores) instead of the RAM disk at /tmp
-const makeSite = async (t, frames) => {
+// a throwaway site under .media (which git ignores) instead of the RAM disk at /tmp, with a set captured as test-day
+// and the desk's faces captured as desk-day
+const makeSite = async (t, frames, extra = {}) => {
   mkdirSync(path.join(siteDir, ".media"), { recursive: true });
   const site = mkdtempSync(path.join(siteDir, ".media", "pack-test-"));
   t.after(() => rmSync(site, { recursive: true, force: true }));
@@ -147,11 +164,17 @@ const makeSite = async (t, frames) => {
     corners,
   }));
   writeFileSync(path.join(raw, "frames.json"), JSON.stringify(list));
-  writeFileSync(path.join(raw, "meta.json"), JSON.stringify(meta));
+  writeFileSync(
+    path.join(raw, "meta.json"),
+    JSON.stringify({ ...meta, ...extra }),
+  );
+  const deskRaw = path.join(site, ".media/flat/desk-day");
+  mkdirSync(deskRaw, { recursive: true });
+  writeFileSync(path.join(deskRaw, "meta.json"), JSON.stringify(deskMeta));
   const desk = Buffer.alloc(32 * 32 * 4, 180);
   for (const look of ["sharp", "blur"]) {
     writeFileSync(
-      path.join(raw, `desk-front-${look}.png`),
+      path.join(deskRaw, `desk-front-${look}.png`),
       await png(desk, 32, 32),
     );
   }
@@ -306,7 +329,6 @@ test("the allowlist lists every written file", async (t) => {
       readFileSync(path.join(site, "privacy-allowlist.json"), "utf8"),
     );
     const images = readdirSync(out).filter((name) => name.endsWith(".webp"));
-    assert.ok(images.includes("desk-front-sharp.webp"));
     for (const name of images) {
       assert.equal(
         allowlist[prefix + name],
@@ -354,11 +376,201 @@ test("half size halves the frame and its coordinates", async (t) => {
   assert.deepEqual(manifest.dragTable.open.table, [0, 0.75, 1]);
   assert.equal(manifest.foldStartTime, 700);
   assert.equal(manifest.inputsHash, meta.inputsHash);
-  const desk = await sharp(path.join(out, "desk-front-blur.webp")).metadata();
-  assert.equal(desk.width, 16);
   for (const frame of manifest.frames) {
     for (const [x, y, w, h] of frame.pieces) {
       assert.ok(x + w <= FRAME_W / 2 && y + h <= FRAME_H / 2);
     }
   }
+});
+
+// the bounding box of every piece a frame shows, as [x0, y0, x1, y1]
+const piecesBox = (manifest, frame) => {
+  const shown = [
+    ...frame.pieces,
+    ...frame.shared.map((k) => manifest.shared[k].piece),
+  ];
+  return [
+    Math.min(...shown.map(([x]) => x)),
+    Math.min(...shown.map(([, y]) => y)),
+    Math.max(...shown.map(([x, , w]) => x + w)),
+    Math.max(...shown.map(([, y, , h]) => y + h)),
+  ];
+};
+
+test("halfMask marks each half pixel whose 2 by 2 block has any drawn pixel", () => {
+  // a 5 by 3 alpha plane with drawn pixels at (1, 0), (4, 2), and nothing else
+  const alpha = new Uint8Array(15);
+  alpha[1] = 255;
+  alpha[2 * 5 + 4] = 3;
+  const half = halfMask(alpha, 5, 3);
+  assert.equal(half.width, 3);
+  assert.equal(half.height, 2);
+  assert.deepEqual([...half.data], [1, 0, 0, 0, 0, 1]);
+});
+
+test("half size pieces stop at the 2 by 2 blocks of the full size drawing", async (t) => {
+  // blocks on odd px, so a resize's soft edge would reach a half pixel past the blocks they touch
+  const pixels = blank();
+  drawBlock(pixels, 31, 41, 89, 149, 20);
+  const site = await makeSite(t, [pixels]);
+  await packSet({ site, set: "test", lighting: "day", size: "half" });
+  const out = path.join(site, "apps/web/public/flat/test-day-half");
+  const manifest = JSON.parse(
+    readFileSync(path.join(out, "manifest.json"), "utf8"),
+  );
+  assert.deepEqual(piecesBox(manifest, manifest.frames[0]), [15, 20, 45, 75]);
+  // and nothing drawn in the atlas past those blocks, where the resize left a faint ring
+  const [x, y, w, h, sx, sy] = manifest.frames[0].pieces[0];
+  const image = await decode(path.join(out, manifest.frames[0].atlas));
+  for (let dy = -OVERLAP; dy < h + OVERLAP; dy++) {
+    for (let dx = -OVERLAP; dx < w + OVERLAP; dx++) {
+      const inside = dx >= 0 && dx < w && dy >= 0 && dy < h;
+      const a = image.data[((sy + dy) * image.width + sx + dx) * 4 + 3];
+      if (!inside) {
+        assert.equal(a, 0, `alpha past the blocks at ${x + dx},${y + dy}`);
+      }
+    }
+  }
+});
+
+test("a run removes a manifest.json.tmp left by an earlier run", async (t) => {
+  const site = await makeSite(t, [twoBlocks(0)]);
+  const out = path.join(site, "apps/web/public/flat/test-day-full");
+  mkdirSync(out, { recursive: true });
+  writeFileSync(path.join(out, "manifest.json.tmp"), "{");
+  // the capture is gone, so the run stops early, after the stale file is cleared
+  rmSync(path.join(site, ".media/flat/test-day/meta.json"));
+  await assert.rejects(
+    packSet({ site, set: "test", lighting: "day", size: "full" }),
+    /capture the set first/,
+  );
+  assert.ok(!existsSync(path.join(out, "manifest.json.tmp")));
+});
+
+test("the desk's faces are packed once per lighting, and a set points at them", async (t) => {
+  const site = await makeSite(t, [twoBlocks(0), twoBlocks(8)]);
+  for (const size of ["full", "half"]) {
+    await packSet({ site, set: "desk", lighting: "day", size });
+    await packSet({ site, set: "test", lighting: "day", size });
+    const deskOut = path.join(site, `apps/web/public/flat/desk-day-${size}`);
+    assert.deepEqual(readdirSync(deskOut).sort(), [
+      "desk-front-blur.webp",
+      "desk-front-sharp.webp",
+      "manifest.json",
+    ]);
+    const desk = JSON.parse(
+      readFileSync(path.join(deskOut, "manifest.json"), "utf8"),
+    );
+    assert.equal(desk.desk.size, size === "full" ? 32 : 16);
+    assert.deepEqual(Object.keys(desk.desk.faces), ["front"]);
+    const face = await sharp(
+      path.join(deskOut, "desk-front-blur.webp"),
+    ).metadata();
+    assert.equal(face.width, desk.desk.size);
+    const setOut = path.join(site, `apps/web/public/flat/test-day-${size}`);
+    assert.ok(!readdirSync(setOut).some((name) => name.startsWith("desk-")));
+    const manifest = JSON.parse(
+      readFileSync(path.join(setOut, "manifest.json"), "utf8"),
+    );
+    assert.equal(manifest.desk, `desk-day-${size}`);
+  }
+  const allowlist = JSON.parse(
+    readFileSync(path.join(site, "privacy-allowlist.json"), "utf8"),
+  );
+  assert.ok(
+    allowlist["apps/web/public/flat/desk-day-half/desk-front-sharp.webp"],
+  );
+});
+
+test("a repack drops the desk faces an older pack put in the set's folder", async (t) => {
+  const site = await makeSite(t, [twoBlocks(0)]);
+  const prefix = "apps/web/public/flat/test-day-full/";
+  const out = path.join(site, prefix);
+  mkdirSync(out, { recursive: true });
+  writeFileSync(path.join(out, "desk-front-sharp.webp"), "old");
+  writeFileSync(
+    path.join(site, "privacy-allowlist.json"),
+    `${JSON.stringify({ [`${prefix}desk-front-sharp.webp`]: "0".repeat(64) })}\n`,
+  );
+  await packSet({ site, set: "test", lighting: "day", size: "full" });
+  assert.ok(!existsSync(path.join(out, "desk-front-sharp.webp")));
+  const allowlist = JSON.parse(
+    readFileSync(path.join(site, "privacy-allowlist.json"), "utf8"),
+  );
+  assert.equal(allowlist[`${prefix}desk-front-sharp.webp`], undefined);
+});
+
+test("sizes.json has each packed folder's decoded and download bytes", async (t) => {
+  const site = await makeSite(t, [twoBlocks(0), twoBlocks(8)]);
+  const result = await packSet({
+    site,
+    set: "test",
+    lighting: "day",
+    size: "full",
+  });
+  await packSet({ site, set: "desk", lighting: "day", size: "half" });
+  const flat = path.join(site, "apps/web/public/flat");
+  const sizes = JSON.parse(readFileSync(path.join(flat, "sizes.json"), "utf8"));
+  assert.deepEqual(Object.keys(sizes).sort(), [
+    "desk-day-half",
+    "test-day-full",
+  ]);
+  const files = readdirSync(path.join(flat, "test-day-full"));
+  const download = files.reduce(
+    (sum, name) =>
+      sum + readFileSync(path.join(flat, "test-day-full", name)).length,
+    0,
+  );
+  assert.equal(sizes["test-day-full"].downloadBytes, download);
+  assert.equal(sizes["test-day-full"].decodedBytes, result.decodedBytes);
+  // each atlas decodes to 4 bytes a px
+  let decoded = 0;
+  for (const name of files.filter((n) => n.endsWith(".webp"))) {
+    const { width, height } = await sharp(
+      path.join(flat, "test-day-full", name),
+    ).metadata();
+    decoded += width * height * 4;
+  }
+  assert.equal(sizes["test-day-full"].decodedBytes, decoded);
+  assert.equal(sizes["desk-day-half"].decodedBytes, 2 * 16 * 16 * 4);
+});
+
+test("half size scales the volume buttons' boxes and hit areas", async (t) => {
+  const volume = {
+    up: "far",
+    poses: {
+      open: {
+        near: {
+          box: [101, 51, 9, 5],
+          hit: [
+            [10, 20],
+            [30, 20],
+            [30, 24],
+            [10, 24],
+          ],
+          hull: [
+            [10, 20],
+            [30, 20],
+            [30, 24],
+            [12, 28],
+          ],
+        },
+        far: null,
+      },
+    },
+  };
+  const site = await makeSite(t, [twoBlocks(0)], { volume });
+  await packSet({ site, set: "test", lighting: "day", size: "half" });
+  const manifest = JSON.parse(
+    readFileSync(
+      path.join(site, "apps/web/public/flat/test-day-half/manifest.json"),
+      "utf8",
+    ),
+  );
+  // the box grows outward to whole half px, so it still covers the whole press
+  assert.deepEqual(manifest.volume.poses.open.near.box, [50, 25, 5, 3]);
+  assert.deepEqual(manifest.volume.poses.open.near.hit[2], [15, 12]);
+  assert.deepEqual(manifest.volume.poses.open.near.hull[3], [6, 14]);
+  assert.equal(manifest.volume.poses.open.far, null);
+  assert.equal(manifest.volume.up, "far");
 });
