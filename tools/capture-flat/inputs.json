@@ -25,6 +25,9 @@
   "apps/web/src/scene/monitors.js",
   "apps/web/src/scene/backdrop.js",
   "apps/web/src/scene/intro.js",
+  "apps/web/src/scene/loop.js",
+  "apps/web/src/scene/fold.js",
   "apps/web/src/scene/shared/motion.js",
-  "apps/web/src/scene/shared/placement.js"
+  "apps/web/src/scene/shared/placement.js",
+  "apps/web/src/dev/spikeApi.js"
 ]

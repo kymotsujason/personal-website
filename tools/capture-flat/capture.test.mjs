@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { inflateSync } from "node:zlib";
 import {
@@ -10,6 +12,30 @@ import {
   largestOffset,
   matte,
 } from "./capture.mjs";
+
+const SITE = join(import.meta.dirname, "..", "..");
+
+test("inputs.json lists files that exist, the modules that pose a frame among them", () => {
+  const inputs = JSON.parse(
+    readFileSync(join(import.meta.dirname, "inputs.json"), "utf8"),
+  );
+  for (const file of inputs) {
+    assert.ok(existsSync(join(SITE, file)), `${file} doesn't exist`);
+  }
+  // the loop poses the phone and hands every frame, fold.js and the shared motion fold it, and the spike api's
+  // freeze, poseCorners, and flapEdge pose the frames and the drag tables
+  for (const file of [
+    "apps/web/src/scene/loop.js",
+    "apps/web/src/scene/fold.js",
+    "apps/web/src/scene/device.js",
+    "apps/web/src/scene/hands.js",
+    "apps/web/src/scene/renderer.js",
+    "apps/web/src/scene/shared/motion.js",
+    "apps/web/src/dev/spikeApi.js",
+  ]) {
+    assert.ok(inputs.includes(file), `inputs.json leaves out ${file}`);
+  }
+});
 
 // the frame a player shows at each ms of a curve, taken as the list's nearest fold
 const nearestIndex = (list, fold) => {
