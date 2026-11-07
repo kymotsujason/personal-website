@@ -40,6 +40,8 @@ export const installFlatHook = (probe) => {
         frosted: scene.frosted,
       };
     },
+    // the volume buttons' hit areas in window px, the bar, and the sink
+    volume: () => scene.volume.state(),
     // the phone's state as the navigation reads it, with its fold
     status: () => probe.status(),
     mount: (options) => probe.mount(options),

@@ -24,6 +24,7 @@ import { arrivalKind, playIntro } from "./intro.js";
 import { createLoop } from "./loop.js";
 import { createHome } from "./home.js";
 import { createLook, motionPose } from "./look.js";
+import { createVolume, volumeSetFor } from "./volume.js";
 import { loadManifest } from "./manifest.js";
 import { createNavigation } from "./navigation.js";
 import { createRain } from "./rain.js";
@@ -158,6 +159,8 @@ export const startFlatScene = ({
     // the rest rule (rest.js): plain glass, still rain, and no drift until a device that starts calm measures fast
     calm: true,
     rain: null,
+    // the volume frames for this orientation, { manifest, layer }, or null when they didn't load
+    volumeSet: null,
     // the pose as last drawn, with the drift, the dodge, and the trail on it
     shownPose: null,
     // the slow path (slowPathFor), read once at start
@@ -174,7 +177,12 @@ export const startFlatScene = ({
     stopEffects();
     unmount();
     dropBlack();
-    document.body.classList.remove("closed", "looking", "over-phone");
+    document.body.classList.remove(
+      "closed",
+      "looking",
+      "over-phone",
+      "over-volume",
+    );
     root.classList.remove("has-flat-scene", "flat-ready");
     pageEl.getAnimations?.().forEach((animation) => animation.cancel());
     pageEl.classList.remove("hint-home");
@@ -653,6 +661,8 @@ export const startFlatScene = ({
   const folds = createFolds({ scene, loop });
   const look = createLook({ scene, loop, folds });
   scene.lookAhead = look.lookAhead;
+  const volume = createVolume({ scene, loop, music });
+  scene.volume = volume;
   scene.effects = { look, drift };
   const apps = createApps({ scene, loop, folds, nav, pageEl });
   const kept = createKept();
@@ -697,6 +707,7 @@ export const startFlatScene = ({
       intro: null,
       openFrames: null,
       closeFrames: null,
+      volumeSet: null,
       cardsView: null,
       cards: null,
       rain: null,
@@ -709,9 +720,18 @@ export const startFlatScene = ({
   const mount = async ({ set, lighting, size }) => {
     unmount();
     const closingSet = closingSetFor(set);
-    const [manifest, closing] = await Promise.all([
+    const [manifest, closing, volumeManifest] = await Promise.all([
       loadManifest(set, lighting, size),
       closingSet ? loadManifest(closingSet, lighting, size) : null,
+      // the buttons are a few KB and can be left out, as 3d leaves them out when their chunk won't load
+      loadManifest(
+        volumeSetFor(!set.endsWith("landscape")),
+        lighting,
+        size,
+      ).catch((error) => {
+        console.warn("the volume buttons didn't load", error);
+        return null;
+      }),
     ]);
     if (failed) {
       throw new Error("the 2d scene stopped while loading");
@@ -754,10 +774,17 @@ export const startFlatScene = ({
       cardsView,
       pose: { ...stage.placed.rest },
     });
+    const volumeLayer = volumeManifest ? stage.addFrames(volumeManifest) : null;
     await Promise.all([
       stage.frameLayer.decode(),
       closeLayer?.decode(),
       desk.decode(),
+      volumeLayer?.decode().then(
+        () => {
+          scene.volumeSet = { manifest: volumeManifest, layer: volumeLayer };
+        },
+        (error) => console.warn("the volume buttons didn't decode", error),
+      ),
     ]);
     return manifest;
   };
@@ -837,6 +864,9 @@ export const startFlatScene = ({
       stopMeter();
     };
     home.start();
+    loop.onDraw(guard(volume.draw));
+    // before the folds' and the look's, so a press on a button reaches neither
+    volume.install({ signal, guard });
     folds.install({
       signal,
       guard,

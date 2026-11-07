@@ -314,7 +314,11 @@ export const createScreens = ({
       const face = faces[name];
       const at = sizes[name];
       [...face.children].forEach((child) => {
-        if (child === dims[name] || child.classList.contains("flat-picture")) {
+        if (
+          child === dims[name] ||
+          child.classList.contains("flat-picture") ||
+          child.classList.contains("flat-volume")
+        ) {
           return;
         }
         if (!look) {

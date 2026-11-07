@@ -255,9 +255,16 @@ test.describe("in a portrait window", () => {
       const closing = await fetch(
         `/flat/portrait-close-${lighting}-${size}/manifest.json`,
       ).then((r) => r.json());
+      const volume = await fetch(
+        `/flat/volume-portrait-${lighting}-${size}/manifest.json`,
+      ).then((r) => r.json());
       return {
         shown: w.__framesAtShown,
-        both: w.__flat.manifest.frames.length + closing.frames.length,
+        // the volume buttons' pressed pictures decode with the two sets too
+        both:
+          w.__flat.manifest.frames.length +
+          closing.frames.length +
+          volume.frames.length,
         opening: w.__flat.manifest.frames.length,
       };
     });
@@ -742,4 +749,225 @@ test.describe("continuous effects", () => {
       expect(level).toBeLessThanOrEqual(100);
     });
   });
+});
+
+test.describe("the volume buttons", () => {
+  type Spot = { x: number; y: number };
+  type VolumeState = {
+    up: "near" | "far" | null;
+    areas: { near: number[][]; far: number[][] } | null;
+    sunk: { near: boolean; far: boolean };
+  };
+
+  const volumeState = (page: Page): Promise<VolumeState> =>
+    page.evaluate(() => (window as any).__flat.volume());
+
+  // the middle of a button's hull in window px, from the hit areas the scene is using now
+  const spotOf = async (page: Page, which: "near" | "far"): Promise<Spot> => {
+    const { areas } = await volumeState(page);
+    expect(areas).not.toBeNull();
+    const hull = areas![which];
+    return {
+      x: hull.reduce((sum, p) => sum + p[0], 0) / hull.length,
+      y: hull.reduce((sum, p) => sum + p[1], 0) / hull.length,
+    };
+  };
+
+  const savedLevel = (page: Page) =>
+    page.evaluate(() => Number(localStorage.getItem("volumeLevel")));
+
+  // which button is up follows the orientation, from the set's own manifest
+  const upButton = async (page: Page): Promise<"near" | "far"> =>
+    (await volumeState(page)).up!;
+
+  const barOf = (page: Page, face: string) =>
+    page.evaluate((name) => {
+      const el = document.querySelector(`.flat-${name} .flat-volume`)!;
+      const cs = getComputedStyle(el);
+      return { visibility: cs.visibility, opacity: Number(cs.opacity) };
+    }, face);
+
+  // records, once per frame, whether a sunk picture showed and the rest frame had its box cut out
+  const watchSink = (page: Page) =>
+    page.evaluate(() => {
+      const seen = { sunk: false, cut: false, done: false };
+      (window as any).__seen = seen;
+      const until = performance.now() + 700;
+      const look = () => {
+        const s = (window as any).__flat.volume();
+        seen.sunk ||= s.sunk.near || s.sunk.far;
+        seen.cut ||= s.cut;
+        if (performance.now() < until) {
+          requestAnimationFrame(look);
+        } else {
+          seen.done = true;
+        }
+      };
+      requestAnimationFrame(look);
+    });
+
+  const sinkSeen = async (page: Page) => {
+    await page.waitForFunction(() => (window as any).__seen.done);
+    return page.evaluate(() => (window as any).__seen);
+  };
+
+  const press = async (page: Page, which: "near" | "far") => {
+    const spot = await spotOf(page, which);
+    await page.mouse.move(spot.x, spot.y);
+    await page.mouse.down();
+    await page.mouse.up();
+  };
+
+  for (const [name, viewport] of [
+    ["landscape", { width: 1280, height: 800 }],
+    ["portrait", { width: 600, height: 900 }],
+  ] as const) {
+    test.describe(name, () => {
+      test.use({ viewport });
+
+      test("a press steps the volume and shows the bar", async ({ page }) => {
+        await page.goto("/");
+        await settledOn(page, "/", null);
+        const up = await upButton(page);
+        const down = up === "near" ? "far" : "near";
+        await watchSink(page);
+        await press(page, up);
+        await expect.poll(() => savedLevel(page)).toBe(9);
+        expect(await barOf(page, "home")).toEqual({
+          visibility: "visible",
+          opacity: 1,
+        });
+        // the cover's bar is on a face that is turned away while the phone is open
+        await expect(page.locator(".flat-cover")).toBeHidden();
+        const seen = await sinkSeen(page);
+        expect(seen).toMatchObject({ sunk: true, cut: true });
+        await press(page, down);
+        await press(page, down);
+        await expect.poll(() => savedLevel(page)).toBe(7);
+        // the picture and the cut go once the press is over, and the bar after it fades
+        await expect
+          .poll(async () => (await volumeState(page)).sunk.near)
+          .toBe(false);
+        await expect
+          .poll(async () => (await barOf(page, "home")).visibility, {
+            timeout: 5000,
+          })
+          .toBe("hidden");
+        expect(
+          await page.evaluate(() => (window as any).__flat.volume().cut),
+        ).toBe(false);
+        // the press didn't start a fold
+        expect(await flatStatus(page)).toMatchObject({
+          phone: "open",
+          fold: 0,
+          busy: false,
+        });
+      });
+
+      test("a press on a button starts no fold swipe and no look", async ({
+        page,
+      }) => {
+        await page.goto("/");
+        await settledOn(page, "/", null);
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+        await expect
+          .poll(async () => (await volumeState(page)).areas !== null)
+          .toBe(true);
+        const spot = await spotOf(page, "near");
+        await page.mouse.move(spot.x, spot.y);
+        await page.mouse.down();
+        for (let i = 1; i <= 20; i++) {
+          await page.mouse.move(spot.x - i * 12, spot.y + i * 3);
+        }
+        await page.mouse.up();
+        const view = await page.evaluate(() => {
+          const e = (window as any).__flat.effects();
+          return { yaw: e.targetYaw, pitch: e.targetPitch };
+        });
+        expect(view).toEqual({ yaw: 0, pitch: expect.any(Number) });
+        expect(await flatStatus(page)).toMatchObject({
+          phone: "closed",
+          fold: 1,
+          busy: false,
+        });
+        await expect(page.locator("body")).not.toHaveClass(/looking/);
+      });
+
+      test("a press works closed, with the bar on the cover and no sink", async ({
+        page,
+      }) => {
+        await page.goto("/");
+        await settledOn(page, "/", null);
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+        const up = await upButton(page);
+        await expect
+          .poll(async () => (await volumeState(page)).areas !== null)
+          .toBe(true);
+        await watchSink(page);
+        await press(page, up);
+        await expect.poll(() => savedLevel(page)).toBe(9);
+        expect(await barOf(page, "cover")).toEqual({
+          visibility: "visible",
+          opacity: 1,
+        });
+        const seen = await sinkSeen(page);
+        expect(seen).toMatchObject({ sunk: false, cut: false });
+        await expect(page.locator(".flat-cover")).toBeVisible();
+      });
+
+      test("a press works while the phone moves", async ({ page }) => {
+        await page.goto("/");
+        await settledOn(page, "/", null);
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+        await page.keyboard.press("Enter");
+        // a press in the same task as a read of the areas, partway through the unfold, so the phone can't move between
+        const result = await page.evaluate(async () => {
+          const hook = (window as any).__flat;
+          const wait = () => new Promise((r) => requestAnimationFrame(r));
+          while (hook.status().fold > 0.6 || !hook.status().busy) {
+            await wait();
+          }
+          const { areas } = hook.volume();
+          const hull = areas.far;
+          const x =
+            hull.reduce((s: number, p: number[]) => s + p[0], 0) / hull.length;
+          const y =
+            hull.reduce((s: number, p: number[]) => s + p[1], 0) / hull.length;
+          const before = Number(localStorage.getItem("volumeLevel"));
+          window.dispatchEvent(
+            new PointerEvent("pointerdown", {
+              clientX: x,
+              clientY: y,
+              pointerType: "mouse",
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+          return {
+            before,
+            after: Number(localStorage.getItem("volumeLevel")),
+            fold: hook.status().fold,
+            busy: hook.status().busy,
+            sunk: hook.volume().sunk,
+          };
+        });
+        expect(result.busy).toBe(true);
+        expect(result.fold).toBeGreaterThan(0);
+        expect(result.fold).toBeLessThan(1);
+        expect(Math.abs(result.after - 8)).toBe(1);
+        // the sink isn't drawn while it moves
+        expect(result.sunk).toEqual({ near: false, far: false });
+        await settledOn(page, "/", null);
+      });
+    });
+  }
 });

@@ -617,3 +617,12 @@ html.has-flat-scene .flat-fall[data-kind="snow"] .near {
   -webkit-mask-size: 240px 240px;
   mask-size: 240px 240px;
 }
+
+/* the volume bar (src/flat/volume.js), a canvas on the body's half and on the cover, over the home screen's dim */
+html.has-flat-scene .flat-volume {
+  position: absolute;
+  z-index: 20;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
