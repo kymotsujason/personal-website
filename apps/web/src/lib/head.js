@@ -207,9 +207,10 @@
     window.__uaTransition = Boolean(event.hasUAVisualTransition);
   });
 
-  // the scene gets 10 s of the page being visible to show its first frame. a tab opened in the background runs no
-  // frames, so hidden time doesn't count. when it gives up it tells the layout, which stops a scene still loading
-  function startWatchdog() {
+  // a scene gets 10 s of the page being visible to show its first frame. a tab opened in the background runs no
+  // frames, so hidden time doesn't count. when it gives up it tells the layout, which stops a scene still loading.
+  // shownFlag is the window flag that scene sets on its first frame, and classes are the root classes it drops
+  function startWatchdog(shownFlag, classes) {
     var left = 10000;
     var since = 0;
     var timer = null;
@@ -217,11 +218,13 @@
     function giveUp() {
       timer = null;
       over = true;
-      if (window.__sceneShown) {
+      if (window[shownFlag]) {
         return;
       }
       root.classList.add("scene-failed");
-      root.classList.remove("has-3d", "page-first");
+      for (var i = 0; i < classes.length; i++) {
+        root.classList.remove(classes[i]);
+      }
       try {
         window.dispatchEvent(new window.Event("scene-failed"));
       } catch (error) {
@@ -322,9 +325,16 @@
   if (show3d) {
     root.classList.add("has-3d");
     preload();
-    startWatchdog();
+    startWatchdog("__sceneShown", ["has-3d", "page-first"]);
   } else if (!notFound && !flatSlow && meetsFlatFloor()) {
     root.classList.add("has-flat-scene");
+    // the 2d scene's watchdog starts here and not in the layout script, so a layout script that never runs (a chunk
+    // a deploy removed, or offline) can't leave #page hidden under has-flat-scene
+    startWatchdog("__flatShown", [
+      "has-flat-scene",
+      "flat-ready",
+      "page-first",
+    ]);
   }
   if (arrival === "page") {
     root.classList.add("page-first");

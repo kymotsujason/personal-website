@@ -433,7 +433,8 @@ describe("3d and the watchdog", () => {
   });
 
   test("no webgl2 leaves the flat site", () => {
-    const page = makePage({ webgl2: false });
+    // below the 2d scene's floor too, since the 2d scene would start its own watchdog
+    const page = makePage({ webgl2: false, features: { inert: false } });
     page.run();
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.timers).toHaveLength(0);
@@ -611,8 +612,13 @@ describe("slow devices", () => {
     const page = makePage({ caveat: true });
     page.run();
     expect(page.classes.has("has-3d")).toBe(false);
-    expect(page.timers).toHaveLength(0);
     expect(page.links).toHaveLength(0);
+    // the 2d scene's watchdog is the only one, and a shown 3d scene doesn't satisfy it
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.timers).toHaveLength(1);
+    page.window.__sceneShown = true;
+    page.timers[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(true);
   });
 
   test("swiftshader behind chrome's generic name leaves the flat site and lets go of the context", () => {
@@ -848,5 +854,70 @@ describe("the 2d scene", () => {
     expect(() => page.run()).not.toThrow();
     expect(page.classes.has("has-flat-scene")).toBe(true);
     expect(page.classes.has("flat-slow")).toBe(false);
+  });
+
+  test("has-flat-scene starts a watchdog that fails after 10 s unless __flatShown", () => {
+    const page = makePage({ path: "/about", navType: "reload", webgl2: false });
+    page.run();
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.classes.has("page-first")).toBe(true);
+    expect(page.links).toHaveLength(0);
+    expect(page.timers).toHaveLength(1);
+    expect(page.timers[0].ms).toBe(10000);
+    page.classes.add("flat-ready");
+    page.timers[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+    expect(page.classes.has("flat-ready")).toBe(false);
+    expect(page.classes.has("page-first")).toBe(false);
+    expect(page.events).toEqual(["scene-failed"]);
+  });
+
+  test("the 2D watchdog leaves a shown 2D scene alone", () => {
+    const page = makePage({ webgl2: false });
+    page.run();
+    page.window.__flatShown = true;
+    page.timers[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(false);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.events).toEqual([]);
+  });
+
+  test("the 2D watchdog doesn't count the 3d scene's shown flag", () => {
+    const page = makePage({ webgl2: false });
+    page.run();
+    page.window.__sceneShown = true;
+    page.timers[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(true);
+  });
+
+  test("time spent hidden doesn't count toward the 2D watchdog", () => {
+    const page = makePage({ webgl2: false });
+    page.run();
+    page.clock.now = 4000;
+    page.setHidden(true);
+    expect(page.live()).toHaveLength(0);
+    page.clock.now = 50000;
+    page.setHidden(false);
+    expect(page.live()).toHaveLength(1);
+    expect(page.live()[0].ms).toBe(6000);
+    page.live()[0].fn();
+    expect(page.classes.has("scene-failed")).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+    page.setHidden(true);
+    page.setHidden(false);
+    expect(page.timers).toHaveLength(2);
+  });
+
+  test("the plain flat page starts no watchdog", () => {
+    for (const options of [
+      { webgl2: false, features: { sin: false } },
+      { webgl2: false, local: { flatAuto: String(Date.now()) } },
+      { path: "/nope", app: "not-found", webgl2: false },
+    ]) {
+      const page = makePage(options);
+      page.run();
+      expect(page.timers, JSON.stringify(options)).toHaveLength(0);
+    }
   });
 });

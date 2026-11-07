@@ -283,8 +283,9 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
           });
       }
 
-      // the 2d scene gets 10 s of the page being visible to show its first frame, as the head script gives the 3d
-      // one. the head script's watchdog isn't reachable from here, and a tab opened in the background runs no frames
+      // the 2d scene gets 10 s of the page being visible to show its first frame. on a page load the head script's
+      // watchdog covers that, and this one is for a 2d scene that takes over from 3d later in the load, after the head
+      // script's watchdog was already satisfied by the 3d scene and out of reach from here
       const startFlatWatchdog = () => {
         let left = 10000;
         let since = 0;
@@ -327,7 +328,6 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         page &&
         dataEl
       ) {
-        startFlatWatchdog();
         import("../flat/index.js")
           .then(
             ({ startFlatScene }) => {
