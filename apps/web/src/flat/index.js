@@ -27,7 +27,7 @@ import { createLook, motionPose } from "./look.js";
 import { loadManifest } from "./manifest.js";
 import { createNavigation } from "./navigation.js";
 import { createRain } from "./rain.js";
-import { createMeter, startsCalm, watchFrames } from "./rest.js";
+import { createMeter, staysCalm, watchFrames } from "./rest.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
 import { createFlatStatus } from "./status.js";
@@ -99,6 +99,8 @@ export const startFlatScene = ({
   let busyNow = false;
   let settleIdle = () => {};
   let stopEffects = () => {};
+  // the frame meter's animation frame chain, which a failure ends too
+  let stopMeter = () => {};
   let flatStatus = null;
   // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
   const scene = {
@@ -784,15 +786,14 @@ export const startFlatScene = ({
       flatSlow: root.classList.contains("flat-slow"),
       auto: read("local", "2dAuto"),
     });
-    // the rest rule. a device that starts calm waits for the frame meter, which watches the intro's unfold, or the first
-    // motions when there's no intro, and one that doesn't has everything on from the first frame
-    scene.calm = startsCalm({
+    // the rest rule. every device starts calm (scene.calm is true). one through 2dAuto or at half size stays that way,
+    // and any other turns things on once the frame meter has seen the intro's unfold mostly under 20 ms per frame, or
+    // with no intro, the first unfold of the phone
+    const meter = createMeter();
+    let judged = staysCalm({
       auto: read("local", "2dAuto"),
       size: scene.manifest.size,
-      flatSlow: root.classList.contains("flat-slow"),
     });
-    const meter = createMeter();
-    let judged = !scene.calm;
     const judge = () => {
       const verdict = judged ? null : meter.verdict();
       if (verdict === null) {
@@ -805,7 +806,7 @@ export const startFlatScene = ({
       }
     };
     loop.onDraw((now, dt) => {
-      if (!judged && scene.busy && scene.drawing) {
+      if (!judged && scene.drawing && scene.fold > 0 && scene.fold < 1) {
         meter.push(dt);
         judge();
       }
@@ -821,6 +822,7 @@ export const startFlatScene = ({
     stopEffects = () => {
       look.stop();
       flatStatus?.stop();
+      stopMeter();
     };
     home.start();
     folds.install({
@@ -867,13 +869,28 @@ export const startFlatScene = ({
       return;
     }
     intro.start();
-    const stopWatching = judged ? () => {} : watchFrames(meter);
-    intro.finished.then(
-      guard(() => {
-        stopWatching();
-        judge();
-      }),
-    );
+    if (!judged) {
+      // only the frames while the phone unfolds count, and the verdict comes when the unfold ends
+      const foldNow = () =>
+        intro.plan.foldAt(Math.min(intro.elapsed(), intro.plan.total));
+      let sawUnfold = false;
+      stopMeter = watchFrames(meter, {
+        take: () => {
+          const fold = foldNow();
+          sawUnfold ||= fold > 0 && fold < 1;
+          return fold > 0 && fold < 1;
+        },
+        done: () => sawUnfold && foldNow() <= 0,
+        onDone: guard(judge),
+      });
+      // an intro cut short has no more to measure, so what it gave is judged, and the first folds after it add to it
+      intro.finished.then(
+        guard(() => {
+          stopMeter();
+          judge();
+        }),
+      );
+    }
     intro.unlocked.then(
       guard(() => {
         if (scene.intro !== intro || scene.unlocked) {

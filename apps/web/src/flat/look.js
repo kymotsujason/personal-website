@@ -148,6 +148,9 @@ export const createLook = ({ scene, loop, folds }) => {
     if (settled()) {
       view.yaw = view.targetYaw;
       view.pitch = view.targetPitch;
+      // the dodge snaps too, or the draw hook below would start the step again for the rest of the visit
+      avoid.x = avoid.tx;
+      avoid.y = avoid.ty;
       removeStep?.();
       removeStep = null;
     }

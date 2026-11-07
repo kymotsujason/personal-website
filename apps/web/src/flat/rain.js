@@ -23,7 +23,7 @@ export const fallFor = ({ scene, intensity }, day) => {
   const k = INTENSITY[intensity] ?? INTENSITY.moderate;
   const [rgb, alpha] =
     kind === "snow"
-      ? [mix([0.75, 0.75, 0.75], [1, 1, 1], day).map((v) => v * 0.98), 0.85]
+      ? [[0.97, 0.98, 1].map((v) => v * (0.75 + 0.25 * day)), 0.85]
       : [mix([0.55, 0.58, 0.7], [0.88, 0.91, 0.96], day), 0.32];
   const [r, g, b] = rgb.map((v) => Math.round(Math.min(v, 1) * 255));
   return { kind, k, color: `rgba(${r}, ${g}, ${b}, ${alpha})` };

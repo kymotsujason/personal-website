@@ -19,7 +19,7 @@ test("each scene falls as the 3d glass has it", () => {
     "rgba(224, 232, 245, 0.32)",
   );
   expect(fallFor({ scene: "snow", intensity: "moderate" }, 1).color).toBe(
-    "rgba(250, 250, 250, 0.85)",
+    "rgba(247, 250, 255, 0.85)",
   );
 });
 

@@ -462,11 +462,38 @@ test.describe("continuous effects", () => {
     expect(Math.abs((await effects(page)).avoidX)).toBeLessThan(0.5);
   });
 
+  // the unfold has played and the phone is open and still
+  const unfolded = (page: Page) =>
+    expect
+      .poll(() => flatStatus(page), { timeout: 90000 })
+      .toMatchObject({ phone: "open", busy: false, fold: 0 });
+
+  // the rest rule has turned the drift, the rain's motion, and the frosted glass on
+  const turnedOn = async (page: Page) => {
+    await expect
+      .poll(() => flatStatus(page), { timeout: 60000 })
+      .not.toBeNull();
+    await expect
+      .poll(async () => (await effects(page)).calm, { timeout: 60000 })
+      .toBe(false);
+  };
+
+  // everything the rule holds back is held back
+  const stillCalm = async (page: Page) => {
+    const now = await effects(page);
+    expect(now.calm).toBe(true);
+    expect(now.frosted).toBe(false);
+    expect(now.idle).toBe(0);
+    await expect(page.locator(".flat-fall[data-still]")).toHaveCount(3);
+    await expect(page.locator(".flat-face.frosted")).toHaveCount(0);
+  };
+
   test("the phone drifts at rest and the drift settles once it moves", async ({
     page,
   }) => {
     await page.goto("/");
     await settledOn(page, "/", null);
+    await turnedOn(page);
     await expect.poll(async () => (await effects(page)).idle).toBe(1);
     const transforms = await page.evaluate(async () => {
       const el = document.querySelector(".flat-frames") as HTMLElement;
@@ -510,6 +537,7 @@ test.describe("continuous effects", () => {
     await stubHome(page, RAIN);
     await page.goto("/");
     await settledOn(page, "/", null);
+    await turnedOn(page);
     await expect(page.locator(".flat-fall[data-kind='rain']")).toHaveCount(3);
     const falling = await page.evaluate(() => {
       const layer = document.querySelector(".flat-fall i") as HTMLElement;
@@ -549,7 +577,32 @@ test.describe("continuous effects", () => {
   });
 
   test.describe("the rest rule", () => {
-    test("a device through 2dAuto stays calm when the unfold is slow", async ({
+    test("a full size device stays calm when the unfold is slow", async ({
+      page,
+    }) => {
+      await page.addInitScript(() => localStorage.removeItem("introSeen"));
+      await stubHome(page, RAIN);
+      const client = await page.context().newCDPSession(page);
+      await client.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+      await page.goto("/");
+      await unfolded(page);
+      await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await stillCalm(page);
+    });
+
+    test("a full size device turns things on once the unfold measures fast", async ({
+      page,
+    }) => {
+      await page.addInitScript(() => localStorage.removeItem("introSeen"));
+      await stubHome(page, RAIN);
+      await page.goto("/");
+      await turnedOn(page);
+      await expect.poll(async () => (await effects(page)).idle).toBe(1);
+      await expect(page.locator(".flat-fall[data-still]")).toHaveCount(0);
+      await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
+    });
+
+    test("a device through 2dAuto stays calm even when the unfold is fast", async ({
       page,
     }) => {
       await page.addInitScript(() => {
@@ -557,37 +610,40 @@ test.describe("continuous effects", () => {
         localStorage.removeItem("introSeen");
       });
       await stubHome(page, RAIN);
-      const client = await page.context().newCDPSession(page);
-      await client.send("Emulation.setCPUThrottlingRate", { rate: 20 });
       await page.goto("/");
+      await unfolded(page);
+      // a fold after it, which a verdict could also have come from, changes nothing
+      await page.keyboard.press("Escape");
       await expect
-        .poll(() => flatStatus(page), { timeout: 90000 })
-        .toMatchObject({ phone: "open", busy: false });
-      await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
-      const now = await effects(page);
-      expect(now.calm).toBe(true);
-      expect(now.frosted).toBe(false);
-      expect(now.idle).toBe(0);
-      await expect(page.locator(".flat-fall[data-still]")).toHaveCount(3);
-      await expect(page.locator(".flat-face.frosted")).toHaveCount(0);
+        .poll(() => flatStatus(page))
+        .toMatchObject({ phone: "closed", busy: false });
+      await page.keyboard.press("Enter");
+      await unfolded(page);
+      await stillCalm(page);
     });
 
-    test("it turns on once the unfold measures fast", async ({ page }) => {
-      await page.addInitScript(() => {
-        localStorage.setItem("2dAuto", String(Date.now()));
-        localStorage.removeItem("introSeen");
+    test.describe("at half size", () => {
+      test.use({ viewport: { width: 640, height: 400 } });
+
+      test("a device stays calm even when the unfold is fast", async ({
+        page,
+      }) => {
+        await page.addInitScript(() => localStorage.removeItem("introSeen"));
+        await stubHome(page, RAIN);
+        await page.goto("/");
+        await unfolded(page);
+        const size = await page.evaluate(
+          () => (window as any).__flat.manifest.size,
+        );
+        expect(size).toBe("half");
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "closed", busy: false });
+        await page.keyboard.press("Enter");
+        await unfolded(page);
+        await stillCalm(page);
       });
-      await stubHome(page, RAIN);
-      await page.goto("/");
-      await expect
-        .poll(() => flatStatus(page), { timeout: 60000 })
-        .not.toBeNull();
-      await expect
-        .poll(async () => (await effects(page)).calm, { timeout: 60000 })
-        .toBe(false);
-      await expect.poll(async () => (await effects(page)).idle).toBe(1);
-      await expect(page.locator(".flat-fall[data-still]")).toHaveCount(0);
-      await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
     });
   });
 

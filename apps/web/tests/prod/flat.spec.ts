@@ -428,19 +428,25 @@ test("a page of another build with no reload left runs none of its scripts", asy
   // the 2d home screen's icon, once the intro has let the home screen take taps
   const icon = page.locator('.flat-home .app-icon[data-app="About"]');
   await expect(page.locator(".flat-home")).not.toHaveAttribute("inert");
-  // the unfold has ended once the phone's idle drift starts, and the drift keeps the icon from ever being stable
+  // the unfold has ended once the phone is open and still at fold 0, and the drift keeps the icon from ever being stable
   await expect
     .poll(() =>
-      page.evaluate(
-        () =>
-          (
-            window as unknown as {
-              __flat?: { effects: () => { idle: number } };
-            }
-          ).__flat?.effects().idle ?? 0,
-      ),
+      page.evaluate(() => {
+        const s = (
+          window as unknown as {
+            __flat?: {
+              status: () => {
+                phone: string | null;
+                busy: boolean;
+                fold: number;
+              };
+            };
+          }
+        ).__flat?.status();
+        return Boolean(s && s.phone === "open" && !s.busy && s.fold === 0);
+      }),
     )
-    .toBeGreaterThan(0);
+    .toBe(true);
   await icon.click({ force: true });
   await expect(page.locator("#page h1")).toHaveText("About");
   await expect(page.locator("html")).toHaveClass(/scene-failed/);

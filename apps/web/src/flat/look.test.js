@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   AVOID_GAIN,
   AVOID_MAX,
@@ -14,8 +14,10 @@ import {
   stepAvoid,
   stepView,
   trailOf,
+  createLook,
   createView,
 } from "./look.js";
+import { handLoop } from "./handLoop.js";
 
 // the 3d scene's clamp as backdrop.js had it before it moved into scene/shared/lookLimits.js, written out with plain math
 const old = (() => {
@@ -267,4 +269,33 @@ test("the pose gets the drift, the dodge, and the trail the way the 3d loop adds
       focal: 500,
     }),
   ).toEqual(pose);
+});
+
+test("a dodge that's eased out by opening the phone leaves the loop asleep", async () => {
+  vi.stubGlobal("innerWidth", 1280);
+  vi.stubGlobal("innerHeight", 800);
+  const hand = handLoop();
+  const scene = {
+    phone: "open",
+    busy: false,
+    unlocked: true,
+    reduced: () => false,
+    wake: () => hand.loop.wake(),
+    edges: () => ({ outer }),
+  };
+  const look = createLook({
+    scene,
+    loop: hand.loop,
+    folds: { gesture: () => null },
+  });
+  // the closed phone had been moved by the mouse, and now it's open
+  Object.assign(look.avoid, { tx: 0, ty: 0, x: -30, y: 12 });
+  hand.loop.wake();
+  for (let t = 0; t <= 4000; t += 16) {
+    await hand.at(t);
+  }
+  expect(look.avoid.x).toBe(0);
+  expect(look.avoid.y).toBe(0);
+  expect(hand.queued()).toBe(0);
+  vi.unstubAllGlobals();
 });
