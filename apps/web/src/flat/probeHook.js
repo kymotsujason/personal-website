@@ -42,6 +42,9 @@ export const installFlatHook = (probe) => {
     },
     // the volume buttons' hit areas in window px, the bar, and the sink
     volume: () => scene.volume.state(),
+    // the charging cable's run, its sets, and the fold sets in use, and the battery's test control (ms into its cycle)
+    charger: () => scene.charger.state(),
+    battery: (at, speed) => probe.battery(at, speed),
     // the phone's state as the navigation reads it, with its fold
     status: () => probe.status(),
     mount: (options) => probe.mount(options),

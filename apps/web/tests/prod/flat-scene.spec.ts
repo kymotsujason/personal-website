@@ -970,3 +970,235 @@ test.describe("the volume buttons", () => {
     });
   }
 });
+
+test.describe("the charger", () => {
+  // the battery's cycle (src/scene/status.js): ten minutes draining, then two charging
+  const DRAIN = 10 * 60 * 1000;
+  const CYCLE = 12 * 60 * 1000;
+
+  type ChargerState = {
+    ready: boolean;
+    failed: boolean;
+    target: boolean;
+    plugged: boolean;
+    busy: boolean;
+    running: boolean;
+    set: string | null;
+    index: number | null;
+    folds: string | null;
+  };
+  type Seen = ChargerState & { transform: string; phone: string; fold: number };
+
+  const chargerState = (page: Page): Promise<ChargerState> =>
+    page.evaluate(() => (window as any).__flat.charger());
+
+  // moves the battery's own clock to `at` ms into its cycle, through the status bar's test control
+  const setBattery = (page: Page, at: number) =>
+    page.evaluate((ms) => (window as any).__flat.battery(ms), at);
+
+  // the battery a few seconds above 5%, so the charger's sets load, and the cable goes in 300 ms later
+  const lowThenPlug = async (page: Page) => {
+    await setBattery(page, DRAIN - 30000);
+    await expect
+      .poll(async () => (await chargerState(page)).ready, { timeout: 20000 })
+      .toBe(true);
+    await record(page);
+    await setBattery(page, DRAIN - 300);
+  };
+
+  // the charger's state and the frames' transform on every frame from now, till the cable is where the battery wants
+  // it and the run has let go of the folds
+  const record = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      w.__runSeen = [];
+      w.__runDone = false;
+      let moved = false;
+      const look = () => {
+        const s = w.__flat.charger();
+        moved ||= s.busy;
+        w.__runSeen.push({
+          ...s,
+          phone: w.__flat.status().phone,
+          fold: w.__flat.status().fold,
+          transform: (document.querySelector(".flat-frames") as HTMLElement)
+            .style.transform,
+        });
+        if (moved && !s.busy && s.target === s.plugged) {
+          w.__runDone = true;
+        } else if (w.__runSeen.length < 900) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+
+  const recorded = async (page: Page): Promise<Seen[]> => {
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__runDone), {
+        timeout: 15000,
+      })
+      .toBe(true);
+    return page.evaluate(() => (window as any).__runSeen);
+  };
+
+  const running = (seen: Seen[]) => seen.filter((s) => s.running);
+
+  for (const [name, viewport, base] of [
+    ["landscape", { width: 1280, height: 800 }, "landscape"],
+    ["portrait", { width: 600, height: 900 }, "portrait"],
+  ] as const) {
+    test.describe(name, () => {
+      test.use({ viewport });
+
+      test("a plug open and an unplug closed play the plug frames both ways", async ({
+        page,
+      }) => {
+        test.setTimeout(60000);
+        await page.goto("/");
+        await settledOn(page, "/", null);
+        const rest = await page.evaluate(
+          () =>
+            (document.querySelector(".flat-frames") as HTMLElement).style
+              .transform,
+        );
+        await lowThenPlug(page);
+        const plug = running(await recorded(page));
+        expect(plug.length, "frames of the plug").toBeGreaterThan(60);
+        expect(new Set(plug.map((s) => s.set))).toEqual(
+          new Set([`charger-${base}-open`]),
+        );
+        const plugIndexes = plug.map((s) => s.index!);
+        expect(plugIndexes[0]).toBeLessThan(10);
+        expect(plugIndexes.at(-1)).toBeGreaterThan(150);
+        plugIndexes.slice(1).forEach((index, i) => {
+          expect(index).toBeGreaterThanOrEqual(plugIndexes[i]);
+        });
+        // the phone moves while the hand works: the frames' transform isn't the resting one through the run
+        expect(plug.some((s) => s.transform !== rest)).toBe(true);
+        const after = await chargerState(page);
+        expect(after).toMatchObject({
+          plugged: true,
+          busy: false,
+          folds:
+            base === "landscape" ? "cable-landscape" : "cable-portrait-open",
+        });
+        // closed with the cable in, then unplugged closed
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+        await record(page);
+        await setBattery(page, CYCLE - 300);
+        const unplug = running(await recorded(page));
+        expect(unplug.length, "frames of the unplug").toBeGreaterThan(60);
+        expect(new Set(unplug.map((s) => s.set))).toEqual(
+          new Set([`charger-${base}-closed`]),
+        );
+        const unplugIndexes = unplug.map((s) => s.index!);
+        expect(unplugIndexes[0]).toBeGreaterThan(100);
+        expect(unplugIndexes.at(-1)).toBeLessThan(10);
+        unplugIndexes.slice(1).forEach((index, i) => {
+          expect(index).toBeLessThanOrEqual(unplugIndexes[i]);
+        });
+        expect(await chargerState(page)).toMatchObject({
+          plugged: false,
+          busy: false,
+          folds: base === "landscape" ? "landscape" : "portrait-open",
+        });
+        // the cable free sets fold the phone again
+        await page.keyboard.press("Enter");
+        await expect
+          .poll(() => flatStatus(page))
+          .toMatchObject({ phone: "open", busy: false, fold: 0 });
+      });
+    });
+  }
+
+  test("a fold pressed during a run waits for it to end", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await lowThenPlug(page);
+    await expect
+      .poll(async () => (await chargerState(page)).running)
+      .toBe(true);
+    await page.keyboard.press("Escape");
+    const seen = await recorded(page);
+    // the run played to its end with the phone open and still, and the close came after it
+    expect(running(seen).length, "frames of the run").toBeGreaterThan(60);
+    expect(running(seen).at(-1)!.index).toBeGreaterThan(150);
+    expect(
+      seen
+        .filter((s) => s.busy)
+        .every((s) => s.phone === "open" && s.fold === 0),
+    ).toBe(true);
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  });
+
+  test("a run while an app is zoomed skips to its end", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await settledOn(page, "/about", "About");
+    await lowThenPlug(page);
+    const seen = await recorded(page);
+    expect(running(seen)).toEqual([]);
+    expect(await chargerState(page)).toMatchObject({
+      plugged: true,
+      folds: "cable-landscape",
+    });
+    // home again, the phone shows the cable set's frames
+    await page.goBack();
+    await settledOn(page, "/", null);
+  });
+
+  test("reduced motion snaps the cable in", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await lowThenPlug(page);
+    const seen = await recorded(page);
+    expect(running(seen)).toEqual([]);
+    expect(await chargerState(page)).toMatchObject({ plugged: true });
+  });
+
+  test("a charger that doesn't load leaves the battery cycling with no cable", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    await page.route(/\/flat\/charger-[^/]+\/manifest\.json$/, (route) =>
+      route.abort(),
+    );
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await setBattery(page, DRAIN - 30000);
+    await expect.poll(async () => (await chargerState(page)).failed).toBe(true);
+    await setBattery(page, DRAIN - 300);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document
+            .querySelector(".flat-home .battery")
+            ?.getAttribute("data-charging"),
+        ),
+      )
+      .toBe("true");
+    expect(await chargerState(page)).toMatchObject({
+      plugged: false,
+      busy: false,
+      folds: "landscape",
+    });
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+  });
+});

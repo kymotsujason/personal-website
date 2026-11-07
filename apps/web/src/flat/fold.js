@@ -171,9 +171,20 @@ export const createFolds = ({ scene, loop }) => {
     return leadTo(1, delay, time);
   };
 
+  // a charger run holds a fold pressed during it until it ends, at most about 2.7 s (charger.js). with none going, the
+  // fold starts in the same task, as it always has
+  const afterCharger = async () => {
+    while (scene.charger?.busy()) {
+      await scene.charger.idle();
+    }
+  };
+
   // gives back "done" once the phone is shut, "cancelled" when something took over first, or nothing when it
   // couldn't start
   const closePhone = async () => {
+    if (scene.charger?.busy()) {
+      await afterCharger();
+    }
     if (scene.busy || scene.zoomed || scene.phone !== "open") {
       return;
     }
@@ -209,6 +220,9 @@ export const createFolds = ({ scene, loop }) => {
   // gives back "done" once the phone is open, "cancelled" when something took over first, or nothing when it
   // couldn't start
   const openPhone = async () => {
+    if (scene.charger?.busy()) {
+      await afterCharger();
+    }
     if (scene.busy || scene.phone !== "closed") {
       return;
     }
@@ -263,9 +277,11 @@ export const createFolds = ({ scene, loop }) => {
   };
 
   const onDown = (event) => {
-    // no swipes while an app is open, so they can't get in the way of the app's own scrolling and dragging
+    // no swipes while an app is open, so they can't get in the way of the app's own scrolling and dragging, and none
+    // while the charger holds the folds
     if (
       scene.busy ||
+      scene.charger?.busy() ||
       scene.zoomed ||
       gesture ||
       !scene.unlocked ||
@@ -323,7 +339,12 @@ export const createFolds = ({ scene, loop }) => {
         return;
       }
       // a key or a navigation moved the phone since the press, and the swipe would fight that move
-      if (scene.busy || scene.zoomed || scene.phone !== g.phone) {
+      if (
+        scene.busy ||
+        scene.zoomed ||
+        scene.charger?.busy() ||
+        scene.phone !== g.phone
+      ) {
         leadBack(g);
         gesture = null;
         return;

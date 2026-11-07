@@ -234,6 +234,39 @@ test("the chain turns the frames the way the 3d scene turns the phone", () => {
   }
 });
 
+test("the charger's tilt turns the phone about its own x and then y, after its pose", () => {
+  const width = 1280;
+  const height = 800;
+  const placed = place({ width, height, portrait: false });
+  const geometry = stageGeometry({ width, height, manifest: landscape });
+  const frame = frameAt(landscape, 0);
+  const front = DUO.depth / 2 + 0.002;
+  const quad = frame.corners.screens[2];
+  const pose = { ...placed.rest, x: 0.6, rx: 0.12, ry: -0.2, rz: 0.05 };
+  for (const tilt of [
+    { tx: -0.1, ty: 0 },
+    { tx: 0, ty: 0.1 },
+    { tx: 0.07, ty: -0.04 },
+  ]) {
+    const chained = through(
+      geometry,
+      { ...pose, ...tilt },
+      0,
+      quad.map((p) => inFrame(landscape, p)),
+    );
+    quad.forEach((p, i) => {
+      const local = backOnPhone(landscape, 0, p, front);
+      const tilted = rotate(rotate(local, { rx: 0, ry: tilt.ty, rz: 0 }), {
+        rx: tilt.tx,
+        ry: 0,
+        rz: 0,
+      });
+      const [x, y] = project3d({ width, height }, pose, 0, tilted);
+      expect(Math.hypot(x - chained[i][0], y - chained[i][1])).toBeLessThan(1);
+    });
+  }
+});
+
 const setUp = () => {
   document.body.innerHTML =
     '<div id="stage"><div id="css-layer"></div><main id="page"></main></div>';

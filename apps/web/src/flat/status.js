@@ -5,8 +5,13 @@ import { createStatus } from "../scene/status.js";
 
 const PING_SHOWN_MS = 2500;
 
-// onChange(status, kind) hears each change too, with kind "time", "wifi", "battery", "plugged", or "unplugged"
-export const createFlatStatus = ({ screens, onChange = () => {} }) => {
+// onChange(status, kind) hears each change too, with kind "time", "wifi", "battery", "plugged", or "unplugged". bolt
+// says whether the battery shows charging, which waits for the cable to be in (scene/home.js applyStatus)
+export const createFlatStatus = ({
+  screens,
+  onChange = () => {},
+  bolt = (status) => status.charging,
+}) => {
   let pingUntil = 0;
   let pingTimer = null;
   let stopped = false;
@@ -19,7 +24,7 @@ export const createFlatStatus = ({ screens, onChange = () => {} }) => {
       return;
     }
     shown.update({
-      status: { ...bar.status },
+      status: { ...bar.status, charging: bolt(bar.status) },
       showPing: performance.now() < pingUntil,
     });
   };

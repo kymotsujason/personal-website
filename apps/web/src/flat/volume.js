@@ -292,7 +292,12 @@ export const createVolume = ({
   // the open phone at rest has the sunk button's picture over its rest frame, which loses the box the picture covers
   const showSink = (now) => {
     const { manifest, layer } = scene.volumeSet;
-    const rest = scene.drawing && !scene.busy && scene.fold === 0;
+    // a charger run shows its own frames, which have no rest frame to cut
+    const rest =
+      scene.drawing &&
+      !scene.busy &&
+      !scene.charger?.busy() &&
+      scene.fold === 0;
     const boxes = [];
     ["near", "far"].forEach((which) => {
       const entry = manifest.volume.poses.open[which];

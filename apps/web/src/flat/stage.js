@@ -50,13 +50,22 @@ export const stageGeometry = ({ width, height, manifest }) => {
 
 // the chain as css transform functions, applied right to left to a point in the frames' px: into the capture's
 // camera on the card, into the phone's own frame at the capture pose, turned and moved to the pose, then seen through
-// the window's camera. three's y points up and css's down, so the y and z turns change sign
+// the window's camera. three's y points up and css's down, so the x and z turns change sign. a pose may carry tx and
+// ty, a turn about the phone's own x and then y after its pose's turn (the charger's tilt, charging.js chargeMove),
+// which the chain only has while one is set
 const chainSteps = (geometry, pose, fold) => {
   const { width, height, focal, captureFocal, capturePose, center } = geometry;
   const k = geometry.unit;
   const shift = centerShift(fold, geometry.portrait);
   const front = cardFront(fold);
   const scale = (k * (-capturePose.z - front)) / captureFocal;
+  const tilt =
+    pose.tx || pose.ty
+      ? [
+          ["rotateX", -(pose.tx ?? 0)],
+          ["rotateY", pose.ty ?? 0],
+        ]
+      : [];
   return [
     ["translate", width / 2, height / 2, 0],
     ["perspective", focal],
@@ -64,6 +73,7 @@ const chainSteps = (geometry, pose, fold) => {
     ["rotateX", -pose.rx],
     ["rotateY", pose.ry],
     ["rotateZ", -pose.rz],
+    ...tilt,
     ["translate", -k * capturePose.x, k * (capturePose.y + shift), k * front],
     ["scale", scale],
     ["translate", -center[0], -center[1], 0],
@@ -227,10 +237,11 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     apply();
   };
 
-  // the phone's fold picks the frame, and moves the card's plane and portrait's hinge shift with it
-  const setFold = (nextFold, lead = 0) => {
+  // the phone's fold picks the frame, and moves the card's plane and portrait's hinge shift with it. index picks the
+  // frame instead, for a set played by time (the charger's)
+  const setFold = (nextFold, lead = 0, index = null) => {
     fold = clampFold(nextFold);
-    frames.show(frames.frameFor(fold, lead));
+    frames.show(index ?? frames.frameFor(fold, lead));
     apply();
   };
 
@@ -247,6 +258,14 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     }
     frames.hide();
     frames = layer;
+  };
+  // a set let go for the rest of the visit, with its images, so the browser can drop what it decoded
+  const dropFrames = (layer) => {
+    layer.release();
+    const at = extra.indexOf(layer);
+    if (at >= 0) {
+      extra.splice(at, 1);
+    }
   };
 
   // a point in the frames' px to where the chain draws it in the window now, or at another pose and fold
@@ -407,6 +426,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     destroy,
     addFrames,
     useFrames,
+    dropFrames,
     toWindow,
     screenPoint,
     scaleAt,

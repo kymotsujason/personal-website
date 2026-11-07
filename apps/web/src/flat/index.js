@@ -16,6 +16,7 @@ import {
   windowLook,
 } from "./apps.js";
 import { createCards, createKept } from "./cards.js";
+import { createCharger } from "./charger.js";
 import { createDesk } from "./desk.js";
 import { createDrift } from "./drift.js";
 import { createFolds, pathAfter } from "./fold.js";
@@ -104,10 +105,10 @@ export const startFlatScene = ({
   let shown = false;
   let busyNow = false;
   let settleIdle = () => {};
-  let stopEffects = () => {};
+  let flatStatus = null;
+  let stopEffects = () => flatStatus?.stop();
   // the frame meter's animation frame chain, which a failure ends too
   let stopMeter = () => {};
-  let flatStatus = null;
   // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
   const scene = {
     manifest: null,
@@ -161,6 +162,8 @@ export const startFlatScene = ({
     rain: null,
     // the volume frames for this orientation, { manifest, layer }, or null when they didn't load
     volumeSet: null,
+    // the charging cable (charger.js), which holds the folds while it runs
+    charger: null,
     // the pose as last drawn, with the drift, the dodge, and the trail on it
     shownPose: null,
     // the slow path (slowPathFor), read once at start
@@ -439,18 +442,25 @@ export const startFlatScene = ({
       }
     }
     scene.lastFold = scene.fold;
-    const frames = activeFrames();
+    // a charger run shows its own set's frames, picked by time, with the phone's move for it on the pose
+    const run = charger.shown();
+    const frames = run ?? activeFrames();
     stage.useFrames(frames.layer);
-    scene.shownPose = motionPose({
-      pose: scene.pose,
-      drift: drift.at(now),
-      avoid: look.avoid,
-      trail: look.trail(),
-      focal: stage.geometry.focal,
-    });
+    scene.shownPose = charger.move(
+      motionPose({
+        pose: scene.pose,
+        drift: drift.at(now),
+        avoid: look.avoid,
+        trail: look.trail(),
+        focal: stage.geometry.focal,
+      }),
+      now,
+    );
     stage.setPose(scene.shownPose);
-    stage.setFold(scene.fold, scene.lead);
-    const index = frames.layer.frameFor(scene.fold, scene.lead);
+    const index = run
+      ? run.index
+      : frames.layer.frameFor(scene.fold, scene.lead);
+    stage.setFold(scene.fold, scene.lead, index);
     if (placedFace.layer !== frames.layer || placedFace.index !== index) {
       placedFace = { layer: frames.layer, index };
       screens.place(frames.manifest.frames[index], frames.manifest);
@@ -492,9 +502,10 @@ export const startFlatScene = ({
       pageFlat: scene.pageFlat,
       app: scene.openApp,
     });
-    // on the slow path the screens show their canvas picture while the phone or an app moves, drawn from the live
-    // screens as the motion starts, and the live html again once it's at rest
-    const pictured = scene.slow && scene.busy;
+    // on the slow path the screens show their canvas picture while the phone or an app moves (a charger run moves the
+    // phone too), drawn from the live screens as the motion starts, and the live html again once it's at rest
+    const moving = scene.busy || charger.moving();
+    const pictured = scene.slow && moving;
     if (pictured !== shownPicture) {
       shownPicture = pictured;
       if (pictured) {
@@ -503,7 +514,7 @@ export const startFlatScene = ({
       screens.showPicture(pictured);
     }
     // frosted glass only at rest, and the plain glass while anything moves
-    const frosted = scene.frosted && !scene.busy;
+    const frosted = scene.frosted && !moving;
     if (frosted !== shownFrosted) {
       shownFrosted = frosted;
       screens.setFrosted(frosted);
@@ -561,6 +572,10 @@ export const startFlatScene = ({
     scene.drawing = true;
     scene.moving = false;
     applyRest();
+    // the charger's sets load once the intro is over, so their decode can't stall the unfold
+    if (flatStatus) {
+      charger.battery(flatStatus.status);
+    }
     draw();
   };
 
@@ -663,6 +678,22 @@ export const startFlatScene = ({
   scene.lookAhead = look.lookAhead;
   const volume = createVolume({ scene, loop, music });
   scene.volume = volume;
+  // the charger's sets join the stage and leave it as the battery wants the cable, in the lighting and size mounted
+  const charger = createCharger({
+    scene,
+    loop,
+    sets: {
+      open: async (name) => {
+        const { lighting, size } = scene.manifest;
+        const manifest = await loadManifest(name, lighting, size);
+        return { manifest, layer: scene.stage.addFrames(manifest) };
+      },
+      release: (entry) => scene.stage?.dropFrames(entry.layer),
+    },
+    onCable: guard(() => flatStatus?.render()),
+    onFail: (error) => fail(error),
+  });
+  scene.charger = charger;
   scene.effects = { look, drift };
   const apps = createApps({ scene, loop, folds, nav, pageEl });
   const kept = createKept();
@@ -693,6 +724,8 @@ export const startFlatScene = ({
 
   const unmount = () => {
     scene.intro?.cancel();
+    // the stage lets the charger's sets go with the rest, so a run or a swap in flight ends here
+    scene.charger?.mounted({ plugged: false });
     scene.cardsView?.destroy();
     scene.rain?.destroy();
     scene.screens?.destroy();
@@ -774,6 +807,7 @@ export const startFlatScene = ({
       cardsView,
       pose: { ...stage.placed.rest },
     });
+    charger.mounted({ plugged: set.startsWith("cable-") });
     const volumeLayer = volumeManifest ? stage.addFrames(volumeManifest) : null;
     await Promise.all([
       stage.frameLayer.decode(),
@@ -802,13 +836,23 @@ export const startFlatScene = ({
   };
 
   const start = async () => {
+    // the status bar first, since a visit that starts while the battery charges mounts the sets with the cable in
+    flatStatus = createFlatStatus({
+      screens: () => scene.screens,
+      onChange: guard((status) => charger.battery(status)),
+      bolt: (status) => charger.bolt(status),
+    });
     const choice = chooseSet({
       width: innerWidth,
       height: innerHeight,
       dpr: devicePixelRatio,
       hour: new Date().getHours(),
     });
+    if (flatStatus.status.charging) {
+      choice.set = `cable-${choice.set}`;
+    }
     await mount(choice);
+    flatStatus.render();
     // a scene that finished loading after its watchdog fired stops, and lets its images go
     if (failed || root.classList.contains("scene-failed")) {
       fail("watchdog");
@@ -848,7 +892,6 @@ export const startFlatScene = ({
       }
     });
     reducedQuery.addEventListener("change", guard(applyRest), { signal });
-    flatStatus = createFlatStatus({ screens: () => scene.screens });
     const home = createHome({
       screens: () => scene.screens,
       rain: () => scene.rain,
@@ -964,6 +1007,8 @@ export const startFlatScene = ({
     const probe = {
       scene,
       status,
+      // the battery's test control (scene/status.js setBattery), ms into its cycle
+      battery: (at, speed) => flatStatus?.bar.setBattery(at, speed),
       mount: async ({ set, lighting, size } = {}) => {
         await started;
         scene.intro?.finish();

@@ -227,6 +227,10 @@ export const createFrameLayer = (manifest, hostEl) => {
         }),
       )
         .catch((error) => {
+          // a release takes the images' sources away, which fails their decode
+          if (released) {
+            throw new Error("the frame layer was released while decoding");
+          }
           throw new Error(`the ${manifest.set} frames didn't decode`, {
             cause: error,
           });

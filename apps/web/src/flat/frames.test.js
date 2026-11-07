@@ -1,10 +1,12 @@
+import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   PHONE_PX_FULL,
   phoneHeightPx,
   chooseLighting,
   createFrameIndex,
+  createFrameLayer,
   frameTimes,
   sizeFor,
 } from "./frames.js";
@@ -178,4 +180,37 @@ test("phoneHeightPx follows the width in a narrow window", () => {
   const wide = phoneHeightPx({ width: 1600, height: 800, portrait: false });
   const narrow = phoneHeightPx({ width: 800, height: 800, portrait: false });
   expect(narrow).toBeLessThan(wide);
+});
+
+test("a layer released while it decodes says it was released", async () => {
+  const { window } = new JSDOM("<!doctype html><body></body>");
+  vi.stubGlobal("document", window.document);
+  // an image whose decode fails once its source is taken away, as a browser's does
+  class SlowImage {
+    decode() {
+      return new Promise((_resolve, reject) => {
+        this.fail = reject;
+      });
+    }
+    removeAttribute() {
+      this.fail?.(new Error("EncodingError"));
+    }
+  }
+  vi.stubGlobal("Image", SlowImage);
+  try {
+    const manifest = {
+      set: "landscape",
+      base: "/flat/test/",
+      window: { width: 10, height: 10 },
+      margin: { x: 0, top: 0, bottom: 0 },
+      frames: [frame(0, { atlas: "a.webp", pieces: [[0, 0, 4, 4, 0, 0]] })],
+      shared: [],
+    };
+    const layer = createFrameLayer(manifest, document.createElement("div"));
+    const decoding = layer.decode();
+    layer.release();
+    await expect(decoding).rejects.toThrow("released while decoding");
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
