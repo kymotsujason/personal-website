@@ -35,6 +35,8 @@ export const installFlatHook = (probe) => {
         avoidY: look.avoid.y,
         idle: drift.idle(),
         calm: scene.calm,
+        judged: scene.rest?.judged ?? false,
+        verdict: scene.rest?.verdict ?? null,
         frosted: scene.frosted,
       };
     },

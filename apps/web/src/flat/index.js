@@ -27,7 +27,12 @@ import { createLook, motionPose } from "./look.js";
 import { loadManifest } from "./manifest.js";
 import { createNavigation } from "./navigation.js";
 import { createRain } from "./rain.js";
-import { createMeter, staysCalm, watchFrames } from "./rest.js";
+import {
+  createFoldMeter,
+  createMeter,
+  staysCalm,
+  watchFrames,
+} from "./rest.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
 import { createFlatStatus } from "./status.js";
@@ -790,25 +795,32 @@ export const startFlatScene = ({
     // and any other turns things on once the frame meter has seen the intro's unfold mostly under 20 ms per frame, or
     // with no intro, the first unfold of the phone
     const meter = createMeter();
-    let judged = staysCalm({
-      auto: read("local", "2dAuto"),
-      size: scene.manifest.size,
-    });
-    const judge = () => {
-      const verdict = judged ? null : meter.verdict();
-      if (verdict === null) {
+    const foldMeter = createFoldMeter();
+    // whether the meter has judged, and what it said (null for a device that stays calm), for the probe hook
+    const rest = {
+      judged: staysCalm({
+        auto: read("local", "2dAuto"),
+        size: scene.manifest.size,
+      }),
+      verdict: null,
+    };
+    scene.rest = rest;
+    const judge = (verdict) => {
+      if (rest.judged || verdict === null) {
         return;
       }
-      judged = true;
+      rest.judged = true;
+      rest.verdict = verdict;
       if (verdict === "fast") {
         scene.calm = false;
         applyRest();
       }
     };
+    // with no intro unfold to measure (a page arrival, or an intro too short to give frames), the first animated
+    // opening fold is measured, and reduced motion never gives one
     loop.onDraw((now, dt) => {
-      if (!judged && scene.drawing && scene.fold > 0 && scene.fold < 1) {
-        meter.push(dt);
-        judge();
+      if (!rest.judged && scene.drawing) {
+        judge(foldMeter.frame({ fold: scene.fold, dt }));
       }
     });
     reducedQuery.addEventListener("change", guard(applyRest), { signal });
@@ -869,7 +881,7 @@ export const startFlatScene = ({
       return;
     }
     intro.start();
-    if (!judged) {
+    if (!rest.judged) {
       // only the frames while the phone unfolds count, and the verdict comes when the unfold ends
       const foldNow = () =>
         intro.plan.foldAt(Math.min(intro.elapsed(), intro.plan.total));
@@ -881,13 +893,13 @@ export const startFlatScene = ({
           return fold > 0 && fold < 1;
         },
         done: () => sawUnfold && foldNow() <= 0,
-        onDone: guard(judge),
+        onDone: guard(() => judge(meter.verdict())),
       });
-      // an intro cut short has no more to measure, so what it gave is judged, and the first folds after it add to it
+      // an intro cut short has no more to measure, so what it gave is judged, and with too few frames the first opening fold after it is measured
       intro.finished.then(
         guard(() => {
           stopMeter();
-          judge();
+          judge(meter.verdict());
         }),
       );
     }

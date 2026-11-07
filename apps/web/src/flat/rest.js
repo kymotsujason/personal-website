@@ -34,6 +34,33 @@ export const createMeter = () => {
   };
 };
 
+// measures opening folds from the loop's frames. frame({ fold, dt }) is called for each frame drawn, with the fold (1
+// closed, 0 open) and the gap since the last frame in ms. it counts the gaps while the fold is opening, and gives back
+// a verdict ("fast" or "slow", or null when the fold gave too few frames) on the frame the fold reaches open. a fold
+// turned back, or a close, counts for nothing
+export const createFoldMeter = () => {
+  let previous = null;
+  let current = null;
+  return {
+    frame: ({ fold, dt }) => {
+      const moving = fold > 0 && fold < 1;
+      const opening = previous !== null && fold < previous;
+      let verdict = null;
+      if (moving && opening) {
+        current ??= createMeter();
+        current.push(dt);
+      } else if (current && !moving) {
+        verdict = fold <= 0 ? current.verdict() : null;
+        current = null;
+      } else if (current && moving) {
+        current = null;
+      }
+      previous = fold;
+      return verdict;
+    },
+  };
+};
+
 // feeds the meter the gaps between animation frames until stop() is called (the intro plays as web animations, so the
 // loop isn't running to measure them). the first frame only starts the clock. take says whether a frame's gap counts,
 // and once done says so, the watch ends and onDone runs

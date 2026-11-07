@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { MIN_FRAMES, createMeter, staysCalm, watchFrames } from "./rest.js";
+import {
+  MIN_FRAMES,
+  createFoldMeter,
+  createMeter,
+  staysCalm,
+  watchFrames,
+} from "./rest.js";
 
 test("a device through 2dAuto or at half size stays calm, and no other does", () => {
   expect(staysCalm({ auto: "1760000000000", size: "full" })).toBe(true);
@@ -60,4 +66,45 @@ test("only the frames take counts, and the watch ends when done says so", () => 
   queue.shift()(80);
   expect(ended).toBe(1);
   expect(queue).toHaveLength(0);
+});
+
+// a fold from `from` to `to` over frames of dt ms, ending on `to`, as the loop would draw it. gives the last verdict
+const playFold = (folds, from, to, frames, dt) => {
+  let verdict = null;
+  for (let i = 1; i <= frames; i++) {
+    const fold = from + ((to - from) * i) / frames;
+    verdict = folds.frame({ fold, dt }) ?? verdict;
+  }
+  return verdict;
+};
+
+test("a close alone judges nothing, and an opening fold gives its verdict when it ends", () => {
+  const folds = createFoldMeter();
+  folds.frame({ fold: 0, dt: 0 });
+  expect(playFold(folds, 0, 1, 60, 16.7)).toBeNull();
+  expect(playFold(folds, 1, 0, 60, 16.7)).toBe("fast");
+});
+
+test("an opening fold counts only its own frames, and a slow one says slow", () => {
+  const folds = createFoldMeter();
+  folds.frame({ fold: 1, dt: 0 });
+  expect(playFold(folds, 1, 0, 60, 33.3)).toBe("slow");
+});
+
+test("a fold too short to give frames judges nothing, and the next one is measured again", () => {
+  const folds = createFoldMeter();
+  folds.frame({ fold: 1, dt: 0 });
+  expect(playFold(folds, 1, 0, MIN_FRAMES - 5, 16.7)).toBeNull();
+  folds.frame({ fold: 1, dt: 0 });
+  expect(playFold(folds, 1, 0, 40, 16.7)).toBe("fast");
+});
+
+test("a fold turned back before it opens counts for nothing", () => {
+  const folds = createFoldMeter();
+  folds.frame({ fold: 1, dt: 0 });
+  // opens a third of the way in 30 smooth frames, then closes again
+  expect(playFold(folds, 1, 0.6, 30, 16.7)).toBeNull();
+  expect(playFold(folds, 0.6, 1, 30, 16.7)).toBeNull();
+  // the next opening starts a fresh count of its own, so a short one still gives nothing
+  expect(playFold(folds, 1, 0, 10, 16.7)).toBeNull();
 });

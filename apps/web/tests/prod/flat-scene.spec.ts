@@ -353,6 +353,8 @@ test.describe("continuous effects", () => {
     avoidY: number;
     idle: number;
     calm: boolean;
+    judged: boolean;
+    verdict: "fast" | "slow" | null;
     frosted: boolean;
   };
 
@@ -586,7 +588,20 @@ test.describe("continuous effects", () => {
       await client.send("Emulation.setCPUThrottlingRate", { rate: 20 });
       await page.goto("/");
       await unfolded(page);
+      // a throttled unfold may give too few frames to judge, and then the next opening folds are measured
+      for (let i = 0; i < 3 && !(await effects(page)).judged; i++) {
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => flatStatus(page), { timeout: 90000 })
+          .toMatchObject({ phone: "closed", busy: false });
+        await page.keyboard.press("Enter");
+        await unfolded(page);
+      }
       await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      expect(await effects(page)).toMatchObject({
+        judged: true,
+        verdict: "slow",
+      });
       await stillCalm(page);
     });
 
@@ -597,9 +612,65 @@ test.describe("continuous effects", () => {
       await stubHome(page, RAIN);
       await page.goto("/");
       await turnedOn(page);
+      expect(await effects(page)).toMatchObject({
+        judged: true,
+        verdict: "fast",
+      });
       await expect.poll(async () => (await effects(page)).idle).toBe(1);
       await expect(page.locator(".flat-fall[data-still]")).toHaveCount(0);
       await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
+    });
+
+    test("a page arrival stays calm until an opening fold is measured, and a close alone doesn't judge", async ({
+      page,
+    }) => {
+      await stubHome(page, RAIN);
+      await page.goto("/about");
+      await settledOn(page, "/about", "About");
+      // a reload of an app's page is the arrival with no intro (head.js arrivalFor)
+      await page.reload();
+      await settledOn(page, "/about", "About");
+      expect(await effects(page)).toMatchObject({
+        calm: true,
+        judged: false,
+      });
+      // out of the app, then the phone closes: neither is an opening fold
+      await page.keyboard.press("Escape");
+      await settledOn(page, "/", null);
+      await page.keyboard.press("Escape");
+      await expect
+        .poll(() => flatStatus(page))
+        .toMatchObject({ phone: "closed", busy: false });
+      expect(await effects(page)).toMatchObject({
+        calm: true,
+        judged: false,
+      });
+      await page.keyboard.press("Enter");
+      await unfolded(page);
+      await turnedOn(page);
+      expect(await effects(page)).toMatchObject({
+        judged: true,
+        verdict: "fast",
+      });
+    });
+
+    test("with reduced motion nothing is measured, so it stays calm for the visit", async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await stubHome(page, RAIN);
+      await page.goto("/");
+      await unfolded(page);
+      await page.keyboard.press("Escape");
+      await expect
+        .poll(() => flatStatus(page))
+        .toMatchObject({ phone: "closed", busy: false });
+      await page.keyboard.press("Enter");
+      await unfolded(page);
+      expect(await effects(page)).toMatchObject({
+        calm: true,
+        judged: false,
+      });
     });
 
     test("a device through 2dAuto stays calm even when the unfold is fast", async ({
