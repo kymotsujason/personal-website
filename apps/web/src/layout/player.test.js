@@ -24,17 +24,19 @@ const startPlayer = async ({ chunk = "missing", app = "Blog" } = {}) => {
   vi.resetModules();
   const recoverFromChunk = vi.fn(() => true);
   const core = fakeCore();
+  const played = vi.fn();
   vi.doMock("./navigation.js", () => ({ recoverFromChunk }));
-  vi.doMock("../scene/youtube.js", () => ({ youtubePlayer: () => () => {} }));
+  vi.doMock("../scene/youtube.js", () => ({ youtubePlayer: () => played }));
   vi.doMock("../scene/music.js", () => {
     if (chunk === "missing") {
       throw new TypeError("Failed to fetch dynamically imported module");
     }
     return {
-      createMusic: () => {
+      createMusic: (options) => {
         if (chunk === "broken") {
           throw new Error("a bug in the player's code");
         }
+        core.options = options;
         return core;
       },
     };
@@ -48,7 +50,7 @@ const startPlayer = async ({ chunk = "missing", app = "Blog" } = {}) => {
     </main>
     <div id="player-host"></div>`;
   const { music } = await import("./player.js");
-  return { music, recoverFromChunk, core };
+  return { music, recoverFromChunk, core, played };
 };
 
 const unavailable = (music) =>
@@ -140,4 +142,30 @@ test("a first press on a music page track row plays that track without resuming"
   press(track, "click");
   await vi.waitFor(() => expect(core.playAt).toHaveBeenCalledWith(3));
   expect(core.resume).not.toHaveBeenCalled();
+});
+
+test("whenStill waits on waitWhile under has-flat-scene", async () => {
+  root.className = "has-flat-scene";
+  const { music, core, played } = await startPlayer({ chunk: "there" });
+  music.loadPlayer();
+  await vi.waitFor(() => expect(core.options).toBeDefined());
+  core.options.loadPlayer({});
+  await settle();
+  expect(played).not.toHaveBeenCalled();
+  music.waitWhile(() => true);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(played).not.toHaveBeenCalled();
+  music.waitWhile(() => false);
+  await vi.waitFor(() => expect(played).toHaveBeenCalledTimes(1));
+});
+
+test("loadOnMusicPage doesn't load under has-flat-scene", async () => {
+  root.className = "has-flat-scene";
+  const { core } = await startPlayer({ chunk: "there", app: "Music" });
+  await settle();
+  expect(core.load).not.toHaveBeenCalled();
+  dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
+  root.className = "scene-failed";
+  dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
+  await vi.waitFor(() => expect(core.load).toHaveBeenCalled());
 });

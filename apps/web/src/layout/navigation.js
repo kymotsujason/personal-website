@@ -31,7 +31,7 @@ export const onNavigate = (fn) => {
 // the flat page from here on, for this page load. the layout stops a scene still running when it hears the event
 const failFlat = (reason) => {
   root.classList.add("scene-failed");
-  root.classList.remove("has-3d", "page-first");
+  root.classList.remove("has-3d", "has-flat-scene", "flat-ready", "page-first");
   dispatchEvent(new CustomEvent("scene-failed", { detail: reason }));
 };
 
@@ -65,10 +65,14 @@ const withCap = (promise) =>
 
 const pageAppOf = (doc) => doc.getElementById("page")?.dataset.app ?? null;
 
-// the scene has no app for the not found page and would hide it under the home screen, so in 3d it's a full page load,
-// which the head script shows as the flat site
+const sceneRuns = () =>
+  root.classList.contains("has-3d") ||
+  root.classList.contains("has-flat-scene");
+
+// neither scene has an app for the not found page and would hide it under the home screen, so with a scene it's a
+// full page load, which the head script shows as the flat site
 const leavesScene = (doc) =>
-  root.classList.contains("has-3d") &&
+  sceneRuns() &&
   doc.querySelector('meta[name="page-app"]')?.getAttribute("content") ===
     "not-found";
 
@@ -127,6 +131,12 @@ if (arrivedBy === "reload" || arrivedBy === "back_forward") {
 // events share
 const swaps = new WeakMap();
 
+let flight = null;
+
+// a promise that settles once the navigation in flight (from its preparation on) has swapped #page or was dropped, or
+// null when there's none
+export const inFlight = () => flight;
+
 document.addEventListener("astro:before-preparation", (event) => {
   const original = event.loader;
   const { from, direction, signal } = event;
@@ -155,6 +165,13 @@ document.addEventListener("astro:before-preparation", (event) => {
     });
     swaps.set(signal, settleSwap);
     signal.addEventListener("abort", () => settleSwap(null), { once: true });
+    const mine = swapped.then(() => {});
+    flight = mine;
+    mine.then(() => {
+      if (flight === mine) {
+        flight = null;
+      }
+    });
     // the page loads while the scene plays its close, so neither waits on the other
     const loading = original();
     // a page that leaves the scene is never told to it, so the scene doesn't start a close the full load cuts off
@@ -255,7 +272,7 @@ let lastSwap = null;
 // the app switcher shows each app where it was left, so the page an app is on is kept just before a swap replaces it
 // or the tab goes (see lib/snapshots.js). the flat site has no switcher
 const keepPage = () => {
-  if (root.classList.contains("has-3d")) {
+  if (sceneRuns()) {
     captureSnapshot(document.getElementById("page"));
   }
 };
@@ -353,8 +370,8 @@ document.addEventListener(
 
 export { navigate };
 
-// youtube's player sits over the music page's slot when that page shows as a flat page (the flat site, or 3d at full
-// zoom), and waits off screen otherwise, still playing. it only moves when the slot does
+// youtube's player sits over the music page's slot when that page shows as a flat page (the flat site, or a scene at
+// full zoom), and waits off screen otherwise, still playing. it only moves when the slot does
 let scenePageFlat = false;
 let playerAt = "";
 
@@ -364,7 +381,7 @@ const placePlayer = () => {
   if (!host || !page) {
     return;
   }
-  const flatSite = !root.classList.contains("has-3d");
+  const flatSite = !sceneRuns();
   const slot =
     page.dataset.app === "Music" && (flatSite || scenePageFlat)
       ? page.querySelector(".player-slot")
@@ -399,11 +416,11 @@ export const setScenePageFlat = (flat) => {
   placePlayer();
 };
 
-// the page is pinned on the phone while 3d runs and doesn't show it as the flat page, which turns off the glass's
+// the page is pinned on the phone while a scene runs and doesn't show it as the flat page, which turns off the glass's
 // backdrop blur. a page first arrival is the flat page too, until the scene shows
 export const syncPagePinned = () => {
   const pinned =
-    root.classList.contains("has-3d") &&
+    sceneRuns() &&
     !root.classList.contains("scene-failed") &&
     !root.classList.contains("page-first") &&
     !scenePageFlat;

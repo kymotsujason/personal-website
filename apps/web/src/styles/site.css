@@ -55,10 +55,11 @@ html.has-3d:not(.page-first) body:not(.ready) #page {
   visibility: hidden;
 }
 
-/* a failed scene leaves the flat page, whatever the scene had put on #page. the head script's watchdog sets this
-   without the scene, so it can't wait for the scene to clear its own styles */
+/* a failed scene leaves the flat page, whatever the scene had put on #page (the 2d scene clips it to the window). the
+   head script's watchdog sets this without the scene, so it can't wait for the scene to clear its own styles */
 html.scene-failed #page {
   transform: none !important;
+  clip-path: none !important;
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;

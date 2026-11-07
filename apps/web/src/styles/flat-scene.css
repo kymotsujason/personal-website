@@ -1,0 +1,23 @@
+/* the 2d scene. a script chunk may not add css (tools/html-rules.mjs), so all of it ships here, imported by the
+   layout */
+
+/* #page waits under black until the 2d scene's first frame, the same as with 3d, unless the arrival shows it first */
+html.has-flat-scene:not(.flat-ready):not(.page-first) #page {
+  visibility: hidden;
+}
+
+/* the 2d home screen has the 3d version link in its credits row, as the 3d one has the 2d link, and the footer keeps
+   its space so a failure doesn't reflow the page */
+html.has-flat-scene #page .flat-footer {
+  visibility: hidden;
+}
+
+/* the 2d version link is only for a device the 2d scene found too slow, which the head script keeps on the flat page */
+#page .flat-footer a[data-version="2d"] {
+  display: none;
+}
+
+html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
+  display: inline;
+  margin-right: 12px;
+}

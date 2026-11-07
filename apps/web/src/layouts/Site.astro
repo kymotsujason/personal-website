@@ -5,6 +5,7 @@ import { APPS } from "../data/apps.js";
 import { latestProject } from "../lib/projects";
 import "../styles/site.css";
 import "../styles/flat.css";
+import "../styles/flat-scene.css";
 
 type Kind =
   | "home"
@@ -179,16 +180,21 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
 
       // the flat page from here on. the event tells the layout's own listeners, such as the player's placement, the
       // same way the head script's watchdog does, and a scene that already failed ignores it
-      const failScene = () => {
+      const failScene = (reason = "scene") => {
         root.classList.add("scene-failed");
-        root.classList.remove("has-3d", "page-first");
+        root.classList.remove(
+          "has-3d",
+          "has-flat-scene",
+          "flat-ready",
+          "page-first",
+        );
         syncPagePinned();
-        dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
+        dispatchEvent(new CustomEvent("scene-failed", { detail: reason }));
       };
 
       // the sky from the visitor's clock with no weather, the same as the scene without it. it's drawn at load in every
       // mode, since the scene sets its own only once it has the weather, after its models load. it refreshes only in
-      // the flat site, since the scene keeps its own going
+      // the flat site, since each scene keeps its own going
       const setClockSky = () => {
         const hour = hourNow();
         const sun = sunPlace(hour, { sunrise: 7, sunset: 19 });
@@ -209,7 +215,10 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
       };
       setClockSky();
       setInterval(() => {
-        if (!root.classList.contains("has-3d")) {
+        if (
+          !root.classList.contains("has-3d") &&
+          !root.classList.contains("has-flat-scene")
+        ) {
           setClockSky();
         }
       }, 60000);
@@ -240,7 +249,7 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
                   root.classList.remove("page-first");
                   syncPagePinned();
                 },
-                onFailed: failScene,
+                onFailed: () => failScene(),
                 onPageFlat: setScenePageFlat,
                 music,
               });
@@ -270,6 +279,100 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
           )
           .catch((error) => {
             console.warn("the scene didn't start", error);
+            failScene();
+          });
+      }
+
+      // the 2d scene gets 10 s of the page being visible to show its first frame, as the head script gives the 3d
+      // one. the head script's watchdog isn't reachable from here, and a tab opened in the background runs no frames
+      const startFlatWatchdog = () => {
+        let left = 10000;
+        let since = 0;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const run = () => {
+          if (timer !== null || document.hidden) {
+            return;
+          }
+          since = performance.now();
+          timer = setTimeout(giveUp, left);
+        };
+        const pause = () => {
+          if (timer === null) {
+            return;
+          }
+          clearTimeout(timer);
+          timer = null;
+          left -= performance.now() - since;
+        };
+        const onVisibility = () => (document.hidden ? pause() : run());
+        const giveUp = () => {
+          timer = null;
+          document.removeEventListener("visibilitychange", onVisibility);
+          if (
+            Reflect.get(window, "__flatShown") ||
+            root.classList.contains("scene-failed")
+          ) {
+            return;
+          }
+          failScene("watchdog");
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+        run();
+      };
+
+      if (
+        root.classList.contains("has-flat-scene") &&
+        !root.classList.contains("scene-failed") &&
+        stageEl &&
+        page &&
+        dataEl
+      ) {
+        startFlatWatchdog();
+        import("../flat/index.js")
+          .then(
+            ({ startFlatScene }) => {
+              if (root.classList.contains("scene-failed")) {
+                return;
+              }
+              const flat = startFlatScene({
+                stageEl,
+                pageEl: page,
+                siteData: JSON.parse(dataEl.textContent ?? "{}"),
+                music,
+                onShown: () => {
+                  // the 2d scene covers the page now, so it is pinned on the phone unless it shows as the flat page
+                  root.classList.remove("page-first");
+                  syncPagePinned();
+                },
+                onFailed: () => failScene(),
+                onPageFlat: setScenePageFlat,
+                arrival: Reflect.get(window, "__arrival"),
+                from: null,
+              });
+              onNavigate(flat.navigation);
+              // the 2d watchdog gave up, or the navigation met a new build, so a 2d scene still running stops
+              addEventListener("scene-failed", (event) =>
+                flat.fail(
+                  event instanceof CustomEvent && event.detail
+                    ? event.detail
+                    : "watchdog",
+                ),
+              );
+            },
+            (error) => {
+              console.warn("the 2d scene didn't load", error);
+              // a missing chunk loads the page again once, under the same rule as the 3d scene's
+              const reading =
+                root.classList.contains("scene-failed") ||
+                root.classList.contains("page-first") ||
+                !navigator.onLine;
+              if (reading || !recoverFromChunk()) {
+                failScene();
+              }
+            },
+          )
+          .catch((error) => {
+            console.warn("the 2d scene didn't start", error);
             failScene();
           });
       }

@@ -29,12 +29,13 @@ let chunkMissing = false;
 // the visitor asked for the music, with a music control or by opening the music page
 let asked = false;
 
-// youtube loading while the phone moved made 100 to 300 ms frames on an iphone, and a failed scene drops has-3d
+const sceneRuns = () =>
+  root.classList.contains("has-3d") ||
+  root.classList.contains("has-flat-scene");
+
+// youtube loading while the phone moved made 100 to 300 ms frames on an iphone, and a failed scene drops its class
 const whenStill = (fn) => {
-  if (
-    root.classList.contains("has-3d") &&
-    (phoneMoving === null || phoneMoving())
-  ) {
+  if (sceneRuns() && (phoneMoving === null || phoneMoving())) {
     setTimeout(() => whenStill(fn), STILL_WAIT_MS);
     return;
   }
@@ -335,12 +336,10 @@ export const music = {
   },
 };
 
-// a script added before the load event holds that event until youtube answers
+// a script added before the load event holds that event until youtube answers. with a scene, the scene loads it when
+// the music app opens
 const loadOnMusicPage = () => {
-  if (
-    root.classList.contains("has-3d") ||
-    document.getElementById("page")?.dataset.app !== "Music"
-  ) {
+  if (sceneRuns() || document.getElementById("page")?.dataset.app !== "Music") {
     return;
   }
   if (document.readyState === "complete") {
