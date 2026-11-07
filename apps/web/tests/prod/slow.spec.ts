@@ -315,6 +315,46 @@ test("a 2d failure under the cover removes it", async ({ page }) => {
   }
 });
 
+test("a missing 2d chunk during the handoff drops to the plain flat page with no reload", async ({
+  page,
+}) => {
+  test.setTimeout(240000);
+  await slowFrames(page);
+  await watchHandoff(page);
+  await quiet(page);
+  // the 2d scene's chunk never arrives, from the first request (the prefetch at the ladder's last step)
+  await page.route(/\/_astro\/[^/]+\.js$/, async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    if (body.includes("the 2d scene stopped")) {
+      await route.abort();
+      return;
+    }
+    await route.fulfill({ response, body });
+  });
+  await page.goto("/");
+  const root = page.locator("html");
+  await expect(root).toHaveClass(/has-3d/);
+  await settledOn(page, "/", null, 90000);
+  await page.evaluate(() => Object.assign(window, { __sameLoad: true }));
+  await expect(root).toHaveClass(/scene-failed/, { timeout: 150000 });
+  await page.evaluate(() => Object.assign(window, { __fastAgain: true }));
+  expect(
+    await page.evaluate(() => (window as any).__sameLoad),
+    "the page didn't reload",
+  ).toBe(true);
+  await expect(root).not.toHaveClass(/has-3d/);
+  await expect(root).not.toHaveClass(/has-flat-scene/);
+  await expect(page.locator("#stage > .flat-blackout")).toHaveCount(0);
+  await expect(page.locator("#page h1")).toHaveText("Jason Yue");
+  await expect(page.locator("#page h1")).toBeVisible();
+  // the cover never showed once the plain flat page did
+  const log = await handoffLog(page);
+  for (const entry of log.filter((e) => has(e, "scene-failed"))) {
+    expect(entry.any, entry.classes).toBe(false);
+  }
+});
+
 test("a 2d scene still too slow drops to the plain flat page and stays there", async ({
   page,
 }) => {

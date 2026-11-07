@@ -596,6 +596,11 @@ test("half against full frames by phone height", async ({
   const shot = async (page: Page, phonePx: number, size: string) => {
     const height = Math.round(phonePx / FILL);
     await page.setViewportSize({ width: Math.round(height * 1.7), height });
+    // the scene fits itself to the new window once the resize has been quiet (resize.js RESIZE_WAIT_MS), and a mount
+    // that starts before that is cut off by it
+    await page.evaluate(
+      () => new Promise((resolve) => setTimeout(resolve, 500)),
+    );
     await page.evaluate(async (s) => {
       const hook = (window as unknown as { __flat: Hook }).__flat;
       await hook.mount({ set: "cable-landscape", lighting: "day", size: s });

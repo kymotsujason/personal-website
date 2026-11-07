@@ -285,28 +285,42 @@ test("the 2D version link loads the flat site and the 3D version link loads 3d a
   const { errors } = watchErrors(page);
   await page.goto("/");
   await settledOn(page, "/", null);
-  // the flat home page doesn't carry the 2d link, the 3d home screen does
-  await expect(page.locator('#page a[data-version="2d"]')).toHaveCount(0);
+  // the 3d scene's flat footer keeps its space but isn't seen, and the 2d link a visitor sees is on the home screen
+  await expect(page.locator('#page a[data-version="2d"]')).toBeHidden();
   const link = page.locator('#css-layer .panel.main a[data-version="2d"]');
   await expect(link).toHaveText("2D version");
   // a full page load starts a new document, so a mark left on this one is gone after it
   await page.evaluate(() => Object.assign(window, { __before: true }));
   await Promise.all([page.waitForEvent("load"), link.click()]);
   await expect(page.locator("html")).not.toHaveClass(/has-3d/);
+  await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
   expect(await page.evaluate(() => "__before" in window)).toBe(false);
   expect(await page.evaluate(() => localStorage.getItem("2d"))).toBe("1");
-  await expect(page.locator("#page h1")).toHaveText("Jason Yue");
-  await expect(page.locator("#page h1")).toBeVisible();
+  const home = page.locator(".flat-home");
+  await expect(home.locator("h1")).toHaveText("Jason Yue");
+  await expect(home.locator(".flat-body")).toBeVisible();
 
-  // the choice holds on the next visit
-  await page.goto("/about");
-  await expect(page.locator("html")).not.toHaveClass(/has-3d/);
-  const back = page.locator('#page a[data-version="3d"]');
+  // the choice holds on the next visit, and the 2d scene's home screen has the 3d link in its credits row (its apps
+  // show the flat page with the footer's space kept and not seen, as 3d does)
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+  await expect(home).not.toHaveAttribute("inert", { timeout: 15000 });
+  // the link is clicked once the unfold has ended, since it moves with the phone
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const s = (window as any).__flat?.status();
+        return Boolean(s && s.phone === "open" && !s.busy && s.fold === 0);
+      }),
+    )
+    .toBe(true);
+  const back = home.locator('a[data-version="3d"]');
   await expect(back).toBeVisible();
   await page.evaluate(() => Object.assign(window, { __before: true }));
-  await Promise.all([page.waitForEvent("load"), back.click()]);
+  // the home screen drifts at rest, so the link is never stable
+  await back.click({ force: true });
+  await expect(page.locator("html")).toHaveClass(/has-3d/, { timeout: 30000 });
   expect(await page.evaluate(() => "__before" in window)).toBe(false);
-  await expect(page.locator("html")).toHaveClass(/has-3d/);
   expect(await page.evaluate(() => localStorage.getItem("2d"))).toBe("0");
   await page.waitForFunction(
     () => (window as unknown as { __sceneShown?: boolean }).__sceneShown,
@@ -314,7 +328,7 @@ test("the 2D version link loads the flat site and the 3D version link loads 3d a
     { timeout: 30000 },
   );
   // in 3d the flat footer's 3d link doesn't show
-  await settledOn(page, "/about", "About");
+  await settledOn(page, "/", null);
   await expect(page.locator('#page a[data-version="3d"]')).toBeHidden();
   expect(errors).toEqual([]);
 });

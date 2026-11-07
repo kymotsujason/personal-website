@@ -485,10 +485,13 @@ test.describe("the not found page", () => {
     const blog = page.locator('#page a[href="/blog"]');
     await expect(blog).toBeVisible();
     await expect(page.locator('head link[rel="preload"]')).toHaveCount(0);
-    await expect(page.locator("#page .flat-footer a")).toHaveAttribute(
-      "href",
-      "/",
-    );
+    // the plain flat page shows the 3D link, and the 2D link is only for a device the 2D scene found too slow
+    const toThreeD = page.locator('#page .flat-footer a[data-version="3d"]');
+    await expect(toThreeD).toBeVisible();
+    await expect(toThreeD).toHaveAttribute("href", "/");
+    await expect(
+      page.locator('#page .flat-footer a[data-version="2d"]'),
+    ).toBeHidden();
     // the blog link is a full page load, so the scene comes back
     await blog.click();
     await expect(page).toHaveURL((url) => url.pathname === "/blog");

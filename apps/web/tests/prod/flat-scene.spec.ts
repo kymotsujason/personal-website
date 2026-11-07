@@ -1529,3 +1529,402 @@ test.describe("failure, resizing, and turning", () => {
     await expect(page.locator("#page h1")).toBeVisible();
   });
 });
+
+test.describe("with reduced motion", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  // the folds the status reports on every animation frame from now, until the phone is at rest in `phone`
+  const watchFolds = (page: Page, phone: string) =>
+    page.evaluate((phone) => {
+      const w = window as any;
+      w.__folds = [];
+      w.__busy = false;
+      const look = () => {
+        const s = w.__flat.status();
+        w.__folds.push(s.fold);
+        w.__busy ||= s.busy;
+        if (!(s.phone === phone && !s.busy) || w.__folds.length < 3) {
+          if (w.__folds.length < 300) {
+            requestAnimationFrame(look);
+          }
+        }
+      };
+      requestAnimationFrame(look);
+    }, phone);
+
+  test("the phone is open at once and a fold snaps", async ({ page }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await watchFolds(page, "closed");
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+    await watchFolds(page, "open");
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "open", busy: false, fold: 0 });
+    const seen = await page.evaluate(() => ({
+      folds: (window as any).__folds as number[],
+      busy: (window as any).__busy as boolean,
+    }));
+    expect(seen.busy, "no fold in motion").toBe(false);
+    for (const fold of seen.folds) {
+      expect([0, 1], "only the ends of the fold").toContain(fold);
+    }
+  });
+
+  test("an app crossfades with no clip or transform on the page", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__page = [];
+      const look = () => {
+        const el = document.getElementById("page")!;
+        const cs = getComputedStyle(el);
+        w.__page.push({
+          clip: cs.clipPath,
+          transform: cs.transform,
+          opacity: Number(cs.opacity),
+          shown: cs.visibility === "visible",
+        });
+        if (w.__page.length < 600) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await settledOn(page, "/about", "About");
+    await page.goBack();
+    await settledOn(page, "/", null);
+    const seen: {
+      clip: string;
+      transform: string;
+      opacity: number;
+      shown: boolean;
+    }[] = await page.evaluate(() => (window as any).__page);
+    const shown = seen.filter((s) => s.shown);
+    expect(shown.length).toBeGreaterThan(5);
+    for (const s of shown) {
+      expect(s.clip, "no clip on the page").toBe("none");
+      expect(s.transform, "no transform on the page").toBe("none");
+    }
+    expect(
+      shown.some((s) => s.opacity > 0 && s.opacity < 1),
+      "the page fades",
+    ).toBe(true);
+  });
+});
+
+test.describe("keyboard focus", () => {
+  const focused = (page: Page) =>
+    page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body) {
+        return null;
+      }
+      return {
+        face: el.closest(".flat-cover")
+          ? "cover"
+          : el.closest(".flat-home")
+            ? "home"
+            : el.closest("#page")
+              ? "page"
+              : "other",
+        app: el.closest<HTMLElement>("[data-app]")?.dataset.app ?? null,
+        label: el.getAttribute("aria-label") ?? el.textContent?.trim() ?? "",
+      };
+    });
+
+  const tabAround = async (page: Page, count: number) => {
+    const seen: NonNullable<Awaited<ReturnType<typeof focused>>>[] = [];
+    for (let i = 0; i < count; i++) {
+      await page.keyboard.press("Tab");
+      const now = await focused(page);
+      if (now) {
+        seen.push(now);
+      }
+    }
+    return seen;
+  };
+
+  test("Tab stays on the faces that are showing", async ({ page }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    const open = await tabAround(page, 24);
+    expect(
+      open.length,
+      "the open phone has something to focus",
+    ).toBeGreaterThan(4);
+    expect(
+      open.filter((f) => f.face !== "home"),
+      "an open phone's Tab never leaves the home screen's faces",
+    ).toEqual([]);
+    expect(
+      new Set(open.map((f) => f.app).filter(Boolean)).size,
+      "the icons are reached",
+    ).toBeGreaterThan(3);
+
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false });
+    const cover = await page.evaluate(
+      () => document.querySelectorAll(".flat-cover :is(a, button)").length,
+    );
+    const closed = await tabAround(page, 8);
+    expect(
+      closed.filter((f) => f.face === "home"),
+      "the home screen is inert while the phone is closed",
+    ).toEqual([]);
+    if (cover > 0) {
+      expect(closed.some((f) => f.face === "cover")).toBe(true);
+    }
+
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "open", busy: false });
+    const again = await tabAround(page, 6);
+    expect(again.filter((f) => f.face === "cover")).toEqual([]);
+  });
+
+  test("an app takes the focus and gives it back to its icon", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    const glyph = page.locator('.flat-home .app-icon[data-app="About"] .glyph');
+    // the icon's glyph is left out of the home screen while the window grows out of it
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__glyph = [];
+      const look = () => {
+        const g = document.querySelector<HTMLElement>(
+          '.flat-home .app-icon[data-app="About"] .glyph',
+        )!;
+        w.__glyph.push({
+          visibility: getComputedStyle(g).visibility,
+          busy: w.__flat.status().busy,
+        });
+        if (w.__glyph.length < 600) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    await settledOn(page, "/about", "About");
+    const heading = await page.evaluate(
+      () => document.activeElement?.tagName ?? null,
+    );
+    expect(heading, "focus is on the page's heading").toBe("H1");
+    await page.goBack();
+    await settledOn(page, "/", null);
+    await expect(
+      page.locator('.flat-home .app-icon[data-app="About"]'),
+    ).toBeFocused();
+    await expect(glyph).toHaveCSS("visibility", "visible");
+    const seen: { visibility: string; busy: boolean }[] = await page.evaluate(
+      () => (window as any).__glyph,
+    );
+    expect(
+      seen.some((s) => s.busy && s.visibility === "hidden"),
+      "the glyph is hidden while the window moves",
+    ).toBe(true);
+  });
+});
+
+// the cpu slowed 4x in Chromium, which slows the main thread and not the gpu or image decoding. the capture build
+// keeps the 2d scene's own slow step off, so the throttled run isn't sent to the plain flat page
+test.describe("with the cpu slowed 4x", () => {
+  test.setTimeout(120000);
+  const LIMIT_MS = 17;
+  const SKIP_MS = 200;
+
+  const slow = async (page: Page) => {
+    await page.addInitScript(() => {
+      (window as any).__flatNoSlowStep = true;
+    });
+    const client = await page.context().newCDPSession(page);
+    await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    return client;
+  };
+
+  // the gaps between animation frames, with the time since the run started, while `busy` says to
+  const startGaps = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as any;
+      w.__gaps = [];
+      w.__stop = false;
+      let last = 0;
+      let start = 0;
+      const look = (now: number) => {
+        const s = w.__flat?.status?.();
+        const moving = Boolean(s && s.busy);
+        if (moving) {
+          start ||= now;
+          if (last) {
+            w.__gaps.push({ at: now - start, gap: now - last });
+          }
+          last = now;
+        } else if (start) {
+          w.__stop = true;
+        }
+        if (!w.__stop) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+
+  const gapsAfterSkip = async (page: Page, least: number) => {
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__stop), {
+        timeout: 30000,
+      })
+      .toBe(true);
+    const all: { at: number; gap: number }[] = await page.evaluate(
+      () => (window as any).__gaps,
+    );
+    const kept = all.filter((g) => g.at > SKIP_MS).map((g) => g.gap);
+    expect(kept.length, "enough frames to judge").toBeGreaterThan(least);
+    const sorted = [...kept].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
+    return { p95, worst: sorted[sorted.length - 1], count: kept.length };
+  };
+
+  test("the intro's frames take at most 17 ms", async ({ page }) => {
+    await quiet(page);
+    await page.addInitScript(() => {
+      // a first visit, so the full intro plays
+      localStorage.setItem("2d", "1");
+      localStorage.removeItem("introSeen");
+    });
+    await slow(page);
+    await page.addInitScript(() => {
+      const w = window as any;
+      w.__intro = { gaps: [], done: false };
+      let last = 0;
+      let start = 0;
+      const look = (now: number) => {
+        const ready = document.documentElement.classList.contains("flat-ready");
+        const s = w.__flat?.status?.();
+        if (ready && !start) {
+          start = now;
+        }
+        if (start && last) {
+          w.__intro.gaps.push({ at: now - start, gap: now - last });
+        }
+        last = now;
+        if (start && s && s.phone === "open" && !s.busy) {
+          w.__intro.done = true;
+          return;
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+    await page.goto("/");
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__intro.done), {
+        timeout: 60000,
+      })
+      .toBe(true);
+    const all: { at: number; gap: number }[] = await page.evaluate(
+      () => (window as any).__intro.gaps,
+    );
+    const kept = all.filter((g) => g.at > SKIP_MS).map((g) => g.gap);
+    expect(kept.length, "enough frames to judge").toBeGreaterThan(30);
+    const sorted = [...kept].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
+    console.log(
+      `SLOW4X intro frames ${kept.length}, p95 ${p95.toFixed(1)} ms, worst ${sorted[sorted.length - 1].toFixed(1)} ms`,
+    );
+    expect(p95, "95% of the intro's frames").toBeLessThanOrEqual(LIMIT_MS);
+  });
+
+  test("an app open's frames take at most 17 ms, with #page on the window", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("2d", "1");
+      localStorage.setItem("introSeen", "1");
+    });
+    await slow(page);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await startGaps(page);
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__aligned = [];
+      const look = () => {
+        const win = document.querySelector<HTMLElement>(".flat-window");
+        const el = document.getElementById("page")!;
+        const s = w.__flat.status();
+        if (
+          win &&
+          s.busy &&
+          getComputedStyle(win).visibility === "visible" &&
+          getComputedStyle(el).visibility === "visible" &&
+          getComputedStyle(el).opacity !== "0"
+        ) {
+          const a = win.getBoundingClientRect();
+          const b = el.getBoundingClientRect();
+          // the window is taller than the page it carries, which is clipped to the window's shape, so the page matches
+          // the window's sides and sits on its middle
+          w.__aligned.push({
+            left: b.left - a.left,
+            right: b.right - a.right,
+            middle: (b.top + b.bottom) / 2 - (a.top + a.bottom) / 2,
+            layers:
+              document.querySelector<HTMLElement>(".flat-frames")!.style
+                .transform ===
+              document.querySelector<HTMLElement>(".flat-screens")!.style
+                .transform
+                ? 0
+                : 100,
+          });
+        }
+        if (!w.__stop) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    const stats = await gapsAfterSkip(page, 15);
+    console.log(
+      `SLOW4X app open frames ${stats.count}, p95 ${stats.p95.toFixed(1)} ms, worst ${stats.worst.toFixed(1)} ms`,
+    );
+    expect(stats.p95, "95% of the open's frames").toBeLessThanOrEqual(LIMIT_MS);
+    const aligned: Record<string, number>[] = await page.evaluate(
+      () => (window as any).__aligned,
+    );
+    expect(
+      aligned.length,
+      "frames with #page pinned on the window",
+    ).toBeGreaterThan(5);
+    const worst = Math.max(
+      ...aligned.flatMap((a) => Object.values(a).map(Math.abs)),
+    );
+    console.log(
+      `SLOW4X #page against the window, worst edge ${worst.toFixed(2)} px over ${aligned.length} frames`,
+    );
+    expect(worst, "#page and the window are aligned").toBeLessThanOrEqual(1);
+  });
+});
