@@ -79,20 +79,28 @@ const nearest = (list, value) => {
   return value - below.key <= above.key - value ? below.index : above.index;
 };
 
+// only a lead's frames have the hands away from the phone's fold
+const isLeadSet = (frames) => frames.some((frame) => frame.hand !== frame.fold);
+
 export const createFrameIndex = (manifest) => {
   const { frames } = manifest;
-  // only a lead's frames have the hands away from the phone's fold
-  const leadSet = frames.some((frame) => frame.hand !== frame.fold);
-  const byFold = sortedBy(
-    frames,
-    (frame) => frame.fold,
-    () => true,
-  );
+  const leadSet = isLeadSet(frames);
   const byHand = sortedBy(
     frames,
     (frame) => frame.hand,
     (frame) => leadSet && frame.fold > LEAD_TOP,
   );
+  // in a lead set the hands wait at LEAD_TOP while the phone's last bit of travel isn't drawn, so below it the lead's
+  // last frame stands for that fold, the same fold frameTimes counts the unfold from
+  const byFold = sortedBy(
+    frames,
+    (frame) => frame.fold,
+    (frame) => !leadSet || frame.fold <= LEAD_TOP,
+  );
+  if (leadSet && byHand.length > 0) {
+    byFold.push({ key: LEAD_TOP, index: byHand[0].index });
+    byFold.sort((a, b) => a.key - b.key);
+  }
   const byTime = sortedBy(
     frames,
     (frame) => frame.t,
@@ -114,7 +122,7 @@ export const createFrameIndex = (manifest) => {
 };
 
 // the u at which a rising curve reaches p
-const inverse = (curve, p) => {
+export const curveInverse = (curve, p) => {
   let lo = 0;
   let hi = 1;
   for (let i = 0; i < INVERSE_STEPS; i++) {
@@ -133,17 +141,20 @@ const inverse = (curve, p) => {
 // held longer than the rest, and each time is rounded once so a frame ends on the same ms the next one starts
 export const frameTimes = (manifest, curve, startMs, durationMs) => {
   const { frames } = manifest;
-  const first = frames[0].fold;
-  const span = frames[frames.length - 1].fold - first;
-  const progress = frames.map((frame) =>
-    span === 0 ? 0 : Math.min(Math.max((frame.fold - first) / span, 0), 1),
+  // a lead set's frames above LEAD_TOP count as LEAD_TOP, as in frameFor
+  const top = isLeadSet(frames) ? LEAD_TOP : Infinity;
+  const folds = frames.map((frame) => Math.min(frame.fold, top));
+  const first = folds[0];
+  const span = folds[folds.length - 1] - first;
+  const progress = folds.map((fold) =>
+    span === 0 ? 0 : Math.min(Math.max((fold - first) / span, 0), 1),
   );
   return progress.map((p, i) => {
     if (i === 0) {
       return Math.round(startMs);
     }
     const mid = (progress[i - 1] + p) / 2;
-    return Math.round(startMs + durationMs * inverse(curve, mid));
+    return Math.round(startMs + durationMs * curveInverse(curve, mid));
   });
 };
 
@@ -246,6 +257,14 @@ export const createFrameLayer = (manifest, hostEl) => {
     shown = index;
   };
 
+  // no frame shows until the next show(), so the intro's animations alone pick the frame
+  const hide = () => {
+    if (shown >= 0 && elements[shown]) {
+      elements[shown].classList.remove("on");
+    }
+    shown = -1;
+  };
+
   const release = () => {
     released = true;
     shown = -1;
@@ -255,5 +274,5 @@ export const createFrameLayer = (manifest, hostEl) => {
     images.length = 0;
   };
 
-  return { show, frameFor, decode, release, indexAt, elements };
+  return { show, hide, frameFor, decode, release, indexAt, elements };
 };

@@ -8,6 +8,10 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 // ms into the fast intro when the phone starts to unfold. in portrait the hands get under the edge first
 export const FAST_FOLD_AT = { landscape: 0, portrait: 100 };
+// how long each intro's unfold takes (inOutSine for the full one, outSine for the fast one), and the fast intro's move
+// from fastStart to rest (outCubic)
+export const INTRO_UNFOLD_MS = { full: 1100, fast: 700 };
+export const FAST_MOVE_MS = 650;
 
 // each part of the move eases out on its own clock: the rise slows gradually and carries a little climb into the
 // opening, the approach overlaps the unfold, and the tilt squares up as it's taken out. nothing turns a corner, so
@@ -185,6 +189,9 @@ export const EXTRA_HOLES = 3;
 
 // looking around and the dodge
 
+// the desk is seen through a camera with this vertical view (degrees), resting tilted down by DESK_REST_PITCH degrees
+export const DESK_FOV = 75;
+export const DESK_REST_PITCH = -0.9;
 // a drag that moves less than this (px) is still a tap
 export const LOOK_SLOP = 6;
 // with the phone closed it moves out of the mouse's way by this share of the cursor's distance from it, capped at

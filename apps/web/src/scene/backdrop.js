@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { wallpaperAt, NIGHT } from "./monitors.js";
 import { loadingManager, failScene } from "./lifetime.js";
+import { DESK_FOV, DESK_REST_PITCH } from "./shared/motion.js";
 
 // jason's desk behind the phone: a partial photo sphere stitched from 21 photos taken from his chair (hugin, with the
 // matches filtered against the shooting grid since every monitor shows the same wallpaper). it's drawn by its own
@@ -19,7 +20,7 @@ export const DESK = {
     topLat: 50,
     // where the view rests, as the lat of its center. halfway between how far it could look up and down before the
     // photo grew 220 rows at its bottom (art/desk-stitch/desk/extend.py)
-    restPitch: -0.9,
+    restPitch: DESK_REST_PITCH,
     // the monitors for the other times of day (art/desk-stitch/monitors/bake.py): the photo's band of rows that holds
     // the screens, baked for each other wallpaper image, with a mask of where the screens are in that band and a
     // lighting map for each. rows count from the photo's top, out of its 3143
@@ -36,7 +37,7 @@ export const DESK = {
     small: "/desk-small.jpg"
 };
 
-const BG_FOV = 75;
+const BG_FOV = DESK_FOV;
 const RADIUS = 100;
 // keeps the view's edge a little inside the photo's edge
 const MARGIN = 2;

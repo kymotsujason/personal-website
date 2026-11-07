@@ -128,9 +128,18 @@ export const projectPoint = (m, [x, y]) => {
 
 // the css transform for the layers. a pose facing the camera squarely is a plain scale and move, written as a 2d
 // matrix so the browser draws the screens' text sharp; any turn gets the chain itself, so animations between poses
-// interpolate it function by function
-export const chainTransform = (geometry, pose, fold = 0) => {
+// interpolate it function by function. keyframes ask for the chain every time (functions), since a keyframe list
+// mixing the two is interpolated by decomposing matrices instead
+export const chainTransform = (
+  geometry,
+  pose,
+  fold = 0,
+  { functions = false } = {},
+) => {
   const steps = chainSteps(geometry, pose, fold);
+  if (functions) {
+    return steps.map(stepCss).join(" ");
+  }
   const m = steps.map(stepMatrix).reduce(multiply);
   if (Math.abs(m[12]) < 1e-12 && Math.abs(m[13]) < 1e-12) {
     const w = m[15];

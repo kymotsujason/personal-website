@@ -51,6 +51,44 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   pointer-events: none;
 }
 
+/* the desk behind everything in the stage, even the frames once they drop behind the flat page */
+.flat-desk {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.flat-desk-look {
+  position: absolute;
+  inset: 0;
+}
+
+.flat-desk-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background-repeat: no-repeat;
+}
+
+/* the scene fades in from black over 0.6 s once its first frame is placed, as the 3d layers do. it's one black sheet
+   over the whole stage instead of each layer fading, so the desk never shows through a half faded phone. an arrival
+   that shows #page first has none, as #page isn't part of the fade in 3d */
+.flat-black {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: #000;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+html.flat-ready .flat-black {
+  opacity: 0;
+}
+
 /* the home and cover screens (components/FlatScreens.astro), laid out by site.css's 3d screen rules at the 3d screens'
    px and warped onto the frame by src/flat/screens.js. a face shows once it's placed, and takes input unless inert */
 html.has-flat-scene .flat-home {

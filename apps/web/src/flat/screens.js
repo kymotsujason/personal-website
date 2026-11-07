@@ -404,38 +404,53 @@ export const createScreens = ({
     syncFocus();
   };
 
-  // warps each face onto the frame's corners, shows only the faces turned toward the camera, and stacks them by depth
-  const place = (frame, manifest) => {
+  // each face's warp onto the frame's corners and its place in the stack by depth, and whether it's turned toward the
+  // camera (a face turned away has no transform). the intro's keyframes are made from these
+  const faceStyles = (frame, manifest) => {
     const quads = faceQuads(frame, manifest);
     const order = FACES.filter((name) => quads[name]).sort(
       (a, b) => quads[a].depth - quads[b].depth,
     );
-    order.forEach((name, i) => {
-      const el = faces[name];
-      const { quad, facing: toCamera } = quads[name];
-      if (!toCamera) {
-        if (shown[name]) {
-          el.style.visibility = "hidden";
-          shown[name] = false;
+    return Object.fromEntries(
+      order.map((name, i) => {
+        const { quad, facing: toCamera } = quads[name];
+        const { w, h } = sizes[name];
+        const transform = toCamera
+          ? quadToQuad(
+              [
+                [0, 0],
+                [w, 0],
+                [w, h],
+                [0, h],
+              ],
+              quad,
+            )
+          : null;
+        return [name, { visible: toCamera, zIndex: i + 1, transform }];
+      }),
+    );
+  };
+
+  // warps each face onto the frame's corners, shows only the faces turned toward the camera, and stacks them by depth
+  const place = (frame, manifest) => {
+    Object.entries(faceStyles(frame, manifest)).forEach(
+      ([name, { visible, zIndex, transform }]) => {
+        const el = faces[name];
+        if (!visible) {
+          if (shown[name]) {
+            el.style.visibility = "hidden";
+            shown[name] = false;
+          }
+          return;
         }
-        return;
-      }
-      const { w, h } = sizes[name];
-      el.style.transform = quadToQuad(
-        [
-          [0, 0],
-          [w, 0],
-          [w, h],
-          [0, h],
-        ],
-        quad,
-      );
-      el.style.zIndex = String(i + 1);
-      if (!shown[name]) {
-        el.style.visibility = "visible";
-        shown[name] = true;
-      }
-    });
+        el.style.transform = transform;
+        el.style.zIndex = String(zIndex);
+        if (!shown[name]) {
+          el.style.visibility = "visible";
+          shown[name] = true;
+        }
+      },
+    );
   };
 
   // the faces drawn into canvases from their live layout, the way the 3d scene draws its screen textures: the sky, the
@@ -540,6 +555,7 @@ export const createScreens = ({
     update,
     setInput,
     place,
+    faceStyles,
     picture,
     showPicture,
     setFrosted,

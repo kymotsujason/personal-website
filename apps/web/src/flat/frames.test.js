@@ -125,10 +125,29 @@ test("frameTimes ends at the last frame", () => {
     0, 200, 600, 900,
   ]);
 
-  // the lead frames all have the phone closed, so only the last of them shows during the unfold
+  // the lead frames all have the phone closed, so only the last of them shows during the unfold, which starts from
+  // where the hands wait (0.99)
   expect(frameTimes(leadSet, linear, 0, 1000)).toEqual([
-    0, 0, 0, 0, 10, 260, 750,
+    0, 0, 0, 0, 5, 253, 747,
   ]);
+});
+
+test("frameFor and frameTimes swap from the lead to the fold frames at the same fold", () => {
+  // the hands wait at 0.99 while the phone's last bit of travel isn't drawn, so both count the lead's end as 0.99
+  const { frameFor } = createFrameIndex(leadSet);
+  expect(frameFor(0.986, 1)).toBe(3);
+  expect(frameFor(0.984, 1)).toBe(4);
+  const times = frameTimes(leadSet, linear, 0, 1000);
+  const foldAt = (ms) => 0.99 * (1 - ms / 1000);
+  expect(frameFor(foldAt(times[4] - 1), 1)).toBe(3);
+  expect(frameFor(foldAt(times[4] + 1), 1)).toBe(4);
+
+  const portrait = realManifest("portrait-open-day-half");
+  const real = createFrameIndex(portrait);
+  const first = portrait.frames.findIndex((f) => f.fold < 0.99);
+  const swap = (0.99 + portrait.frames[first].fold) / 2;
+  expect(real.frameFor(swap + 1e-4, 1)).toBe(first - 1);
+  expect(real.frameFor(swap - 1e-4, 1)).toBe(first);
 });
 
 test("chooseLighting gives day at noon, night at 23, dusk at 19", () => {

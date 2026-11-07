@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { state, pose, DUO, TAP_FOLD } from "./state.js";
 import { tween, ease, cancelAll } from "./tween.js";
-import { MOVE, moveTotal, moveAt, FAST_FOLD_AT } from "./shared/motion.js";
+import { MOVE, moveTotal, moveAt, FAST_FOLD_AT, INTRO_UNFOLD_MS, FAST_MOVE_MS } from "./shared/motion.js";
 import { camera, backdrop } from "./renderer.js";
 import { centerComp, setFold, leadOpen, LEAD, loadVolume } from "./device.js";
 import { siteData, dropScrub } from "./home.js";
@@ -91,7 +91,7 @@ const runIntro = async (fast) => {
     };
     let unfolded;
     if (fast) {
-        tween({ to: { ...state.poses.rest, idle: 1 }, duration: 650, easing: ease.outCubic, group: "intro" });
+        tween({ to: { ...state.poses.rest, idle: 1 }, duration: FAST_MOVE_MS, easing: ease.outCubic, group: "intro" });
         tween({ to: { blur: 0 }, duration: 450, easing: ease.inOutSine, group: "intro" });
         // the unfold starts as the page fades in, while the phone is still moving into place (low enough in landscape
         // that its bottom edge is cut off for the first few frames), so the two motions run together. the cover swings
@@ -99,7 +99,7 @@ const runIntro = async (fast) => {
         // standstill read as a pause after the fade. leaving closed with some speed reads as a soft start instead
         const foldAt = state.portrait ? FAST_FOLD_AT.portrait : FAST_FOLD_AT.landscape;
         leadOpen(Math.max(0, foldAt - LEAD.time), Math.min(LEAD.time, foldAt));
-        unfolded = tween({ to: { fold: 0 }, duration: 700, delay: foldAt, easing: ease.outSine, group: "intro", onUpdate: unlockNearFlat });
+        unfolded = tween({ to: { fold: 0 }, duration: INTRO_UNFOLD_MS.fast, delay: foldAt, easing: ease.outSine, group: "intro", onUpdate: unlockNearFlat });
     } else {
         const total = moveTotal();
         const { fullStart, rest } = state.poses;
@@ -113,7 +113,7 @@ const runIntro = async (fast) => {
         });
         tween({ to: { blur: 0 }, duration: 550, delay: 100, easing: ease.inOutSine, group: "intro" });
         leadOpen(Math.max(0, foldAt - LEAD.time));
-        unfolded = tween({ to: { fold: 0 }, duration: 1100, delay: foldAt, easing: ease.inOutSine, group: "intro", onUpdate: unlockNearFlat });
+        unfolded = tween({ to: { fold: 0 }, duration: INTRO_UNFOLD_MS.full, delay: foldAt, easing: ease.inOutSine, group: "intro", onUpdate: unlockNearFlat });
     }
     unfolded.then(unlock);
     unfolded.then(() => backdrop.loadRest()).catch(failScene);
