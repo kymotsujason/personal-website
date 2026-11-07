@@ -1409,6 +1409,73 @@ test.describe("failure, resizing, and turning", () => {
       .toMatchObject({ phone: "closed", busy: false, fold: 1 });
   });
 
+  test("a turn drops a desk drag in progress", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false, fold: 1 });
+    const look = () =>
+      page.evaluate(() => {
+        const w = window as any;
+        const { targetYaw, targetPitch, dragging } = w.__flat.effects();
+        return { targetYaw, targetPitch, dragging, slow: w.__flat.slowStep() };
+      });
+    // a drag off the phone, held down through the turn
+    await page.mouse.move(40, 400);
+    await page.mouse.down();
+    await page.mouse.move(300, 400, { steps: 10 });
+    await expect.poll(async () => (await look()).dragging).toBe(true);
+    await watchTurn(page);
+    await page.setViewportSize({ width: 600, height: 900 });
+    await expect
+      .poll(async () => (await turnSeen(page)).covered)
+      .toBeGreaterThan(0);
+    // its release lands under the cover, where the scene takes no input
+    await page.mouse.up();
+    await settledOn(page, "/", null);
+    const after = await look();
+    expect(after.dragging).toBe(false);
+    // a mouse move with no button down moves nothing
+    await page.mouse.move(100, 300, { steps: 10 });
+    await page.mouse.move(500, 600, { steps: 10 });
+    const moved = await look();
+    expect(moved.targetYaw).toBe(after.targetYaw);
+    expect(moved.targetPitch).toBe(after.targetPitch);
+    // and the phone counts as at rest, so the last step could drop a slow device here
+    await expect.poll(async () => (await look()).slow.atRest).toBe(true);
+    await expect(page.locator("body")).not.toHaveClass(/looking/);
+  });
+
+  test("a turn while the first sets load is seen once they're in", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    const held: (() => Promise<void>)[] = [];
+    await page.route(/\/flat\/landscape-[^/]+\/a\d+\.webp$/, (route) => {
+      held.push(() => route.continue());
+    });
+    await page.goto("/");
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    await page.setViewportSize({ width: 600, height: 900 });
+    await page.unroute(/\/flat\/landscape-[^/]+\/a\d+\.webp$/);
+    await Promise.all(held.map((release) => release()));
+    await expect
+      .poll(() => frameSets(page), { timeout: 20000 })
+      .toContain("portrait-open");
+    await settledOn(page, "/", null);
+    expect(
+      (await frameSets(page)).filter((set) => set?.includes("landscape")),
+    ).toEqual([]);
+    const fitted = await page.evaluate(() => {
+      const { width, height } = (window as any).__flat.stage.geometry;
+      return { width, height };
+    });
+    expect(fitted).toEqual({ width: 600, height: 900 });
+  });
+
   test("a blocked frame image drops to the plain flat page", async ({
     page,
   }) => {

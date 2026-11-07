@@ -180,8 +180,10 @@ export const createLook = ({ scene, loop, folds }) => {
     );
   };
 
-  const endDrag = (event) => {
-    if (!drag || event.pointerId !== drag.id) {
+  // a resize or a turn drops a drag in progress, as it drops a fold swipe. its release may never reach the scene, so
+  // it's dropped here instead of waiting for one
+  const dropDrag = () => {
+    if (!drag) {
       return;
     }
     if (drag.moved) {
@@ -189,6 +191,12 @@ export const createLook = ({ scene, loop, folds }) => {
     }
     drag = null;
     document.body.classList.remove("looking");
+  };
+
+  const endDrag = (event) => {
+    if (drag && event.pointerId === drag.id) {
+      dropDrag();
+    }
   };
 
   // the listeners, all on the window and removed with signal. guard wraps each so a throw fails the scene
@@ -324,6 +332,7 @@ export const createLook = ({ scene, loop, folds }) => {
 
   return {
     install,
+    dropDrag,
     lookAhead,
     stop,
     view,

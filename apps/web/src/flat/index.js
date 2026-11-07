@@ -1110,11 +1110,11 @@ export const startFlatScene = ({
         fail("too slow for the 2d scene");
       }, 10);
     };
-    const noteFrame = (now, moving) => {
+    const noteFrame = (now, moving, fresh = false) => {
       if (tooSlow || failed) {
         return;
       }
-      if (slowMeter.frame({ now, moving }) === "slow" && !keepOnSlow) {
+      if (slowMeter.frame({ now, moving, fresh }) === "slow" && !keepOnSlow) {
         tooSlow = true;
         dropWhenStill();
       }
@@ -1124,13 +1124,18 @@ export const startFlatScene = ({
         measured: slowMeter.measured(),
         ...slowMeter.counted(),
         verdict: slowMeter.verdict(),
+        atRest: atRest(),
       });
     }
-    // the loop's first frame after it slept has no gap, and starts a motion's clock afresh
+    // the loop's first frame after it slept has no gap, so a motion's clock starts on it
     loop.onDraw((now, dt) => {
       if (scene.drawing) {
-        noteFrame(now, dt > 0 && !turn && (scene.busy || charger.moving()));
+        noteFrame(now, !turn && (scene.busy || charger.moving()), dt === 0);
       }
+    });
+    // a hidden tab runs no frames, so the gap across it isn't one
+    document.addEventListener("visibilitychange", () => slowMeter.pause(), {
+      signal,
     });
     const watchIntro = () => {
       const tick = (now) => {
@@ -1148,6 +1153,7 @@ export const startFlatScene = ({
     const dropHeld = () => {
       folds.dropGesture();
       switcher.dropHomeSwipe();
+      look.dropDrag();
     };
     const showFromAddress = () => {
       dropHeld();
@@ -1234,6 +1240,12 @@ export const startFlatScene = ({
       return showFromAddress();
     };
     resizing = watchResize(guard(rebuild), { signal });
+    // a window resized or turned while the first sets loaded wasn't heard, so the stage fitted at the mount is checked
+    // against it now
+    const { width, height } = scene.stage.geometry;
+    if (width !== innerWidth || height !== innerHeight) {
+      resizing.again();
+    }
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,

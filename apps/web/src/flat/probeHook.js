@@ -38,6 +38,7 @@ export const installFlatHook = (probe) => {
         judged: scene.rest?.judged ?? false,
         verdict: scene.rest?.verdict ?? null,
         frosted: scene.frosted,
+        dragging: look.dragging(),
       };
     },
     // the volume buttons' hit areas in window px, the bar, and the sink

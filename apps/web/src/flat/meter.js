@@ -8,8 +8,6 @@
 export const SKIP_MS = 200;
 export const DECIDE_MS = 3000;
 export const SLOW_MS = 50;
-// a gap this long is a pause (a hidden tab runs no frames), so the frame after it starts a new motion
-const PAUSE_MS = 1000;
 
 // the head script keeps a device the 3d scene sent here (2dAuto) or one this step sent to the flat page (flatAuto) for
 // AUTO_DAYS, and the 2d scene reads 2dAuto the same way (head.js autoRecent, which can't import this)
@@ -24,8 +22,10 @@ export const autoRecent = (saved, now = Date.now()) => {
   return age >= 0 && age < AUTO_DAYS * 24 * 60 * 60 * 1000;
 };
 
-// frame({ now, moving }) is called for each frame with its time and whether anything moves on it, and gives back the
-// verdict, null until it says "slow"
+// frame({ now, moving, fresh }) is called for each frame with its time and whether anything moves on it, and gives
+// back the verdict, null until it says "slow". fresh says the frame has no gap of its own (the loop's first frame after
+// it slept), so a motion's clock starts on it. pause() is for a hidden tab, which runs no frames, so the gap across it
+// never counts
 export const createSlowMeter = () => {
   // the last frame's time in this motion and how far into it that was, both null at rest
   let last = null;
@@ -42,21 +42,26 @@ export const createSlowMeter = () => {
     return verdict;
   };
 
-  const frame = ({ now, moving }) => {
+  const pause = () => {
+    last = null;
+    into = null;
+  };
+
+  const frame = ({ now, moving, fresh = false }) => {
     if (!moving) {
-      last = null;
-      into = null;
+      pause();
       return verdict;
     }
-    if (last === null || now - last > PAUSE_MS) {
+    if (last === null || fresh) {
       last = now;
       into = 0;
       return verdict;
     }
     const gap = now - last;
-    // a gap that starts inside the motion's first SKIP_MS is skipped whole
-    if (into >= SKIP_MS) {
-      measured += gap;
+    // only the part of a gap past the motion's first SKIP_MS counts, though the frame is judged by its whole gap
+    const past = Math.min(gap, into + gap - SKIP_MS);
+    if (past > 0) {
+      measured += past;
       frames++;
       if (gap > SLOW_MS) {
         slow++;
@@ -69,6 +74,7 @@ export const createSlowMeter = () => {
 
   return {
     frame,
+    pause,
     verdict: () => verdict,
     measured: () => measured,
     counted: () => ({ frames, slow }),
