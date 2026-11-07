@@ -14,10 +14,13 @@ import { arrive, holdIntro, showFromAddress, showHome } from "./intro.js";
 import { installGestures, installKeys, dropGesture } from "./fold.js";
 import { installLook } from "./look.js";
 import { startLoop, stopLoop } from "./loop.js";
-import { testSwitches } from "./switches.js";
 import { signal, endScene, endFetches, sceneFetch, sceneSignal, setFail, guard, every } from "./lifetime.js";
 
 export { sceneNavigation } from "./navigation.js";
+
+// the address switches for testing (?slow and ?noweather) count only in the dev server and the capture build. each file
+// reads the build constants itself, since a shared module would keep the guard live in the shipped build
+const testSwitches = Boolean(import.meta.env?.DEV) || (typeof __CAPTURE__ !== "undefined" && __CAPTURE__);
 
 // resolves once startScene has set the scene up, before the models arrive, for the dev tools that reach into it
 let markStarted = null;

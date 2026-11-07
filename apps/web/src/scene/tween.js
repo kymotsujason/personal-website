@@ -1,5 +1,8 @@
 import { pose } from "./state.js";
-import { testSwitches } from "./switches.js";
+
+// the address switches for testing (?slow and ?noweather) count only in the dev server and the capture build. each file
+// reads the build constants itself, since a shared module would keep the guard live in the shipped build
+const testSwitches = Boolean(import.meta.env?.DEV) || (typeof __CAPTURE__ !== "undefined" && __CAPTURE__);
 
 const TIME_SCALE = (testSwitches && Number(new URLSearchParams(globalThis.location?.search).get("slow"))) || 1;
 
