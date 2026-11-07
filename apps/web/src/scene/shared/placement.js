@@ -1,5 +1,14 @@
 import { DUO, FOV, HOME_FILL } from "../state.js";
 
+// how far in front of the phone's center the open screen's html lies (device.js pins it there), which is the plane the
+// zoom pose puts at zoomDist
+export const SCREEN_FRONT = DUO.depth / 2 + 0.003;
+
+// in portrait the hinge keeps the closed slab centered by shifting it up half a device as it closes, which made the
+// whole device sink while opening. this cancels that shift in world space (cm in y), so the body half holds still and
+// the lid opens upward
+export const centerShift = (fold, portrait) => (portrait ? -(DUO.halfW / 2) * Math.min(Math.max(fold, 0), 1) : 0);
+
 // where the phone sits for a window of this size, in the camera's space (cm), for both scenes. nothing here may reach
 // three.js, since the 2d bundle imports it
 export const place = ({ width, height, portrait }) => {
@@ -34,7 +43,7 @@ export const place = ({ width, height, portrait }) => {
         // zoomDist is where the screen itself has to be, and the screen sits in front of the device's center plane by
         // half its depth, so the device stops that much farther back. without this the app ended 1.55% larger than
         // the window and visibly shrank when the flat page took over
-        zoom: { x: 0, y: 0, z: -(zoomDist + DUO.depth / 2 + 0.003), rx: 0, ry: 0, rz: 0 },
+        zoom: { x: 0, y: 0, z: -(zoomDist + SCREEN_FRONT), rx: 0, ry: 0, rz: 0 },
         fullStart: {
             x: bodyW * 0.1, y: -visibleH(homeDist) * 0.75 - bodyH * 0.4,
             z: -homeDist * 1.25, rx: -1.15, ry: 0.28, rz: -0.12

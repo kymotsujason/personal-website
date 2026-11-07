@@ -40,3 +40,13 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   background-image: var(--atlas);
   background-repeat: no-repeat;
 }
+
+/* the stage's two layers, laid out in the frames' own px and moved by one transform from their top left corner: the
+   screens behind #page and the frames in front of it. neither takes input itself, and the frames never do */
+.flat-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}

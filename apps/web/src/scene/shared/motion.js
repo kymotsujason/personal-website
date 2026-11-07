@@ -82,6 +82,8 @@ export const CLOSE_MS = 460;
 export const CLOSE_DELAY_MS = 80;
 export const CLOSE_SWIPE_MS = 380;
 export const REST_RETURN_MS = 650;
+// the apps' background, ios's dark appearance. flat.css's #page column colors go with it
+export const APP_BACKGROUND = "#000000";
 // #page's fade for an open or a close with reduced motion
 export const CROSSFADE_MS = 300;
 // another page on the window that's already open fades in over this

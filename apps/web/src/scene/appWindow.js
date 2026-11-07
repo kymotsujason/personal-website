@@ -7,7 +7,7 @@ import {
     springOut, OPEN_WINDOW_MS, ZOOM_MS, FOLD_FINISH_MS, CLOSE_MS, CLOSE_DELAY_MS, CLOSE_SWIPE_MS, REST_RETURN_MS, CROSSFADE_MS, FADE_IN_MS,
     HOME_HINT_KEY, HOME_HINT_MS, SWITCH_MS, SWITCH_SWAP_AT, SWITCH_SHRINK_X, SWITCH_SHRINK_Y, SWITCH_GAP, SWITCH_SWAP_WAIT_MS,
     HOME_SHRINK, HOME_DISTANCE, HOME_FLICK, HOME_SPRING_BACK_MS, HOME_LIFT, HOME_EDGE, HOME_FIT,
-    SWITCHER_PULL, SWITCHER_SLOW, SWITCHER_REST_MS, SPEED_FADE_MS, QUICK_SHARE
+    SWITCHER_PULL, SWITCHER_SLOW, SWITCHER_REST_MS, SPEED_FADE_MS, QUICK_SHARE, APP_BACKGROUND
 } from "./shared/motion.js";
 import { camera } from "./renderer.js";
 import { music } from "./home.js";
@@ -20,8 +20,7 @@ import { noteOpened } from "./recents.js";
 import { hideSnapshots } from "./snapshotCards.js";
 import { enterSwitcher, switcherDrag, switcherDragEnd, switcherRow, drawPeek, quickSwitch } from "./switcher.js";
 
-// the apps' background, ios's dark appearance. flat.css's #page column colors go with it
-export const APP_BACKGROUND = "#000000";
+export { APP_BACKGROUND };
 
 // the page's own <main id="page">, which the scene pins onto the app window and never moves or copies
 export let pageEl = null;

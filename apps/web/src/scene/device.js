@@ -10,7 +10,7 @@ import { createHands, handMatrix, LIMITS } from "./hands.js";
 import { state, pose, settings, DUO } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
 import { LEAD } from "./shared/motion.js";
-import { place } from "./shared/placement.js";
+import { place, centerShift, SCREEN_FRONT } from "./shared/placement.js";
 import { renderer, scene, camera, backdrop, focusBlur, phoneGlow, MATERIALS, holeMaterial, applyDaylight, applyWeather, currentWeather } from "./renderer.js";
 import { applyWallpaperMotion, reducedMotion } from "./quality.js";
 import { music, statusBar, buildWidgets, buildHomeContent, fillGithub, fitLines, applyStatus, showMusic, refreshStatus, siteData } from "./home.js";
@@ -177,10 +177,9 @@ const measure = () => {
     return { appW, appH, rest, stage, zoom, fullStart, fastStart };
 };
 
-// in portrait the hinge keeps the closed slab centered by shifting it up half a device as it closes, which made the
-// whole device sink while opening. this cancels that shift in world space, so the body half holds still and the lid
-// opens upward (the halves and the hands keep their relative layout, since all of it sits under the root)
-export const centerComp = (fold) => (state.portrait ? -(DUO.halfW / 2) * THREE.MathUtils.clamp(fold, 0, 1) : 0);
+// portrait's hinge shift cancelled in world space (see centerShift). the halves and the hands keep their relative
+// layout, since all of it sits under the root
+export const centerComp = (fold) => centerShift(fold, state.portrait);
 
 export const setFold = (fold) => {
     const closed = THREE.MathUtils.clamp(fold, 0, 1);
@@ -494,7 +493,7 @@ export const buildDevice = () => {
         root.add(attachHands());
     }
 
-    const z = DUO.depth / 2 + 0.003;
+    const z = SCREEN_FRONT;
 
     // reference: open, for the inner screen's layout and the uvs of both halves
     setFold(0);
