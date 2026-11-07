@@ -160,6 +160,20 @@ const loadDeskManifest = async (name) => {
   return manifest;
 };
 
+// the desk's images fetched into the cache ahead of a scene that may start later in the load (index.js
+// prefetchFlatScene), not decoded
+export const prefetchDesk = async (name) => {
+  const loaded = await loadDeskManifest(name);
+  for (const face of FACES.filter((f) => loaded.desk.faces[f])) {
+    for (const look of LOOKS) {
+      const response = await fetch(`/flat/${name}/desk-${face}-${look}.webp`, {
+        priority: "low",
+      });
+      await response.blob();
+    }
+  }
+};
+
 // the desk for a set's manifest (which names its desk folder), in host behind the stage's layers
 export const createDesk = ({ host, manifest }) => {
   const base = `/flat/${manifest.desk}/`;

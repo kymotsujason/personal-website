@@ -96,8 +96,9 @@ html.flat-ready .flat-black {
   opacity: 0;
 }
 
-/* the black a turn of the window decodes the new orientation under (src/flat/index.js), up at once over the whole stage
-   and #page, taking the pointer, and fading once the turned phone has drawn */
+/* the black a turn of the window decodes the new orientation under, and the handoff from 3d loads the 2d scene under
+   (src/flat/cover.js), up at once over the whole stage and #page, taking the pointer, and fading once the scene under it
+   has drawn */
 .flat-blackout {
   position: absolute;
   inset: 0;

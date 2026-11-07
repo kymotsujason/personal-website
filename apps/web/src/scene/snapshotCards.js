@@ -51,6 +51,11 @@ const makeHost = () => {
     return surface;
 };
 
+// the copies' hosts out of the stage, for the 2d scene taking it over
+export const dropSnapshotHosts = () => {
+    snapshotSurfaces.splice(0).forEach((surface) => surface.el.remove());
+};
+
 // a copy not showing is taken out of the page entirely, since visibility alone isn't enough: About's front fact cards
 // set their own visibility, and drew over the next app the visitor opened. a copy coming back takes its scroll then,
 // since a box that isn't displayed can't be scrolled

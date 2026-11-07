@@ -114,3 +114,21 @@ test("an interval stops when the scene ends, and none starts after", () => {
     assert.deepEqual(cleared, [id]);
     assert.equal(every(() => {}, 1000), null);
 });
+
+test("a timer stops when the scene ends, and none starts after", async () => {
+    // a fresh copy of the module, since the one above has already ended its scene
+    const fresh = await import("./lifetime.js?later");
+    const ran = [];
+    fresh.later(() => ran.push("before"), 0);
+    const ended = fresh.later(() => ran.push("ended"), 5);
+    assert.notEqual(ended, null);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    fresh.endScene();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(ran, ["before"]);
+    assert.equal(fresh.later(() => ran.push("after"), 0), null);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.deepEqual(ran, ["before"]);
+    // a timer that ran takes its listener back off
+    assert.equal(getEventListeners(fresh.signal, "abort").length, 0);
+});

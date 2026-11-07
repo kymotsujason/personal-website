@@ -4,7 +4,7 @@ import { createWeatherFeed, loadHome, readWeather } from "./weather.js";
 import { readContributions } from "./github.js";
 import { state, pose } from "./state.js";
 import { cancelAll } from "./tween.js";
-import { initRenderer, renderer, backdrop, MATERIALS, setWeather, applyWeather, applyDaylight } from "./renderer.js";
+import { initRenderer, renderer, scene, backdrop, MATERIALS, setWeather, applyWeather, applyDaylight } from "./renderer.js";
 import { installQuality, resize } from "./quality.js";
 import { initDevice, loadKeys, handsRig, buildDevice, loadCharger, watchCharger, chargerWanted } from "./device.js";
 import { initHome, stopHome, showContributions, statusBar, dropScrub } from "./home.js";
@@ -15,6 +15,8 @@ import { installGestures, installKeys, dropGesture } from "./fold.js";
 import { installLook } from "./look.js";
 import { startLoop, stopLoop } from "./loop.js";
 import { signal, endScene, endFetches, sceneFetch, sceneSignal, setFail, guard, every } from "./lifetime.js";
+import { releaseImages } from "./release.js";
+import { dropSnapshotHosts } from "./snapshotCards.js";
 
 export { sceneNavigation } from "./navigation.js";
 
@@ -67,7 +69,9 @@ const installRebuild = () => {
     });
 };
 
-export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {}, onFailed = () => {}, onPageFlat = () => {} }) => {
+// onFailed hears "handoff" when the device is too slow at the ladder's last step, after a teardown that leaves the root's
+// classes to the layout, and onLastStep hears once the ladder takes the step before it (see quality.js)
+export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {}, onFailed = /** @type {(reason: unknown) => void} */ (() => {}), onPageFlat = () => {}, onLastStep = () => {} }) => {
     const appNamed = (name) => siteData.apps.find((a) => a.name === name) || null;
     let failed = false;
     const root = document.documentElement;
@@ -80,17 +84,10 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
             console.warn("the scene's teardown hit an error", error);
         }
     };
-    // final for this page load: the flat page as the server sent it, with its content and scroll, and a scene that
-    // does nothing more. a reason that's a string (the watchdog, a lost context) or an error marked expected (a model
-    // that didn't load) is the fallback working, so only an error nobody expected is logged as one
-    const fail = (reason, { expected = typeof reason === "string" || Boolean(reason && reason.expected) } = {}) => {
-        if (failed) {
-            return;
-        }
-        failed = true;
+    // the scene stopped for good: its loop, listeners, fetches, timers, and photo worker, #page's inline styles, the
+    // images it held on the cpu, and webgl
+    const teardown = () => {
         stopLoop();
-        root.classList.add("scene-failed");
-        root.classList.remove("has-3d", "page-first");
         pageEl.removeAttribute("style");
         // the desk's cursors, which would otherwise stay over the flat page
         document.body.classList.remove("closed", "looking", "over-volume");
@@ -98,7 +95,8 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         quietly(endFetches);
         quietly(endScene);
         quietly(stopHome);
-        quietly(() => backdrop && backdrop.stop());
+        quietly(() => backdrop && backdrop.release());
+        quietly(() => releaseImages(scene, ...Object.values(state.phoneModel ? state.phoneModel.parts : {}), state.handModel && state.handModel.root));
         quietly(() => {
             if (!renderer) {
                 return;
@@ -110,12 +108,38 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
                 renderer.forceContextLoss();
             }
         });
+    };
+    // final for this page load: the flat page as the server sent it, with its content and scroll, and a scene that
+    // does nothing more. a reason that's a string (the watchdog, a lost context) or an error marked expected (a model
+    // that didn't load) is the fallback working, so only an error nobody expected is logged as one
+    const fail = (reason, { expected = typeof reason === "string" || Boolean(reason && reason.expected) } = {}) => {
+        if (failed) {
+            return;
+        }
+        failed = true;
+        root.classList.add("scene-failed");
+        root.classList.remove("has-3d", "page-first");
+        teardown();
         if (expected) {
             console.warn("the scene failed, so the page shows flat", reason);
         } else {
             console.error("the scene failed, so the page shows flat", reason);
         }
         onFailed(reason);
+    };
+    // the device is too slow for 3d, and the 2d scene takes over on this page load (the layout decides, under its
+    // cover). no scene-failed, which would pin #page flat for the rest of the load, and the stage is left with none of
+    // the 3d scene's own elements in it: the home screen's, and the switcher's copies of the pages
+    const handoff = () => {
+        if (failed) {
+            return;
+        }
+        failed = true;
+        teardown();
+        quietly(() => stageEl.querySelector("#css-layer").replaceChildren());
+        quietly(dropSnapshotHosts);
+        console.warn("the 3d scene is too slow here, so the 2d scene takes over");
+        onFailed("handoff");
     };
     setFail(fail);
 
@@ -135,7 +159,7 @@ export const startScene = ({ stageEl, pageEl, siteData, music, onShown = () => {
         initRenderer(stageEl.querySelector("#gl-layer"));
         // rare, and rebuilding every texture the scene uploads isn't worth the risk, so the page shows flat
         renderer.domElement.addEventListener("webglcontextlost", onContextLost);
-        installQuality();
+        installQuality({ onHandoff: handoff, onLastStep });
         initDevice(stageEl.querySelector("#css-layer"));
         installHomeSwipe();
         installSwitcher();

@@ -3,6 +3,7 @@ import { wallpaperAt, NIGHT } from "./monitors.js";
 import { loadingManager, failScene } from "./lifetime.js";
 import { DESK_FOV, DESK_REST_PITCH } from "./shared/motion.js";
 import { DESK_EXTENT, restPitchFor, createLimits, clampLook } from "./shared/lookLimits.js";
+import { freeTexture, releaseImages } from "./release.js";
 
 // jason's desk behind the phone: a partial photo sphere stitched from 21 photos taken from his chair (hugin, with the
 // matches filtered against the shooting grid since every monitor shows the same wallpaper). it's drawn by its own
@@ -356,6 +357,16 @@ export const createBackdrop = (renderer, onEnvironment) => {
     };
     // what waits until the page has shown its first frame (intro.js and loop.js call loadRest), so it doesn't take bandwidth from
     // what that frame needs, the phone and hands included
+    const stop = () => {
+        stopped = true;
+        strips.length = 0;
+        if (photoWorker) {
+            photoWorker.terminate();
+            photoWorker = null;
+        }
+        cutting.forEach((resolve) => resolve(null));
+        cutting.clear();
+    };
     const afterShown = [];
     let restLoading = false;
     const whenShown = (load) => {
@@ -508,15 +519,13 @@ export const createBackdrop = (renderer, onEnvironment) => {
         look,
         // whether the desk shows yet (see showWhenReady)
         ready: () => sky.visible,
-        stop: () => {
-            stopped = true;
-            strips.length = 0;
-            if (photoWorker) {
-                photoWorker.terminate();
-                photoWorker = null;
-            }
-            cutting.forEach((resolve) => resolve(null));
-            cutting.clear();
+        stop,
+        // the photos held on the cpu, for a scene that has stopped. one still loading is let go once it arrives
+        release: () => {
+            stop();
+            textures.forEach((pending) => pending.then(freeTexture, () => {}));
+            textures.clear();
+            releaseImages(scene);
         },
         // the full images that haven't started stay unloaded, and the strips not yet uploaded are dropped. a full image
         // already showing stays

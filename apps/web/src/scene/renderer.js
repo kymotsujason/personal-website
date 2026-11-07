@@ -7,7 +7,7 @@ import { sunPlace, moonPlace, rimAngle } from "./skyPath.js";
 import { skyTint, glassColor } from "./tint.js";
 import { daylight, hourNow } from "./daylight.js";
 import { state, FOV } from "./state.js";
-import { guard } from "./lifetime.js";
+import { later } from "./lifetime.js";
 import { applySky, skyVars } from "../lib/sky.js";
 
 export let renderer = null;
@@ -159,7 +159,7 @@ export const applyWeather = () => {
         const { scene, intensity } = currentWeather();
         state.wallpaper.setWeather(scene, intensity);
         // once the sky's two second crossfade to the new weather is done
-        setTimeout(guard(applyTint), 2200);
+        later(applyTint, 2200);
     }
 };
 

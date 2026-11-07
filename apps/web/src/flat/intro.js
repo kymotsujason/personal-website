@@ -28,11 +28,13 @@ const smoothstep = (t) => t * t * (3 - 2 * t);
 // plays, the fast one for a returning visit
 export const arrivalKind = ({
   arrival,
+  from = null,
   reduced = false,
   hasApp = false,
   seen = false,
 }) => {
-  if (reduced) {
+  // a handoff from 3d shows the page as a 3d resize does: the app zoomed, or the home screen with the phone open
+  if (reduced || from === "3d") {
     return hasApp ? "page" : "open";
   }
   const given = arrival || (seen ? "fast" : "full");

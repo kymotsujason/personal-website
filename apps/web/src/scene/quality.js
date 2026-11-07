@@ -2,7 +2,8 @@ import { stepSkyLevel, stepLater, stepFlat, glassFor, LATER, FLAT_MS } from "./s
 import { setGlassSimple } from "./screens.js";
 import { renderer, camera, backdrop } from "./renderer.js";
 import { state } from "./state.js";
-import { signal, guard, failScene } from "./lifetime.js";
+import { signal, guard } from "./lifetime.js";
+import { groupBusy } from "./tween.js";
 import { write } from "../lib/storage.js";
 
 // with reduced motion the sky holds still on one frame of its weather, and it follows the setting if it changes.
@@ -43,25 +44,51 @@ const applyLater = () => {
     }
 };
 
-// a device still too slow at the last step shows the flat site from here on, and the head script keeps it there for
-// 30 days. it waits for the phone to settle, so the intro or an open never cuts off half way, and a visitor who chose
-// 3d keeps it
+// a device still too slow at the last step hands off to the 2d scene from here on (or the flat site, below the 2d
+// floor), and the head script keeps it there for 30 days. it waits for the phone to settle, so the intro or an open
+// never cuts off half way, and for no press held down, no lead, no cable moving, and no navigation the scene is still
+// deciding, so the 2d scene starts from a page that's known. a visitor who chose 3d keeps it
 let crawlSeconds = 0;
+let hooks = { onHandoff: () => {}, onLastStep: () => {} };
+const held = new Set();
 const settled = () => state.phone !== null && !state.busy && !state.switching;
+const readyToHand = () =>
+    settled() &&
+    held.size === 0 &&
+    !groupBusy("lead") &&
+    !(state.charger && state.charger.busy()) &&
+    state.pendingPage === null;
 const stepTooSlow = (p75) => {
     if (laterLevel < LATER.smallDesk || window.__chose3d) {
         return;
     }
     const step = stepFlat({ crawl: crawlSeconds, crawling: p75 > FLAT_MS });
     crawlSeconds = step.crawl;
-    if (step.flat && settled()) {
+    if (step.flat && readyToHand()) {
         write("local", "2dAuto", String(Date.now()));
-        failScene("too slow for 3d");
+        hooks.onHandoff();
     }
 };
 
-export const installQuality = () => {
+// the pointers held down. a release the window didn't hear (outside it, say) shows as a move with no button down
+const trackPointers = () => {
+    const up = (event) => held.delete(event.pointerId);
+    addEventListener("pointerdown", (event) => held.add(event.pointerId), { capture: true, signal });
+    addEventListener("pointerup", up, { capture: true, signal });
+    addEventListener("pointercancel", up, { capture: true, signal });
+    addEventListener("pointermove", (event) => {
+        if (event.buttons === 0) {
+            up(event);
+        }
+    }, { capture: true, signal });
+    addEventListener("blur", () => held.clear(), { signal });
+};
+
+// onLastStep hears once the ladder takes its last step before the handoff, so the 2d scene can be fetched ahead
+export const installQuality = ({ onHandoff = () => {}, onLastStep = () => {} } = {}) => {
+    hooks = { onHandoff, onLastStep };
     reducedMotion.addEventListener("change", guard(applyWallpaperMotion), { signal });
+    trackPointers();
 };
 
 // a device that can't keep up renders the 3d at a lower resolution, a step at a time (the html layers stay sharp). the
@@ -110,6 +137,9 @@ export const stepQuality = (now) => {
                 if (later.level !== laterLevel) {
                     laterLevel = later.level;
                     applyLater();
+                    if (laterLevel >= LATER.smallDesk && !window.__chose3d) {
+                        hooks.onLastStep();
+                    }
                 } else {
                     stepTooSlow(p75);
                 }

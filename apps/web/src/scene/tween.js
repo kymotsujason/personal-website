@@ -34,6 +34,9 @@ export const cancelGroup = (group) => {
     });
 };
 
+// whether a group has a tween waiting or running
+export const groupBusy = (group) => tweens.some((tw) => tw.group === group);
+
 // stops every tween where it is, and settles each one, so nothing waiting on a tween is left hanging
 export const cancelAll = () => {
     const stopped = tweens;

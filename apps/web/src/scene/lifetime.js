@@ -80,3 +80,18 @@ export const every = (fn, ms) => {
     signal.addEventListener("abort", () => clearInterval(id));
     return id;
 };
+
+// a timer that ends with the scene, so what it runs can't reach the page after a teardown. gives back null once the
+// scene has ended, without starting it
+export const later = (fn, ms) => {
+    if (signal.aborted) {
+        return null;
+    }
+    const stop = () => clearTimeout(id);
+    const id = setTimeout(() => {
+        signal.removeEventListener("abort", stop);
+        guard(fn)();
+    }, ms);
+    signal.addEventListener("abort", stop, { once: true });
+    return id;
+};

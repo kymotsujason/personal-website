@@ -106,12 +106,14 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
     <script>
       import {
         goHome,
+        inFlight,
         navigate,
         onNavigate,
         recoverFromChunk,
         setScenePageFlat,
         syncPagePinned,
       } from "../layout/navigation.js";
+      import { createCover } from "../flat/cover.js";
       import "../layout/depth.js";
       import "../layout/edgeSwipe.js";
       import "../layout/facts.js";
@@ -226,65 +228,6 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
       }, 60000);
       addEventListener("scene-failed", setClockSky);
 
-      const stageEl = document.getElementById("stage");
-      const dataEl = document.getElementById("site-data");
-      if (
-        root.classList.contains("has-3d") &&
-        !root.classList.contains("scene-failed") &&
-        stageEl &&
-        page &&
-        dataEl
-      ) {
-        import("../scene/index.js")
-          .then(
-            ({ startScene, sceneNavigation }) => {
-              if (root.classList.contains("scene-failed")) {
-                return;
-              }
-              const scene = startScene({
-                stageEl,
-                pageEl: page,
-                siteData: JSON.parse(dataEl.textContent ?? "{}"),
-                onShown: () => {
-                  Object.assign(window, { __sceneShown: true });
-                  // the scene covers the page now, so it is pinned on the phone unless it shows as the flat page
-                  root.classList.remove("page-first");
-                  syncPagePinned();
-                },
-                onFailed: () => failScene(),
-                onPageFlat: setScenePageFlat,
-                music,
-              });
-              onNavigate(sceneNavigation(scene, { navigate, goHome }));
-              // the head script's watchdog gave up, or the navigation met a new build, so a scene still running stops
-              addEventListener("scene-failed", (event) =>
-                scene.fail(
-                  event instanceof CustomEvent && event.detail
-                    ? event.detail
-                    : "watchdog",
-                ),
-              );
-            },
-            (error) => {
-              console.warn("the scene didn't load", error);
-              // a chunk a deploy removed is the likely cause, so the page loads again once. not when the page already
-              // shows flat, when it shows first, or when the browser is offline, since a reload would take the page
-              // the visitor is reading away from them
-              const reading =
-                root.classList.contains("scene-failed") ||
-                root.classList.contains("page-first") ||
-                !navigator.onLine;
-              if (reading || !recoverFromChunk()) {
-                failScene();
-              }
-            },
-          )
-          .catch((error) => {
-            console.warn("the scene didn't start", error);
-            failScene();
-          });
-      }
-
       // the 2d scene gets 10 s of the page being visible to show its first frame. on a page load the head script's
       // watchdog covers that, and this one is for a 2d scene that takes over from 3d later in the load, after the head
       // script's watchdog was already satisfied by the 3d scene and out of reach from here
@@ -323,6 +266,233 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         run();
       };
 
+      // the 2d scene's module, loaded once, by its start or by the fetch ahead at the 3d ladder's last step
+      let flatModule: Promise<typeof import("../flat/index.js")> | null = null;
+      const loadFlat = () => (flatModule ??= import("../flat/index.js"));
+
+      type Host = {
+        stageEl: HTMLElement;
+        pageEl: HTMLElement;
+        dataEl: HTMLElement;
+      };
+
+      // the 2d scene on the stage. from is "3d" for the handoff, which starts it from the page the address names
+      const startFlat = (
+        { startFlatScene }: typeof import("../flat/index.js"),
+        { stageEl, pageEl, dataEl }: Host,
+        {
+          from = null,
+          onShown = () => {},
+        }: { from?: string | null; onShown?: () => void } = {},
+      ) => {
+        const flat = startFlatScene({
+          stageEl,
+          pageEl,
+          siteData: JSON.parse(dataEl.textContent ?? "{}"),
+          music,
+          links: { navigate, goHome },
+          onShown: () => {
+            // the 2d scene covers the page now, so it is pinned on the phone unless it shows as the flat page
+            root.classList.remove("page-first");
+            syncPagePinned();
+            onShown();
+          },
+          onFailed: (reason: unknown) =>
+            failScene(typeof reason === "string" ? reason : undefined),
+          onPageFlat: setScenePageFlat,
+          arrival: Reflect.get(window, "__arrival"),
+          from,
+        });
+        // the 2d watchdog gave up, or the navigation met a new build, so a 2d scene still running stops
+        addEventListener("scene-failed", (event) =>
+          flat.fail(
+            event instanceof CustomEvent && event.detail
+              ? event.detail
+              : "watchdog",
+          ),
+        );
+        return flat;
+      };
+
+      // the head script's floor for the 2d scene (inert, constructable stylesheets, and css sin()), and a device the 2d
+      // scene itself found too slow in the last 30 days stays on the plain flat page
+      const flatAllowed = () => {
+        try {
+          return (
+            "inert" in HTMLElement.prototype &&
+            "adoptedStyleSheets" in document &&
+            CSS.supports("width: calc(sin(1rad) * 1px)") &&
+            !root.classList.contains("flat-slow")
+          );
+        } catch {
+          return false;
+        }
+      };
+
+      // the 3d ladder's last step before the handoff fetches the 2d module and its first sets, so a handoff after it
+      // waits less. nothing is decoded, and a failure here only logs
+      const fetchFlatAhead = () => {
+        if (!flatAllowed()) {
+          return;
+        }
+        loadFlat().then(
+          (module) =>
+            module.prefetchFlatScene().catch((error: unknown) => {
+              console.warn("the 2d scene's frames didn't load ahead", error);
+            }),
+          (error: unknown) => {
+            // the handoff asks again
+            flatModule = null;
+            console.warn("the 2d scene didn't load ahead", error);
+          },
+        );
+      };
+
+      type Navigation = Parameters<
+        ReturnType<
+          (typeof import("../flat/index.js"))["startFlatScene"]
+        >["navigation"]
+      >[0];
+      type Handler = (navigation: Navigation) => unknown;
+
+      // the navigation handler while the 2d scene loads: each navigation waits here until the 2d scene's handler is
+      // there and then goes to it. the swap waits for at most 4 s on it, as on any handler (layout/navigation.js)
+      const createRelay = () => {
+        let target: Handler | null = null;
+        const waiting: (() => void)[] = [];
+        const pass = (fn: Handler) => {
+          target = fn;
+          waiting.splice(0).forEach((go) => go());
+        };
+        return {
+          handler: (navigation: Navigation) =>
+            target
+              ? target(navigation)
+              : new Promise((resolve) =>
+                  waiting.push(() => resolve(target?.(navigation))),
+                ),
+          ready: pass,
+          drop: () => pass(() => undefined),
+        };
+      };
+
+      // the 3d scene found the device too slow during the visit and has stopped, and the 2d scene takes over on this
+      // page load under a black cover, so the plain flat page never shows in between. a browser below the 2d floor gets
+      // the plain flat page, as before
+      const handOff = (host: Host) => {
+        if (!flatAllowed()) {
+          failScene("too slow for 3d");
+          return;
+        }
+        // 1. the cover at once, a fresh 2d watchdog, the relay, and what the 3d teardown left on the page
+        const cover = createCover(host.stageEl);
+        cover.up();
+        addEventListener("scene-failed", () => cover.remove());
+        startFlatWatchdog();
+        const relay = createRelay();
+        onNavigate(relay.handler);
+        document.body.classList.remove("ready", "over-phone");
+        Reflect.deleteProperty(window, "__sceneShown");
+        ["--glass-fill", "--bar-fill", "--rim-angle"].forEach((name) =>
+          root.style.removeProperty(name),
+        );
+        music.waitWhile(() => false);
+        setScenePageFlat(false);
+        // glass-simple stays, since a device found slow keeps the simpler glass
+        root.classList.remove("has-3d", "page-pinned");
+        root.classList.add("has-flat-scene");
+        const stop = (error: unknown, what: string) => {
+          console.warn(what, error);
+          relay.drop();
+          failScene();
+        };
+        // 2. a navigation that was already swapping #page lands first. 3. the 2d scene loads, starting from the
+        // address's page, and the navigations held meanwhile go to it. 4. the cover fades on its first frame. a
+        // missing chunk doesn't reload here, since that would take the page from the visitor
+        Promise.resolve(inFlight())
+          .then(() => loadFlat())
+          .then(
+            (module) => {
+              if (root.classList.contains("scene-failed")) {
+                relay.drop();
+                return;
+              }
+              const flat = startFlat(module, host, {
+                from: "3d",
+                onShown: () => cover.lift(),
+              });
+              relay.ready(flat.navigation);
+            },
+            (error) => stop(error, "the 2d scene didn't load"),
+          )
+          .catch((error) => stop(error, "the 2d scene didn't start"));
+      };
+
+      const stageEl = document.getElementById("stage");
+      const dataEl = document.getElementById("site-data");
+      if (
+        root.classList.contains("has-3d") &&
+        !root.classList.contains("scene-failed") &&
+        stageEl &&
+        page &&
+        dataEl
+      ) {
+        import("../scene/index.js")
+          .then(
+            ({ startScene, sceneNavigation }) => {
+              if (root.classList.contains("scene-failed")) {
+                return;
+              }
+              const scene = startScene({
+                stageEl,
+                pageEl: page,
+                siteData: JSON.parse(dataEl.textContent ?? "{}"),
+                onShown: () => {
+                  Object.assign(window, { __sceneShown: true });
+                  // the scene covers the page now, so it is pinned on the phone unless it shows as the flat page
+                  root.classList.remove("page-first");
+                  syncPagePinned();
+                },
+                onFailed: (reason: unknown) =>
+                  reason === "handoff"
+                    ? handOff({ stageEl, pageEl: page, dataEl })
+                    : failScene(
+                        typeof reason === "string" ? reason : undefined,
+                      ),
+                onLastStep: fetchFlatAhead,
+                onPageFlat: setScenePageFlat,
+                music,
+              });
+              onNavigate(sceneNavigation(scene, { navigate, goHome }));
+              // the head script's watchdog gave up, or the navigation met a new build, so a scene still running stops
+              addEventListener("scene-failed", (event) =>
+                scene.fail(
+                  event instanceof CustomEvent && event.detail
+                    ? event.detail
+                    : "watchdog",
+                ),
+              );
+            },
+            (error) => {
+              console.warn("the scene didn't load", error);
+              // a chunk a deploy removed is the likely cause, so the page loads again once. not when the page already
+              // shows flat, when it shows first, or when the browser is offline, since a reload would take the page
+              // the visitor is reading away from them
+              const reading =
+                root.classList.contains("scene-failed") ||
+                root.classList.contains("page-first") ||
+                !navigator.onLine;
+              if (reading || !recoverFromChunk()) {
+                failScene();
+              }
+            },
+          )
+          .catch((error) => {
+            console.warn("the scene didn't start", error);
+            failScene();
+          });
+      }
+
       if (
         root.classList.contains("has-flat-scene") &&
         !root.classList.contains("scene-failed") &&
@@ -330,37 +500,18 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         page &&
         dataEl
       ) {
-        import("../flat/index.js")
+        loadFlat()
           .then(
-            ({ startFlatScene }) => {
+            (module) => {
               if (root.classList.contains("scene-failed")) {
                 return;
               }
-              const flat = startFlatScene({
+              const flat = startFlat(module, {
                 stageEl,
                 pageEl: page,
-                siteData: JSON.parse(dataEl.textContent ?? "{}"),
-                music,
-                links: { navigate, goHome },
-                onShown: () => {
-                  // the 2d scene covers the page now, so it is pinned on the phone unless it shows as the flat page
-                  root.classList.remove("page-first");
-                  syncPagePinned();
-                },
-                onFailed: () => failScene(),
-                onPageFlat: setScenePageFlat,
-                arrival: Reflect.get(window, "__arrival"),
-                from: null,
+                dataEl,
               });
               onNavigate(flat.navigation);
-              // the 2d watchdog gave up, or the navigation met a new build, so a 2d scene still running stops
-              addEventListener("scene-failed", (event) =>
-                flat.fail(
-                  event instanceof CustomEvent && event.detail
-                    ? event.detail
-                    : "watchdog",
-                ),
-              );
             },
             (error) => {
               console.warn("the 2d scene didn't load", error);

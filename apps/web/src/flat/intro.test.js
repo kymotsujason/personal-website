@@ -190,6 +190,13 @@ test("a page arrival skips the intro", async () => {
   expect(arrivalKind({ arrival: "fast", seen: true })).toBe("fast");
   expect(arrivalKind({ seen: true })).toBe("fast");
   expect(arrivalKind({ seen: false })).toBe("full");
+  // a handoff from 3d shows the page as a 3d resize does: the app zoomed, or the home screen with the phone open
+  expect(arrivalKind({ arrival: "full", from: "3d", hasApp: true })).toBe(
+    "page",
+  );
+  expect(
+    arrivalKind({ arrival: "full", from: "3d", hasApp: false, seen: true }),
+  ).toBe("open");
   expect(introPlan({ kind: "page", manifest: landscape })).toBe(null);
 
   const fake = fakeParts(landscape);

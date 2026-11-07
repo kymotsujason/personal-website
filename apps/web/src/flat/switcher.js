@@ -810,6 +810,10 @@ export const createSwitcher = ({
         swapped,
         new Promise((resolve) => setTimeout(resolve, SWITCH_SWAP_WAIT_MS)),
       ]);
+      // showUrl or a failure took the phone over while the swap was waited on
+      if (scene.switching !== run) {
+        return;
+      }
     }
     scene.switching = null;
     scene.swapOpen = false;

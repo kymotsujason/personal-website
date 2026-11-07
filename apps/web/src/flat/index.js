@@ -1,8 +1,8 @@
 // the 2d scene, shown under html.has-flat-scene: captured frames of the hands and phone, the live home and cover
 // screens warped onto them, and the desk behind, played from the address the way the 3d scene arrives (intro.js).
 // the intro runs as web animations, and every motion after it (the folds, the apps) from one animation frame loop
-// (loop.js) that draws the frame, the wrappers, the screens, #page, and the switcher's cards together. from (the 3d
-// scene's handoff) isn't read yet
+// (loop.js) that draws the frame, the wrappers, the screens, #page, and the switcher's cards together. from is "3d" when
+// the 3d scene handed a slow device over during the visit, and the scene then starts from the page the address names
 import { read, write } from "../lib/storage.js";
 import { screenLayout } from "../scene/shared/placement.js";
 import {
@@ -16,8 +16,9 @@ import {
   windowLook,
 } from "./apps.js";
 import { createCards, createKept } from "./cards.js";
+import { createCover } from "./cover.js";
 import { createCharger } from "./charger.js";
-import { createDesk } from "./desk.js";
+import { createDesk, prefetchDesk } from "./desk.js";
 import { createDrift } from "./drift.js";
 import { createFolds, pathAfter } from "./fold.js";
 import { chooseLighting, phoneHeightPx, sizeFor } from "./frames.js";
@@ -90,6 +91,31 @@ const atlasesOf = (manifest) => {
   return [...atlases];
 };
 
+// the handoff from 3d fetches the sets the scene would start with (and the desk) once the 3d ladder reaches its last
+// step, so they're in the cache, not decoded, if the device turns out too slow. one at a time, at low priority
+export const prefetchFlatScene = async () => {
+  const { set, lighting, size } = chooseSet({
+    width: innerWidth,
+    height: innerHeight,
+    dpr: devicePixelRatio,
+    hour: new Date().getHours(),
+  });
+  const names = [set, closingSetFor(set)].filter(Boolean);
+  const manifests = [];
+  for (const name of names) {
+    manifests.push(await loadManifest(name, lighting, size));
+  }
+  await prefetchDesk(manifests[0].desk);
+  for (const manifest of manifests) {
+    for (const atlas of atlasesOf(manifest)) {
+      const response = await fetch(`${manifest.base}${atlas}`, {
+        priority: "low",
+      });
+      await response.blob();
+    }
+  }
+};
+
 // where the phone is now: the state the loop draws, or while the intro's animations still play (between its unlock
 // and its end, say), where they have it
 export const phoneAt = ({ drawing, pose, fold, lead, intro, placed }) => {
@@ -135,7 +161,8 @@ export const startFlatScene = ({
   // the black cover, and the deadline it has to be ready by
   let turn = null;
   let stopDeadline = () => {};
-  let blackout = null;
+  // the black cover a turn decodes under (cover.js)
+  const turnCover = createCover(stageEl);
   // the resize listener, from the first mount on (resize.js watchResize)
   let resizing = null;
   // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
@@ -211,8 +238,7 @@ export const startFlatScene = ({
     turn = null;
     unmount();
     dropBlack();
-    blackout?.remove();
-    blackout = null;
+    turnCover.remove();
     document.body.classList.remove(
       "closed",
       "looking",
@@ -965,28 +991,6 @@ export const startFlatScene = ({
     setTimeout(guard(prefetchOther), PREFETCH_AFTER_MS);
   };
 
-  // the black cover a turn decodes under, over the whole stage and #page, taking the pointer. it goes at once on a
-  // failure, and fades once the turned phone has drawn
-  const coverUp = () => {
-    if (blackout) {
-      blackout.classList.remove("lifting");
-      return;
-    }
-    blackout = document.createElement("div");
-    blackout.className = "flat-blackout";
-    stageEl.append(blackout);
-  };
-  const coverDown = () => {
-    const el = blackout;
-    if (!el) {
-      return;
-    }
-    blackout = null;
-    el.classList.add("lifting");
-    el.addEventListener("transitionend", () => el.remove(), { once: true });
-    setTimeout(() => el.remove(), 400);
-  };
-
   const showFirstFrame = () => {
     shown = true;
     root.classList.add("flat-ready");
@@ -1172,7 +1176,7 @@ export const startFlatScene = ({
     const turnTo = async (portrait) => {
       const run = { portrait };
       turn = run;
-      coverUp();
+      turnCover.up();
       dropHeld();
       takeOver();
       scene.unlocked = true;
@@ -1213,7 +1217,7 @@ export const startFlatScene = ({
       }
       await nextFrame();
       if (!failed && !turn) {
-        coverDown();
+        turnCover.lift();
       }
     };
     const rebuild = () => {
@@ -1249,6 +1253,7 @@ export const startFlatScene = ({
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,
+      from,
       reduced: reducedQuery.matches,
       hasApp: Boolean(appForPage()),
       seen,
