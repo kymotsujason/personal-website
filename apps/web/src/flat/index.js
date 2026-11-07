@@ -14,6 +14,12 @@ export const startFlatScene = ({
   from,
 }) => {
   const root = document.documentElement;
+  // the speed probes' stage and screens (probeHook.js), which the build that ships leaves out
+  if (__CAPTURE__) {
+    import("./probeHook.js").then(({ installFlatHook }) =>
+      installFlatHook({ stageEl, pageEl, siteData, music }),
+    );
+  }
   let failed = false;
   let shown = false;
 

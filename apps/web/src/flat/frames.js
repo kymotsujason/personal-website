@@ -1,15 +1,28 @@
 // the frame player: shows the captured frames of the hands and phone, one at a time, from a set's manifest
 import { daylight } from "../scene/daylight.js";
 import { LEAD } from "../scene/shared/motion.js";
+import { place } from "../scene/shared/placement.js";
+import { DUO, FOV } from "../scene/state.js";
 import { manifestFolder } from "./manifest.js";
 
-// the phone's height on screen in device pixels from which the full size frames are used. a placeholder until the
-// probes measure it
-export const PHONE_PX_FULL = 1000;
+// the open phone's height on screen in device pixels from which the full size frames are used. the full frames show it
+// 688 px tall at a window of 800 px and a device pixel ratio of 1, and the half frames 344 px (docs/flat-scene-probes.md
+// has the measurements)
+export const PHONE_PX_FULL = 600;
 
 // above this phone fold a portrait opening's hands are still leading, with the phone not yet moving
 const LEAD_TOP = 1 - LEAD.fold;
 const INVERSE_STEPS = 40;
+
+// how tall the open phone is on screen in css px at its home pose, from the same place() that sets the pose. in
+// landscape the open phone's long side runs across, so its height is the body's, and in portrait it's the two halves.
+// the caller multiplies by the device pixel ratio
+export const phoneHeightPx = ({ width, height, portrait }) => {
+  const tanHalf = Math.tan((FOV / 2) * (Math.PI / 180));
+  const { homeDist } = place({ width, height, portrait });
+  const phoneCm = portrait ? 2 * DUO.halfW : DUO.bodyH;
+  return (phoneCm / (2 * homeDist * tanHalf)) * height;
+};
 
 // decided once per page load, so a toolbar showing and hiding can't flip it
 export const sizeFor = ({ phonePx } = {}) =>

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import {
   PHONE_PX_FULL,
+  phoneHeightPx,
   chooseLighting,
   createFrameIndex,
   frameTimes,
@@ -144,4 +145,16 @@ test("sizeFor is half below the threshold", () => {
   expect(sizeFor({ phonePx: PHONE_PX_FULL * 2 })).toBe("full");
   expect(sizeFor({ phonePx: Number.NaN })).toBe("half");
   expect(sizeFor({})).toBe("half");
+});
+
+test("phoneHeightPx is 688 px for an 800 px tall landscape window", () => {
+  expect(
+    phoneHeightPx({ width: 1280, height: 800, portrait: false }),
+  ).toBeCloseTo(688, 0);
+});
+
+test("phoneHeightPx follows the width in a narrow window", () => {
+  const wide = phoneHeightPx({ width: 1600, height: 800, portrait: false });
+  const narrow = phoneHeightPx({ width: 800, height: 800, portrait: false });
+  expect(narrow).toBeLessThan(wide);
 });
