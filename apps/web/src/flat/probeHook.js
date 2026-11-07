@@ -1,6 +1,6 @@
-// window.__flat for the speed probes (tests/prod/flat-probes.spec.ts), loaded only where __CAPTURE__ is true. it mounts
-// a stage and the screens of its own, since nothing mounts them on the site yet, and mount() builds them again for
-// another set or size
+// window.__flat for the speed probes (tests/prod/flat-probes.spec.ts), loaded only where __CAPTURE__ is true. nothing
+// mounts on load, so other specs that open the 2d site cost nothing. a probe calls mount(), which builds a stage and the
+// screens of its own (nothing mounts them on the site yet) and builds them again for another set or size
 import { chooseLighting, phoneHeightPx, sizeFor } from "./frames.js";
 import { loadManifest } from "./manifest.js";
 import { createScreens } from "./screens.js";
@@ -12,7 +12,6 @@ export const installFlatHook = ({ stageEl, pageEl, siteData, music }) => {
     frames: null,
     screens: null,
     manifest: null,
-    ready: null,
     setPose: (pose) => hook.stage.setPose(pose),
     // the fold picks the frame, and the screens are warped onto that frame's corners
     setFold: (fold, lead = 0) => {
@@ -61,6 +60,5 @@ export const installFlatHook = ({ stageEl, pageEl, siteData, music }) => {
       return manifest;
     },
   };
-  hook.ready = hook.mount();
   Object.assign(window, { __flat: hook });
 };

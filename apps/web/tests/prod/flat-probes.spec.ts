@@ -28,7 +28,6 @@ type Stats = {
 };
 
 type Hook = {
-  ready: Promise<unknown>;
   manifest: {
     frames: { fold: number }[];
     window: { width: number; height: number };
@@ -65,8 +64,8 @@ const withHook = async (page: Page, route = "/?2d") => {
   await page.waitForFunction(() =>
     Boolean((window as unknown as { __flat?: Hook }).__flat),
   );
-  await page.evaluate(
-    () => (window as unknown as { __flat: Hook }).__flat.ready,
+  await page.evaluate(() =>
+    (window as unknown as { __flat: Hook }).__flat.mount(),
   );
 };
 
@@ -176,6 +175,7 @@ test.describe("2d scene probes", () => {
       results[`live_html_cpu${rate}x`] = await loop(page, 180, SWAY);
       await page.evaluate(() => {
         const hook = (window as unknown as { __flat: Hook }).__flat;
+        hook.screens.picture();
         hook.screens.showPicture(true);
       });
       results[`canvas_picture_cpu${rate}x`] = await loop(page, 180, SWAY);

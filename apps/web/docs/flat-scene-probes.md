@@ -12,14 +12,14 @@ The loop sways the pose (`ry` and `rx`) and steps through the unfold's frames, s
 
 | Variant                     | Median ms | p95 ms | Frames over 33 ms | Update ms (p95) |
 | --------------------------- | --------- | ------ | ----------------- | --------------- |
-| Live HTML, GPU, 1x CPU      | 16.7      | 16.8   | 0                 | 0.3             |
-| Canvas picture, GPU, 1x CPU | 16.7      | 16.8   | 0                 | 0.2             |
-| Live HTML, GPU, 4x CPU      | 16.7      | 16.7   | 0                 | 1.2             |
-| Canvas picture, GPU, 4x CPU | 16.7      | 16.8   | 0                 | 1.1             |
+| Live HTML, GPU, 1x CPU      | 16.7      | 16.7   | 0                 | 0.3             |
+| Canvas picture, GPU, 1x CPU | 16.7      | 16.7   | 0                 | 0.2             |
+| Live HTML, GPU, 4x CPU      | 16.7      | 16.8   | 0                 | 1.0             |
+| Canvas picture, GPU, 4x CPU | 16.7      | 16.8   | 0                 | 0.9             |
 
-Under SwiftShader (the stand-in for an old phone, 120 frames each) the live HTML had 31 frames over 33 ms with a p95 of 183 ms and 29 long animation frames, while the picture had 12 frames over 33 ms with the same p95 and 13 long animation frames. The picture's worst frame was longer (550 ms against 283 ms), so both janked, but live HTML janked about 2.5 times as often.
+Under SwiftShader (the stand-in for an old phone, 120 frames each) the live HTML had 38 frames over 33 ms with a p95 of 133 ms and 38 long animation frames, while the picture had 9 frames over 33 ms with a p95 of 67 ms and 8 long animation frames. The picture's worst frame was longer (1383 ms against 150 ms), so both janked, but live HTML had about four times as many slow frames. The first run agreed on the direction (31 against 12 slow frames), though its 1x CPU picture row measured faces with no canvas drawn, so these figures are from the rerun that draws the pictures first.
 
-Drawing the pictures of the three faces once took 1 to 17 ms at 1x CPU and 13 to 20 ms at 4x, so a draw just before each motion is cheap.
+Drawing the pictures of the three faces once took 1 to 6 ms at 1x CPU and 6 to 24 ms at 4x, so a draw just before each motion is cheap.
 
 ### Crop check for missing text strips
 
@@ -31,14 +31,14 @@ The probe grows `#page` from a small box to the whole screen over 20 frames thro
 
 | Variant        | Median ms | p95 ms | Worst ms | Frames over 33 ms | Wall ms for 24 frames |
 | -------------- | --------- | ------ | -------- | ----------------- | --------------------- |
-| No clip path   | 16.7      | 33.3   | 133      | 1                 | 568                   |
-| With clip path | 16.7      | 583    | 600      | 8                 | 2982                  |
+| No clip path   | 16.7      | 16.8   | 100      | 1                 | 520                   |
+| With clip path | 16.7      | 433    | 517      | 7                 | 1896                  |
 
-The clip path is not the 25 second first frame the 3D scene hit. It still makes a third of the frames take 460 to 700 ms on a software renderer, against one slow frame without it. The spec says the plan comes back to Jason with options if this is slow, so it goes into the final report as a concern. The options are to clip with a mask made ahead of time, to drop the clip on a device that gets half size frames, or to accept it.
+The clip path is not the 25 second first frame the 3D scene hit. It still makes a quarter or more of the frames take 400 to 520 ms on a software renderer, against one slow frame without it. The spec says the plan comes back to Jason with options if this is slow, so it goes into the final report as a concern. The options are to clip with a mask made ahead of time, to drop the clip on a device that gets half size frames, or to accept it.
 
 ## Visibility against opacity frame flips
 
-The probe flipped between frames 240 times at 4x CPU. The default `.flat-frame.on { visibility: visible }` and an override of `opacity: 0` with `.on { opacity: 1 }` (all frames kept visible) both held 16.7 ms with no frames over 33 ms and no long animation frames. Both had the same layer tree of 14 layers and 31.3 MB (the layers' width times height times 4, from CDP `LayerTree`), so opacity gave the frames no layers of their own here. Keep `visibility`, since it also skips painting the hidden frames.
+The probe flipped between frames 240 times at 4x CPU. The default `.flat-frame.on { visibility: visible }` and an override of `opacity: 0` with `.on { opacity: 1 }` (all frames kept visible) both held 16.7 ms with no frames over 33 ms and no long animation frames. Both had the same layer tree of 14 layers and 37.9 MB (the layers' width times height times 4, from CDP `LayerTree`), so opacity gave the frames no layers of their own here. Keep `visibility`, since it also skips painting the hidden frames.
 
 ## Set sizes against the budgets
 
@@ -68,11 +68,11 @@ The phone's height on screen is `phoneHeightPx` in `src/flat/frames.js`, worked 
 | 900             | 1291218      | 2.08 | 0.976     |
 | 800 at 2x ratio | 1016891      | 2.60 | 0.967     |
 
-The half frames lose about 2 to 3 percent of their edge energy once they're scaled up, and the loss doesn't grow from 450 px to 900 px. So the numbers can't pick a threshold alone, and they don't show how it looks to a person, which Jason hasn't judged at these sizes. The rule chosen is that the full set is used once the phone is at least 600 device px tall (`PHONE_PX_FULL = 600`). At that height the full frames are shown at most 15 percent below their native 688, and the half frames would be enlarged 1.74 times. The 2560 by 1440 screens Jason judged clean were full frames enlarged 1.8 times, so half frames enlarged by less than that are inside what he accepted. A 1280 by 800 window at a ratio of 1 measures 688 and gets full frames, which puts a typical desktop on the full budget. If that proves too heavy, raising the constant to 700 moves those windows to half frames at a measured 2 to 3 percent edge loss.
+The half frames lose about 2 to 3 percent of their edge energy once they're scaled up, and the loss doesn't grow from 450 px to 900 px. So the numbers can't pick a threshold alone, and they don't show how it looks to a person, which Jason hasn't judged at these sizes. The rule chosen is that the full set is used once the phone is at least 600 device px tall (`PHONE_PX_FULL = 600`). At that height the full frames are shown at most 13 percent below their native 688, and the half frames would be enlarged 1.74 times. The 2560 by 1440 screens Jason judged clean were full frames enlarged 1.8 times, so half frames enlarged by less than that are inside what he accepted. A 1280 by 800 window at a ratio of 1 measures 688 and gets full frames, which puts a typical desktop on the full budget. If that proves too heavy, raising the constant to 700 moves those windows to half frames at a measured 2 to 3 percent edge loss.
 
 ## The choices
 
-While the phone moves, the 2D scene uses live HTML. On a GPU the live layer matched the picture with no missed frames at 4x CPU and showed no missing strips. On software rendering the picture janked less, so the canvas picture stays as the fallback for a device the scene already counts as slow (the half size path and `2dAuto`). The code for it (`screens.picture()` and `showPicture(on)`) is already in `src/flat/screens.js`. `PHONE_PX_FULL` is 600.
+While the phone moves, the 2D scene uses live HTML, and this choice is provisional until it runs on a real old phone, since the one test that told the two apart (SwiftShader) favored the picture. On a GPU the live layer matched the picture with no missed frames at 4x CPU and showed no missing strips. On software rendering the picture janked less, so the canvas picture stays as the fallback for a device the scene already counts as slow (the half size path and `2dAuto`). The code for it (`screens.picture()` and `showPicture(on)`) is already in `src/flat/screens.js`. `PHONE_PX_FULL` is 600.
 
 ## The test hook and the shipped build
 
