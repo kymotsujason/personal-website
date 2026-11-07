@@ -1,7 +1,7 @@
 // what the 2d scene runs at rest (the spec's "What runs at rest on a slow device"): the idle drift, the rain's motion,
-// and frosted glass keep the gpu busy, so every device starts without them. one that came through 2dAuto or gets half
-// size frames keeps it that way for the visit, and any other gets them once the frame meter has shown the intro's
-// unfold, the unfold itself and not the whole intro, mostly under UNFOLD_MS per frame. this isn't the slow path
+// and frosted glass keep the gpu busy, so every device starts without them. one that came through 2dAuto keeps it that
+// way for the visit, and any other (half size frames included, Jason's call on 2026-11-07) gets them once the frame
+// meter has shown the intro's unfold, the unfold itself and not the whole intro, mostly under UNFOLD_MS per frame. this isn't the slow path
 // (index.js slowPathFor), which only decides how apps and the picture are drawn while things move
 
 export const UNFOLD_MS = 20;
@@ -10,8 +10,7 @@ export const MOSTLY = 0.75;
 // frames needed before the meter says anything
 export const MIN_FRAMES = 20;
 
-export const staysCalm = ({ auto = null, size } = {}) =>
-  auto !== null || size === "half";
+export const staysCalm = ({ auto = null } = {}) => auto !== null;
 
 // the gaps between frames, each in ms. verdict is null until there are enough, then "fast" when most were under
 // UNFOLD_MS and "slow" when not
@@ -26,7 +25,9 @@ export const createMeter = () => {
     count: () => gaps.length,
     verdict: () => {
       if (gaps.length < MIN_FRAMES) {
-        return null;
+        // too few frames to judge, unless they took as long as MIN_FRAMES frames at UNFOLD_MS, which is slow already
+        const total = gaps.reduce((sum, ms) => sum + ms, 0);
+        return total >= MIN_FRAMES * UNFOLD_MS ? "slow" : null;
       }
       const quick = gaps.filter((ms) => ms < UNFOLD_MS).length;
       return quick / gaps.length >= MOSTLY ? "fast" : "slow";

@@ -818,17 +818,14 @@ export const startFlatScene = ({
       flatSlow: root.classList.contains("flat-slow"),
       auto: read("local", "2dAuto"),
     });
-    // the rest rule. every device starts calm (scene.calm is true). one through 2dAuto or at half size stays that way,
+    // the rest rule. every device starts calm (scene.calm is true). one through 2dAuto stays that way,
     // and any other turns things on once the frame meter has seen the intro's unfold mostly under 20 ms per frame, or
     // with no intro, the first unfold of the phone
     const meter = createMeter();
     const foldMeter = createFoldMeter();
     // whether the meter has judged, and what it said (null for a device that stays calm), for the probe hook
     const rest = {
-      judged: staysCalm({
-        auto: read("local", "2dAuto"),
-        size: scene.manifest.size,
-      }),
+      judged: staysCalm({ auto: read("local", "2dAuto") }),
       verdict: null,
     };
     scene.rest = rest;

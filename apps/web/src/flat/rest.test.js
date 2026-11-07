@@ -7,10 +7,9 @@ import {
   watchFrames,
 } from "./rest.js";
 
-test("a device through 2dAuto or at half size stays calm, and no other does", () => {
-  expect(staysCalm({ auto: "1760000000000", size: "full" })).toBe(true);
-  expect(staysCalm({ auto: null, size: "half" })).toBe(true);
-  expect(staysCalm({ auto: null, size: "full" })).toBe(false);
+test("a device through 2dAuto stays calm, and no other does, half size included", () => {
+  expect(staysCalm({ auto: "1760000000000" })).toBe(true);
+  expect(staysCalm({ auto: null })).toBe(false);
 });
 
 test("the meter says fast only when most of the unfold's frames came in under 20 ms", () => {
@@ -20,6 +19,9 @@ test("the meter says fast only when most of the unfold's frames came in under 20
     return meter.verdict();
   };
   expect(feed(Array(MIN_FRAMES - 1).fill(16.7))).toBeNull();
+  // a few long frames that took as long as MIN_FRAMES frames at 20 ms are slow, not too few to judge
+  expect(feed(Array(8).fill(60))).toBe("slow");
+  expect(feed(Array(8).fill(40))).toBeNull();
   expect(feed(Array(60).fill(16.7))).toBe("fast");
   expect(feed(Array(60).fill(33.3))).toBe("slow");
   // a few hitches in a smooth run still count as mostly fast, and a run of long frames doesn't

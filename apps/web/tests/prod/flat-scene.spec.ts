@@ -703,24 +703,23 @@ test.describe("continuous effects", () => {
     test.describe("at half size", () => {
       test.use({ viewport: { width: 640, height: 400 } });
 
-      test("a device stays calm even when the unfold is fast", async ({
+      test("a device turns things on once the unfold measures fast", async ({
         page,
       }) => {
         await page.addInitScript(() => localStorage.removeItem("introSeen"));
         await stubHome(page, RAIN);
         await page.goto("/");
-        await unfolded(page);
+        await turnedOn(page);
         const size = await page.evaluate(
           () => (window as any).__flat.manifest.size,
         );
         expect(size).toBe("half");
-        await page.keyboard.press("Escape");
-        await expect
-          .poll(() => flatStatus(page))
-          .toMatchObject({ phone: "closed", busy: false });
-        await page.keyboard.press("Enter");
-        await unfolded(page);
-        await stillCalm(page);
+        expect(await effects(page)).toMatchObject({
+          judged: true,
+          verdict: "fast",
+        });
+        await expect.poll(async () => (await effects(page)).idle).toBe(1);
+        await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
       });
     });
   });
