@@ -86,12 +86,42 @@ export const pageOpacity = (k) => Math.min(Math.max((k - 0.35) / 0.4, 0), 1);
 
 // the window's rounded cutout as a clip on #page, in #page's own px, since the clip moves with its transform. #page is
 // laid out at the browser window's size and centered in the app window (appW by appH), which covers rect on the
-// screen, so the cutout is the same box around #page at any rect, and only its rounding changes with the rect's size
-export const pageClip = ({ appW, appH, width, height, radius, rectW }) => {
-  const x = -(appW - width) / 2;
-  const y = -(appH - height) / 2;
+// screen, so the cutout is the same box around #page at any rect, and only its rounding changes with the rect's size.
+// crop closes the cutout in on #page itself (1 while a swipe or the switcher carries the window as a card), as
+// scene/appWindow.js placeAppWindow does
+export const pageClip = ({
+  appW,
+  appH,
+  width,
+  height,
+  radius,
+  rectW,
+  crop = 0,
+}) => {
+  const x = (-(appW - width) / 2) * (1 - crop);
+  const y = (-(appH - height) / 2) * (1 - crop);
   const r = rectW > 0 ? (radius * appW) / rectW : 0;
   return `inset(${y}px ${x}px ${y}px ${x}px round ${r}px)`;
+};
+
+// the part of the app window that shows, as a box in the screen's px and its size in the window's own px. crop closes
+// the cutout in on #page (1 while a swipe or the switcher carries the window as a card), and since #page is centered in
+// the window the cutout keeps the window's center. the window is laid out at that size, so it needs no clip
+export const windowCutout = ({ rect, appW, appH, width, height, crop = 0 }) => {
+  const ix = ((appW - width) / 2) * crop;
+  const iy = ((appH - height) / 2) * crop;
+  const sx = (rect.x1 - rect.x0) / appW;
+  const sy = (rect.y1 - rect.y0) / appH;
+  return {
+    hole: {
+      x0: rect.x0 + ix * sx,
+      y0: rect.y0 + iy * sy,
+      x1: rect.x1 - ix * sx,
+      y1: rect.y1 - iy * sy,
+    },
+    w: appW - 2 * ix,
+    h: appH - 2 * iy,
+  };
 };
 
 // the home screen behind the window zooms in around the icon and dims, all the way at home 1
@@ -154,6 +184,8 @@ export const createApps = ({ scene, loop, folds, nav, pageEl }) => {
   const resetAppWindow = () => {
     scene.pageFade = null;
     scene.win = null;
+    scene.cards = null;
+    scene.switcher = null;
   };
 
   const showFlat = () => {
@@ -406,6 +438,8 @@ export const createApps = ({ scene, loop, folds, nav, pageEl }) => {
     scene.takeOver();
     scene.setPageFlat(false);
     resetAppWindow();
+    scene.switching = null;
+    scene.swapOpen = false;
     scene.zoomed = false;
     scene.appVisible = false;
     scene.pose = { ...scene.placed.rest };
@@ -447,5 +481,8 @@ export const createApps = ({ scene, loop, folds, nav, pageEl }) => {
     goHome,
     showUrl,
     install,
+    setAppWindow,
+    showFlat,
+    hideFlat,
   };
 };

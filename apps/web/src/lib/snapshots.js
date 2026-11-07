@@ -43,6 +43,16 @@ export const captureSnapshot = (page) => {
   return write("local", KEY, JSON.stringify(all));
 };
 
+// css for a shadow root holding a copy of #page: html and :root become :host, keeping whatever classes or :not() they
+// test, so the copy's host takes the root's classes. both scenes' switcher cards use it
+export const forHost = (css) =>
+  css
+    .replace(/:root(?![\w-])/g, ":host")
+    .replace(
+      /(^|[\s,>+~(}])html((?:\.[\w-]+|:not\([^()]*\)|\[[^\]]*\])*)(?![\w-])/g,
+      (_, before, tests) => `${before}:host${tests ? `(${tests})` : ""}`,
+    );
+
 // app's last page, or null when there's none from this build
 export const snapshotOf = (app) => {
   const shot = readAll()[app];

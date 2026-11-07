@@ -175,8 +175,12 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
   };
   const screensEl = makeLayer("flat-screens");
   const framesEl = makeLayer("flat-frames");
+  // the switcher's cards go over #page and under the hands, the way the 3d cards are drawn over the window's hole. the
+  // layer is hidden while there are none (src/flat/cards.js)
+  const cardsEl = makeLayer("flat-cards");
+  cardsEl.hidden = true;
   stageEl.insertBefore(screensEl, pageEl);
-  pageEl.after(framesEl);
+  pageEl.after(cardsEl, framesEl);
   const frameLayer = createFrameLayer(manifest, framesEl);
   let frames = frameLayer;
 
@@ -213,6 +217,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     if (transform !== shownTransform) {
       shownTransform = transform;
       screensEl.style.transform = transform;
+      cardsEl.style.transform = transform;
       framesEl.style.transform = transform;
     }
   };
@@ -376,6 +381,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     frameLayer.release();
     extra.forEach((layer) => layer.release());
     screensEl.remove();
+    cardsEl.remove();
     framesEl.remove();
     for (const name of [
       "transform",
@@ -404,7 +410,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     toWindow,
     screenPoint,
     scaleAt,
-    layers: { screens: screensEl, frames: framesEl },
+    layers: { screens: screensEl, cards: cardsEl, frames: framesEl },
     frameLayer,
     get frames() {
       return frames;

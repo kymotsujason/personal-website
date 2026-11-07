@@ -247,13 +247,23 @@ beforeEach(() => {
   Object.assign(window, { innerWidth: 1280, innerHeight: 800 });
 });
 
-test("the stage puts the screens behind #page and the frames in front", () => {
+test("the stage puts the screens behind #page, the cards over it, and the frames in front", () => {
   const { stageEl, pageEl } = setUp();
   const stage = createStage({ stageEl, pageEl, manifest: landscape });
   const order = [...stageEl.children];
   expect(order.indexOf(stage.layers.screens)).toBe(order.indexOf(pageEl) - 1);
-  expect(order.indexOf(stage.layers.frames)).toBe(order.indexOf(pageEl) + 1);
-  for (const layer of [stage.layers.screens, stage.layers.frames]) {
+  expect(order.indexOf(stage.layers.cards)).toBe(order.indexOf(pageEl) + 1);
+  expect(order.indexOf(stage.layers.frames)).toBe(order.indexOf(pageEl) + 2);
+  expect(stage.layers.cards.hidden).toBe(true);
+  stage.setPose(stage.placed.rest);
+  expect(stage.layers.cards.style.transform).toBe(
+    stage.layers.frames.style.transform,
+  );
+  for (const layer of [
+    stage.layers.screens,
+    stage.layers.cards,
+    stage.layers.frames,
+  ]) {
     expect(layer.style.width).toBe("1920px");
     expect(layer.style.height).toBe("1160px");
   }

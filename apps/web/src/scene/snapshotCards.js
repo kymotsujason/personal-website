@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { snapshotOf, snapshotNodes } from "../lib/snapshots.js";
+import { snapshotOf, snapshotNodes, forHost } from "../lib/snapshots.js";
 import { EXTRA_HOLES } from "./screens.js";
 
 // up to three of the app switcher's cards show the page their app was left on (lib/snapshots.js), the way ios shows
@@ -10,11 +10,8 @@ import { EXTRA_HOLES } from "./screens.js";
 // the copies the loop pins each frame, as surfaces like state.surfaces.page
 export const snapshotSurfaces = [];
 
-// css for a shadow root: html and :root become :host, keeping whatever classes or :not() they test
-export const forHost = (css) =>
-    css
-        .replace(/:root(?![\w-])/g, ":host")
-        .replace(/(^|[\s,>+~(}])html((?:\.[\w-]+|:not\([^()]*\)|\[[^\]]*\])*)(?![\w-])/g, (_, before, tests) => `${before}:host${tests ? `(${tests})` : ""}`);
+// css for a shadow root (lib/snapshots.js, which the 2d scene's cards read too)
+export { forHost };
 
 let sheet = null;
 const hostSheet = () => {

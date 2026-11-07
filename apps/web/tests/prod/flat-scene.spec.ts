@@ -128,6 +128,56 @@ test("rapid history", async ({ page }) => {
   await expect(page.locator("#page h1")).toHaveText("About");
 });
 
+test("a resting swipe opens the switcher and Escape returns", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await settledOn(page, "/", null);
+  await page.locator('.flat-home .app-icon[data-app="About"]').click();
+  await settledOn(page, "/about", "About");
+  const bar = await page.locator("#page .home-bar").boundingBox();
+  expect(bar).not.toBeNull();
+  const x = bar!.x + bar!.width / 2;
+  const y = bar!.y + bar!.height / 2;
+  // pulled up a fifth of the window and held there, still pressed
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 160, { steps: 16 });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__flat.status().switcher))
+    .toBe(true);
+  await page.mouse.up();
+  // the cards come in over the darkened backdrop, each with its label, and #page rides the open app's card, clipped
+  await expect(page.locator(".flat-backdrop")).toBeVisible();
+  await expect(page.locator(".flat-card-label:visible")).toHaveCount(4);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".flat-card-label")].map(
+          (el) => el.style.opacity,
+        ),
+      ),
+    )
+    .toEqual(["1", "1", "1", "1"]);
+  const pinned = await page.evaluate(() => {
+    const el = document.getElementById("page")!;
+    return { transform: el.style.transform, clip: el.style.clipPath };
+  });
+  expect(pinned.transform).not.toBe("");
+  expect(pinned.clip).toMatch(/^inset\(/);
+  await expect
+    .poll(() => flatStatus(page))
+    .toMatchObject({ busy: true, zoomed: true, path: "/about" });
+  await page.keyboard.press("Escape");
+  await settledOn(page, "/about", "About");
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__flat.status().switcher))
+    .toBe(false);
+  await expect(page.locator(".flat-cards")).toBeHidden();
+  await expect(page.locator(".flat-backdrop")).toBeHidden();
+  await expect(page.locator("#page h1")).toHaveText("About");
+});
+
 test("one frame per paint during an unfold", async ({ page }) => {
   await page.goto("/");
   await settledOn(page, "/", null);

@@ -17,6 +17,7 @@ import {
   lerpPose,
   mixColor,
   pageClip,
+  windowCutout,
   windowLook,
 } from "./apps.js";
 import { handLoop } from "./handLoop.js";
@@ -122,6 +123,25 @@ test("the window's look and #page's clip follow the 3d window", () => {
       rectW: 700,
     }),
   ).toBe("inset(0px -60px 0px -60px round 40px)");
+});
+
+test("a window carried as a card closes its cutout in on #page", () => {
+  const sizes = { appW: 1200, appH: 900, width: 1280, height: 720 };
+  // closed in all the way, #page's own box clips #page, and the window shows only that box, centered as #page is
+  expect(pageClip({ ...sizes, radius: 20, rectW: 600, crop: 1 })).toBe(
+    "inset(0px 0px 0px 0px round 40px)",
+  );
+  const rect = { x0: 100, y0: 50, x1: 700, y1: 500 };
+  expect(windowCutout({ rect, ...sizes, crop: 0 })).toEqual({
+    hole: rect,
+    w: 1200,
+    h: 900,
+  });
+  const card = windowCutout({ rect, ...sizes, crop: 1 });
+  expect(card.w).toBe(1280);
+  expect(card.h).toBe(720);
+  // #page (1280 by 720) centered in the window (1200 by 900) drawn at half size
+  expect(card.hole).toEqual({ x0: 80, y0: 95, x1: 720, y1: 455 });
 });
 
 test("focus goes to the page at full zoom and back to the icon on close", () => {

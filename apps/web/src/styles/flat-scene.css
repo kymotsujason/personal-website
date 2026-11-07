@@ -423,3 +423,68 @@ html.has-flat-scene .flat-dim {
   opacity: 0;
   pointer-events: none;
 }
+
+/* the switcher's darkened sky behind its cards, over the home screen and under the app window (src/flat/cards.js) */
+html.has-flat-scene .flat-backdrop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 9;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* the switcher's cards, labels, and kept pages, warped onto the screen in the cards layer over #page. the kept pages
+   go under the stand ins */
+html.has-flat-scene :is(.flat-card, .flat-card-label, .flat-snapshot) {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+html.has-flat-scene :is(.flat-card, .flat-card-label) {
+  z-index: 1;
+}
+
+html.has-flat-scene :is(.flat-card, .flat-card-label, .flat-snapshot)[hidden] {
+  display: none;
+}
+
+html.has-flat-scene .flat-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.has-flat-scene :is(.flat-card-icon, .flat-card-label-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+}
+
+html.has-flat-scene .flat-card-icon[hidden] {
+  display: none;
+}
+
+html.has-flat-scene .flat-card-label-icon {
+  position: absolute;
+}
+
+html.has-flat-scene .flat-card-label-name {
+  position: absolute;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+html.has-flat-scene .flat-snapshot {
+  overflow: hidden;
+  contain: strict;
+}

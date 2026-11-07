@@ -1,8 +1,8 @@
 // the 2d scene, shown under html.has-flat-scene: captured frames of the hands and phone, the live home and cover
 // screens warped onto them, and the desk behind, played from the address the way the 3d scene arrives (intro.js).
 // the intro runs as web animations, and every motion after it (the folds, the apps) from one animation frame loop
-// (loop.js) that draws the frame, the wrappers, the screens, and #page together. from (the 3d scene's handoff) isn't
-// read yet
+// (loop.js) that draws the frame, the wrappers, the screens, #page, and the switcher's cards together. from (the 3d
+// scene's handoff) isn't read yet
 import { read, write } from "../lib/storage.js";
 import { screenLayout } from "../scene/shared/placement.js";
 import {
@@ -12,8 +12,10 @@ import {
   pageClip,
   pageOpacity,
   smoothstep,
+  windowCutout,
   windowLook,
 } from "./apps.js";
+import { createCards, createKept } from "./cards.js";
 import { createDesk } from "./desk.js";
 import { createFolds, pathAfter } from "./fold.js";
 import { chooseLighting, phoneHeightPx, sizeFor } from "./frames.js";
@@ -23,7 +25,8 @@ import { loadManifest } from "./manifest.js";
 import { createNavigation } from "./navigation.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
-import { quadToQuad } from "./warp.js";
+import { createSwitcher } from "./switcher.js";
+import { homography, mapPoint, quadToQuad } from "./warp.js";
 
 const nextFrame = () =>
   new Promise((resolve) => requestAnimationFrame(resolve));
@@ -108,6 +111,13 @@ export const startFlatScene = ({
     appVisible: false,
     pageFade: null,
     win: null,
+    // the home swipe's and the switcher's cards (switcher.js), drawn by cardsView (cards.js), and the switcher, a link's
+    // switch, and whether the navigation may swap #page during one
+    cards: null,
+    cardsView: null,
+    switcher: null,
+    switching: null,
+    swapOpen: false,
     openApp: null,
     openIcon: null,
     openFromWidget: false,
@@ -258,23 +268,32 @@ export const startFlatScene = ({
     const { fullW, fullH } = scene.full;
     const { appW, appH } = stage.placed;
     const { rect } = win;
+    // a window carried as a card shows only the part #page covers, as the 3d cutout closes in on it
+    const { hole, w, h } = windowCutout({
+      rect,
+      appW,
+      appH,
+      width: stage.geometry.width,
+      height: stage.geometry.height,
+      crop: win.crop,
+    });
     const quad = [
-      [rect.x0, rect.y0],
-      [rect.x1, rect.y0],
-      [rect.x1, rect.y1],
-      [rect.x0, rect.y1],
+      [hole.x0, hole.y0],
+      [hole.x1, hole.y0],
+      [hole.x1, hole.y1],
+      [hole.x0, hole.y1],
     ].map(([px, py]) => stage.screenPoint([px / fullW, py / fullH]));
     const perScreenPx = appW / Math.max(rect.x1 - rect.x0, 1e-6);
     const look = windowLook(win.look, win.app, scene.openFromWidget);
     Object.assign(windowEl.style, {
-      width: `${appW}px`,
-      height: `${appH}px`,
+      width: `${w}px`,
+      height: `${h}px`,
       transform: quadToQuad(
         [
           [0, 0],
-          [appW, 0],
-          [appW, appH],
-          [0, appH],
+          [w, 0],
+          [w, h],
+          [0, h],
         ],
         quad,
       ),
@@ -342,6 +361,7 @@ export const startFlatScene = ({
               height: stage.geometry.height,
               radius: win.radius,
               rectW: win.rect.x1 - win.rect.x0,
+              crop: win.crop,
             }),
       );
       return;
@@ -390,9 +410,13 @@ export const startFlatScene = ({
       desk.setBlur(blur);
     }
     drawWindow();
+    scene.cardsView.draw(scene.cards);
     drawPage();
+    // the open app's icon, which stays the same while the switcher's window carries another app's page
     screens.setHiddenIcon(
-      scene.win && !scene.openFromWidget ? scene.win.app.name : null,
+      scene.win && !scene.openFromWidget && scene.openApp
+        ? scene.openApp.name
+        : null,
     );
     const fading = scene.pageFade !== null;
     screens.setInput(
@@ -480,9 +504,7 @@ export const startFlatScene = ({
     zoomed: scene.zoomed,
     app: scene.zoomed && scene.openApp ? scene.openApp.name : null,
     shown: scene.appVisible || scene.pageFlat || scene.pageFade !== null,
-    switchingTo: null,
-    switcher: false,
-    swapOpen: false,
+    ...switcher.status(),
     fold: scene.fold,
   });
 
@@ -504,8 +526,18 @@ export const startFlatScene = ({
       const app = appNamed(name);
       return app ? apps.fadeTo(app) : Promise.resolve();
     }),
-    leaveSwitcher: () => {},
-    showUrl: guard(() => apps.showUrl(appForPage())),
+    // another app's page on its way while one is open. swapped settles once the page has swapped in (null if the
+    // navigation was dropped)
+    switchTo: guard((name, opts) => {
+      const app = appNamed(name);
+      return app ? switcher.switchTo(app, opts) : Promise.resolve();
+    }),
+    // a navigation the switcher didn't start puts the open app back at once, so it isn't held up
+    leaveSwitcher: guard(() => switcher.leave()),
+    showUrl: guard(() => {
+      switcher.dropHomeSwipe();
+      return apps.showUrl(appForPage());
+    }),
     rebuildPending: () => false,
     fail: (error) => fail(error),
     failed: () => failed || root.classList.contains("scene-failed"),
@@ -516,7 +548,28 @@ export const startFlatScene = ({
   // data-app names. null on the home screen
   const appForPage = () => appNamed(nav.pendingPage() ?? pageEl.dataset.app);
 
+  // a point in the window to the open screen's px, through the screen's corners as the loop last drew them
+  // (scene/appWindow.js toScreenPx)
+  const toScreenPx = (clientX, clientY) => {
+    const { stage, full } = scene;
+    const corners = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ].map((p) => stage.toWindow(stage.screenPoint(p)));
+    const m = homography(corners, [
+      [0, 0],
+      [full.fullW, 0],
+      [full.fullW, full.fullH],
+      [0, full.fullH],
+    ]);
+    const [x, y] = mapPoint(m, [clientX, clientY]);
+    return { x, y };
+  };
+
   Object.assign(scene, {
+    toScreenPx,
     reduced: () => reducedQuery.matches,
     slowPath: () => scene.slow,
     takeOver,
@@ -530,10 +583,27 @@ export const startFlatScene = ({
   // read when a motion starts, from the set and the window of the moment
   Object.defineProperties(scene, {
     placed: { get: () => scene.stage.placed },
+    // #page's layout size, which is the window's at mount
+    pageSize: {
+      get: () => ({
+        w: scene.stage.geometry.width,
+        h: scene.stage.geometry.height,
+      }),
+    },
     drag: { get: () => activeFrames().manifest.dragTable },
   });
   const folds = createFolds({ scene, loop });
   const apps = createApps({ scene, loop, folds, nav, pageEl });
+  const kept = createKept();
+  const switcher = createSwitcher({
+    scene,
+    loop,
+    apps,
+    nav,
+    pageEl,
+    kept,
+    siteApps: siteData.apps,
+  });
 
   // a tap on an icon or a widget, or on the cover's icons
   const onOpen = guard(({ app, face, el, path }) => {
@@ -552,6 +622,7 @@ export const startFlatScene = ({
 
   const unmount = () => {
     scene.intro?.cancel();
+    scene.cardsView?.destroy();
     scene.screens?.destroy();
     scene.desk?.destroy();
     scene.stage?.destroy();
@@ -564,6 +635,8 @@ export const startFlatScene = ({
       intro: null,
       openFrames: null,
       closeFrames: null,
+      cardsView: null,
+      cards: null,
     });
   };
 
@@ -593,6 +666,15 @@ export const startFlatScene = ({
     stage.layers.screens.append(windowEl);
     const desk = createDesk({ host: stageEl, manifest });
     const l = screenLayout(portrait);
+    const full = { fullW: l.fullW, fullH: l.fullH, radius: l.radius };
+    const cardsView = createCards({
+      stage,
+      full,
+      screensHost: stage.layers.screens,
+      cardsHost: stage.layers.cards,
+      kept,
+      slow: () => scene.slow,
+    });
     Object.assign(scene, {
       manifest,
       stage,
@@ -601,7 +683,8 @@ export const startFlatScene = ({
       portrait,
       openFrames: { manifest, layer: stage.frameLayer },
       closeFrames: closing ? { manifest: closing, layer: closeLayer } : null,
-      full: { fullW: l.fullW, fullH: l.fullH, radius: l.radius },
+      full,
+      cardsView,
       pose: { ...stage.placed.rest },
     });
     await Promise.all([
@@ -647,6 +730,7 @@ export const startFlatScene = ({
       onEscapeApp: () => apps.goHome(),
     });
     apps.install({ signal, guard });
+    switcher.install({ signal, guard });
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,
