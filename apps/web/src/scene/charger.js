@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { segmentDistance, handMatrix } from "./hands.js";
+import { PLAN } from "./shared/motion.js";
 
 // the battery easter egg's cable. when the battery hits 1% the left hand lets go, reaches down out of view, comes back
 // pinching a white usb c plug and pushes it into the port on the flap's bottom edge (the half with the cover screen,
@@ -430,9 +431,6 @@ export const createCharger = ({ root, frame, port, getHands, getBones, getSuppor
         job = { plugIn, t: 0 };
     };
 
-    // the steps, in seconds. plugging in: reach away, come back with the plug, line it up, push it in, let go, return.
-    // unplugging is the same path backwards
-    const PLAN = { swap: 0.35, away: 0.45, bring: 0.6, push: 0.28, release: 0.17, back: 0.5 };
     const TOTAL = PLAN.away + PLAN.bring + PLAN.push + PLAN.release + PLAN.back;
     const swapTime = () => (support ? PLAN.swap : 0);
     const runTotal = () => TOTAL + 2 * swapTime();

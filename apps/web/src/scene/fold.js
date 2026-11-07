@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state, pose, DUO } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
+import { FOLD_TIME, foldPoseAt, FOLD_SAMPLES, MAX_FOLLOW, CATCH_UP } from "./shared/motion.js";
 import { camera, backdrop } from "./renderer.js";
 import { centerComp, setFold, leadOpen, leadTo } from "./device.js";
 import { closeApp } from "./appWindow.js";
@@ -11,7 +12,6 @@ import { reducedMotion } from "./quality.js";
 
 // closing and opening the phone. a swipe drives the fold directly (the hands follow the fold), and on release it
 // finishes or springs back. keys play the same motion on their own
-const FOLD_TIME = { close: 900, open: 1000 };
 // what has to happen before the fold can move
 const prepareClose = () => {
     cancelGroup("intro");
@@ -21,20 +21,6 @@ const prepareClose = () => {
 const closedPose = () => ({ ...state.poses.stage, idle: 0 });
 const openPose = () => ({ ...state.poses.rest, idle: 0 });
 
-const POSE_FIELDS = ["x", "y", "z", "rx", "ry", "rz"];
-
-// one progress value drives both the distance and the fold. closing backs away early and folds late, opening unfolds
-// early and moves in late, so the flap never swings up into the camera while the phone is still close
-const foldPoseAt = (from, to, foldFrom, foldTo, p, action) => {
-    const move = action === "close" ? 1 - Math.pow(1 - p, 2.2) : Math.pow(p, 2.2);
-    const fold = action === "close" ? Math.pow(p, 1.6) : 1 - Math.pow(1 - p, 1.6);
-    const out = { fold: foldFrom + (foldTo - foldFrom) * fold };
-    POSE_FIELDS.forEach((k) => {
-        out[k] = from[k] + (to[k] - from[k]) * move;
-    });
-    return out;
-};
-
 const setFoldProgress = (from, to, foldFrom, foldTo, p, action) => {
     Object.assign(pose, foldPoseAt(from, to, foldFrom, foldTo, p, action));
 };
@@ -42,10 +28,6 @@ const setFoldProgress = (from, to, foldFrom, foldTo, p, action) => {
 // where the flap's outer edge lands on screen (along the swipe's axis) through a fold. that edge is the part a swipe
 // grabs, open or closed, so the swipe moves the fold to keep it under the pointer. the scene is posed here only to
 // measure, and put back after
-const FOLD_SAMPLES = 480;
-// the most any corner of the phone may move on screen for each px the pointer moves
-const MAX_FOLLOW = 2.5;
-const CATCH_UP = 80;
 const foldTable = (g) => {
     const root = state.root;
     const v = new THREE.Vector3();

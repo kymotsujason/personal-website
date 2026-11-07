@@ -3,6 +3,12 @@ import { unpin } from "./pin.js";
 import { glyphRect, CARD_SLOTS } from "./screens.js";
 import { state, pose, settings } from "./state.js";
 import { tween, ease, cancelGroup } from "./tween.js";
+import {
+    springOut, OPEN_WINDOW_MS, ZOOM_MS, FOLD_FINISH_MS, CLOSE_MS, CLOSE_DELAY_MS, CLOSE_SWIPE_MS, REST_RETURN_MS, CROSSFADE_MS, FADE_IN_MS,
+    HOME_HINT_KEY, HOME_HINT_MS, SWITCH_MS, SWITCH_SWAP_AT, SWITCH_SHRINK_X, SWITCH_SHRINK_Y, SWITCH_GAP, SWITCH_SWAP_WAIT_MS,
+    HOME_SHRINK, HOME_DISTANCE, HOME_FLICK, HOME_SPRING_BACK_MS, HOME_LIFT, HOME_EDGE, HOME_FIT,
+    SWITCHER_PULL, SWITCHER_SLOW, SWITCHER_REST_MS, SPEED_FADE_MS, QUICK_SHARE
+} from "./shared/motion.js";
 import { camera } from "./renderer.js";
 import { music } from "./home.js";
 import { openPhone, blockNextClick } from "./fold.js";
@@ -91,8 +97,6 @@ export const syncAppFocus = (covered) => {
 
 // visitors took a while to find their way home from an app, so the first app one opens in 3d nudges the home bar up
 // with a line saying what it does, once per browser (see .home-hint in flat.css). a page swap ends it early
-const HOME_HINT_KEY = "homeHintSeen";
-const HOME_HINT_MS = 3600;
 const showHomeHint = () => {
     if (!pageEl || read("local", HOME_HINT_KEY) === "1") {
         return;
@@ -289,8 +293,6 @@ export const toScreenPx = (clientX, clientY) => {
     return { x, y };
 };
 
-const springOut = (t) => 1 - Math.pow(1 - t, 3.2);
-
 export const openFromCover = async (app, opts) => {
     if (state.busy || state.phone !== "closed") {
         return;
@@ -312,7 +314,7 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
     cancelGroup("intro");
     pose.blur = 0;
     if (pose.fold > 0) {
-        tween({ to: { fold: 0 }, duration: 160, easing: ease.outCubic });
+        tween({ to: { fold: 0 }, duration: FOLD_FINISH_MS, easing: ease.outCubic });
     }
     state.openApp = app;
     noteOpened(app.name);
@@ -347,8 +349,8 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
         Object.assign(pose, state.poses.zoom, { idle: 0, fold: 0 });
     } else {
         const ends = await Promise.all([
-            tween({ to: {}, duration: 520, easing: (t) => t, onUpdate: (t) => setAppWindow(springOut(t), state.openIcon, app) }),
-            tween({ to: { ...state.poses.zoom, idle: 0 }, duration: 600, easing: ease.outCubic })
+            tween({ to: {}, duration: OPEN_WINDOW_MS, easing: (t) => t, onUpdate: (t) => setAppWindow(springOut(t), state.openIcon, app) }),
+            tween({ to: { ...state.poses.zoom, idle: 0 }, duration: ZOOM_MS, easing: ease.outCubic })
         ]);
         // a rebuild or a new intro took over, and set the state itself
         if (ends.includes("cancelled")) {
@@ -366,7 +368,6 @@ export const openApp = async (app, { from = null, instant = false } = {}) => {
 // another page on the window that's already open, in the new app's color, with #page's new content fading in. #page
 // already holds the new page. with no app open it opens the app. the fade is a web animation, so it leaves #page's
 // inline styles to the loop
-const FADE_IN_MS = 220;
 export const fadeTo = async (app) => {
     if (!state.zoomed) {
         return openApp(app);
@@ -390,11 +391,6 @@ export const fadeTo = async (app) => {
 // there's one window, so the card that doesn't hold #page is drawn in the page's sky with nothing on it. the swap is
 // held until the cards are near halfway (see swapOpen), so the old page rides the leaving card and the new one the
 // arriving card, and the motion never waits on the swap
-const SWITCH_MS = 420;
-const SWITCH_SWAP_AT = 0.35;
-const SWITCH_SHRINK_X = 0.06;
-const SWITCH_SHRINK_Y = 0.14;
-const SWITCH_GAP = 0.04;
 
 // the two cards at t (0 to 1) as whole window rects in the screen's px, the leaving one (from) and the arriving one
 // (to), and how round their corners are (0 square, 1 the screen's own radius). they shrink about the page's center,
@@ -463,8 +459,6 @@ const placeCard = (rect, radius, sky) => {
     showCards([{ body: pageBox(rect), kind: 3, slot: 0 }], radius, sky);
 };
 
-const SWITCH_SWAP_WAIT_MS = 4000;
-
 export const switchTo = async (app, { back = false, swapped }) => {
     if (state.busy || !state.zoomed || reducedMotion.matches) {
         return;
@@ -523,18 +517,6 @@ export const switchTo = async (app, { back = false, swapped }) => {
 // the swipe up from the home bar, the way ios does it: the window shrinks as it's pulled up, with the point that was
 // grabbed staying under the pointer, so it can be carried anywhere while the home screen comes back behind it. only
 // on release does it fly into its icon, if it was pulled far enough up or flicked, or spring back to fill the screen
-const HOME_SHRINK = 0.65;
-const HOME_DISTANCE = 0.2;
-const HOME_FLICK = 0.5;
-// the most the card rises, as a share of the screen's height. it rises one for one with the finger at first, then
-// slower and slower toward this, as ios does, and the whole card stays on the screen
-const HOME_LIFT = 0.42;
-// the card's gap from the window's edges, as a share of the screen's height, and how far into the pull it takes to
-// blend from the whole screen into its motion, for each share of its size it has to lose on the way, so it shrinks at
-// the same rate in any window. the zoomed screen covers the window, so in a window shaped unlike the screen it runs
-// past two of the window's edges, and the card moves in a frame the size of the part that shows
-const HOME_EDGE = 0.03;
-const HOME_FIT = 0.45;
 export const rubberBand = (distance, limit) => limit * (1 - 1 / (distance / limit + 1));
 // the part of the screen the window shows, in the screen's px
 export const shownScreenRect = () => {
@@ -581,17 +563,6 @@ export const dropHomeSwipe = () => {
         homeSwipe.dropped = true;
     }
 };
-// a swipe that slows and rests opens the app switcher the way ios does. it's read from the finger's speed, not from
-// it holding perfectly still, since a resting finger drifts: once the swipe is pulled up this far (a share of the
-// screen's height) and its speed (px per ms, smoothed) stays under this for this long, the switcher opens. no move
-// fires while the finger rests, so the speed fades with the time since the last one, and a fast swipe that stops dead
-// still waits a little longer than one that slowed down first
-const SWITCHER_PULL = 0.06;
-const SWITCHER_SLOW = 0.25;
-const SWITCHER_REST_MS = 90;
-const SPEED_FADE_MS = 60;
-// a release mostly sideways, this far along the page, switches straight to the app on that side
-const QUICK_SHARE = 0.2;
 const startHomeSwipe = (event) => {
     if (state.busy || !state.zoomed || homeSwipe) {
         return;
@@ -740,7 +711,7 @@ const endHomeSwipe = guard(async (event) => {
     } else if (swipe.rect) {
         const full = { x0: 0, y0: 0, x1: fullW, y1: fullH };
         // the neighbours that peeked in fade back out with it
-        const end = await tween({ to: {}, duration: 300, easing: ease.outCubic, onUpdate: (t) => {
+        const end = await tween({ to: {}, duration: HOME_SPRING_BACK_MS, easing: ease.outCubic, onUpdate: (t) => {
             const rect = lerpRect(swipe.rect, full, t);
             placeAppWindow(rect, radiusPx, 1, swipe.home + (1 - swipe.home) * t, state.openIcon, state.openApp, 1 - t);
             drawPeek(rect, swipe.pulled * (1 - t), swipe.row);
@@ -757,7 +728,6 @@ const endHomeSwipe = guard(async (event) => {
 });
 
 // #page's fade for an open or a close with reduced motion (see placePage in loop.js)
-const CROSSFADE_MS = 300;
 const crossfade = (from, to) => tween({ to: {}, duration: CROSSFADE_MS, easing: (t) => t, onUpdate: (t) => {
     state.pageFade = from + (to - from) * ease.inOutSine(t);
 } });
@@ -796,7 +766,7 @@ export const closeApp = async (from = null) => {
     // the window shrinks back into its icon as the phone moves back to its resting distance. the real icon takes over
     // the moment the shrink ends, instead of the window sitting there as a stand in while the phone finishes moving.
     // let go mid swipe, it's already moving, so it flies off at once and eases in
-    const shrink = tween({ to: {}, duration: from ? 380 : 460, delay: from ? 0 : 80, easing: (t) => t, onUpdate: (t) => step(from ? ease.outCubic(t) : ease.inOutCubic(t)) })
+    const shrink = tween({ to: {}, duration: from ? CLOSE_SWIPE_MS : CLOSE_MS, delay: from ? 0 : CLOSE_DELAY_MS, easing: (t) => t, onUpdate: (t) => step(from ? ease.outCubic(t) : ease.inOutCubic(t)) })
         .then((end) => {
             if (end === "cancelled") {
                 return end;
@@ -805,7 +775,7 @@ export const closeApp = async (from = null) => {
             setAppVisible(false);
             return end;
         });
-    const ends = await Promise.all([shrink, tween({ to: { ...state.poses.rest, idle: 1 }, duration: 650, easing: ease.inOutCubic })]);
+    const ends = await Promise.all([shrink, tween({ to: { ...state.poses.rest, idle: 1 }, duration: REST_RETURN_MS, easing: ease.inOutCubic })]);
     if (ends.includes("cancelled")) {
         return;
     }

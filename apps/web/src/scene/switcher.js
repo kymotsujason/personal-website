@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state, settings } from "./state.js";
 import { tween, ease } from "./tween.js";
+import { SWITCHER, liftSpring } from "./shared/motion.js";
 import { guard, signal, failScene } from "./lifetime.js";
 import { reducedMotion } from "./quality.js";
 import { siteData } from "./home.js";
@@ -17,50 +18,15 @@ import { pageEl, placeAppWindow, pageBox, toScreenPx, showCards, hideCards, page
 // else or a swipe up from outside the cards goes home. apps can't be closed, so a card pushed up stretches a little
 // and springs back
 
-// the cards' size and the gap between them, as shares of the page, and how far above the page's center they sit,
-// which leaves room for the labels
-const CARD_SCALE = 0.62;
-const CARD_GAP = 0.06;
-const CARD_RISE = 0.04;
-// a label's height against its card's, and its gap above the card
-const LABEL_SHARE = 0.085;
-const LABEL_GAP = 0.03;
-// how far the home screen behind the cards zooms in and dims, in placeAppWindow's home (1 is an open app's, which
-// dims it to 0.7). this one dims it to 0.45
-const BACKDROP_HOME = (1 - 0.45) / 0.3;
-// how much the darkened sky behind the cards hides the home screen, the way ios blurs the wallpaper there
-const BACKDROP = 0.92;
-const ENTER_MS = 320;
-const SNAP_MS = 320;
-const OPEN_MS = 340;
-const HOME_FADE_MS = 200;
-const LIFT_MS = 500;
-// how far a card can be pushed up, against its height, before it stops giving
-const LIFT_LIMIT = 0.12;
-// a press that moves less than this (in the window's px) is a tap
-const TAP_SLOP = 8;
-// a swipe up from outside the cards this far (in the window's px), or this fast (px per ms), goes home
-const HOME_PULL = 40;
-const HOME_FLICK = 0.5;
-// how far ahead a flick carries the row, in ms of its speed
-const FLICK_AHEAD = 150;
-// a release this long after the last move was a finger at rest, so it carries no speed (no move fires while it rests)
-const REST_MS = 50;
+// the switcher's numbers live in shared/motion.js, which the 2d scene reads too
+const {
+    CARD_SCALE, CARD_GAP, CARD_RISE, LABEL_SHARE, LABEL_GAP, BACKDROP_HOME, BACKDROP, ENTER_MS, SNAP_MS, OPEN_MS, HOME_FADE_MS,
+    LIFT_MS, LIFT_LIMIT, TAP_SLOP, HOME_PULL, HOME_FLICK, FLICK_AHEAD, REST_MS, SWAP_WAIT_MS, PEEK_FROM, PEEK_TO
+} = SWITCHER;
 const speedAt = (lastT, speed) => (performance.now() - lastT > REST_MS ? 0 : speed);
-// a swap that never lands leaves the opened card as a stand in for at most this long
-const SWAP_WAIT_MS = 4000;
 
 // each app's last page, so a card opens the app where it was left, the way ios keeps an app's place
 const lastPath = new Map();
-
-// an ios style spring with a little bounce (bounce 0.2, about half a second), as a 0 to 1 curve over the tween
-const spring = (t) => {
-    const seconds = t * 0.5;
-    const zeta = 0.8;
-    const omega = (2 * Math.PI) / 0.5;
-    const damped = omega * Math.sqrt(1 - zeta * zeta);
-    return 1 - Math.exp(-zeta * omega * seconds) * (Math.cos(damped * seconds) + ((zeta * omega) / damped) * Math.sin(damped * seconds));
-};
 
 // the row's geometry in the screen's px, from the part #page covers
 const layoutOf = () => {
@@ -160,8 +126,6 @@ export const switcherOpen = () => Boolean(state.switcher);
 // from a home bar swipe that rested, with the window at rect (the whole window, as the swipe placed it)
 // the swipe's neighbours on either side of the card it carries (the window at rect), fading in as the swipe pulls up
 // the way ios lets the app before peek in, so the switcher and a quick switch are already in view
-const PEEK_FROM = 0.03;
-const PEEK_TO = 0.14;
 export const peekShare = (pulled) => THREE.MathUtils.smoothstep(pulled, PEEK_FROM, PEEK_TO);
 export const drawPeek = (rect, pulled, row) => {
     const layout = layoutAround(pageBox(rect));
@@ -435,7 +399,7 @@ const settleLift = (sw) => {
         if (state.switcher !== sw || sw.lift !== lift) {
             return;
         }
-        lift.dy = from * (1 - spring(t));
+        lift.dy = from * (1 - liftSpring(t));
         draw();
     } }).then(() => {
         if (state.switcher === sw && sw.lift === lift) {

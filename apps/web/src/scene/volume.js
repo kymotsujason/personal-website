@@ -1,22 +1,10 @@
 import * as THREE from "three";
+import { PRESS_DEPTH, PRESS_IN, PRESS_OUT, SHOW_FOR, FADE_OUT, LEVEL_EASE, BAR, REACH } from "./shared/motion.js";
 
 // the phone's volume buttons (art/phone/buildPhone.py puts them on the bottom half's top edge, x 0.93 to 1.93 and 2.23
 // to 3.23 from the hinge). a press steps the music's level and shows an ios style volume bar on the screen. like
 // ipados, which button turns it up follows how the phone is held: the right one in landscape, and in portrait, where
 // the halves turn so that edge is the phone's right side, the upper one, nearer the hinge
-
-// how far a pressed button sinks into the frame, cm, and how long the press and the bar take, ms
-const PRESS_DEPTH = 0.035;
-const PRESS_IN = 60;
-const PRESS_OUT = 140;
-const SHOW_FOR = 1400;
-const FADE_OUT = 260;
-const LEVEL_EASE = 120;
-// the bar on the screen, cm: along the edge, across it, and in from the edge
-const BAR = { long: 2.6, short: 0.46, inset: 0.55 };
-// the invisible area round each button that takes a press, cm. seen from the front the top edge is nearly edge on, so
-// the buttons alone would be a few pixels tall
-const REACH = { along: 0.2, out: 0.7, inward: 0.15, depth: 0.45 };
 
 // the buttons' triangles split out of the joined buttons mesh by where they sit: the two on the top edge, nearer and
 // farther from the hinge. the rest (the side button and camera control) stay in the original mesh

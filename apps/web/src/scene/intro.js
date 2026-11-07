@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state, pose, DUO, TAP_FOLD } from "./state.js";
 import { tween, ease, cancelAll } from "./tween.js";
+import { MOVE, moveTotal, moveAt, FAST_FOLD_AT } from "./shared/motion.js";
 import { camera, backdrop } from "./renderer.js";
 import { centerComp, setFold, leadOpen, LEAD, loadVolume } from "./device.js";
 import { siteData, dropScrub } from "./home.js";
@@ -12,29 +13,8 @@ import { reducedMotion } from "./quality.js";
 import { shown } from "./loop.js";
 
 const POSE_KEYS = ["x", "y", "z", "rx", "ry", "rz"];
-// ms into the fast intro when the phone starts to unfold. in portrait the hands get under the edge first
-const FAST_FOLD_AT = { landscape: 0, portrait: 100 };
-
-// each part of the move eases out on its own clock: the rise slows gradually and carries a little climb into the
-// opening, the approach overlaps the unfold, and the tilt squares up as it's taken out. nothing turns a corner, so
-// nothing reads as a stop between coming into view and opening
-export const MOVE = {
-    rise: { keys: ["x", "y"], time: 1500, power: 4.5 },
-    approach: { keys: ["z"], time: 2100, power: 2.5 },
-    turn: { keys: ["rx", "ry", "rz"], time: 1100, power: 3 }
-};
-export const moveTotal = () => Math.max(...Object.values(MOVE).map((m) => m.time));
-
-export const moveAt = (ms, start, rest) => {
-    const out = {};
-    Object.values(MOVE).forEach(({ keys, time, power }) => {
-        const u = 1 - Math.pow(1 - THREE.MathUtils.clamp(ms / time, 0, 1), power);
-        keys.forEach((k) => {
-            out[k] = start[k] + (rest[k] - start[k]) * u;
-        });
-    });
-    return out;
-};
+// the intro's move and its timings live in shared/motion.js, and spikeApi.js reads them from here
+export { MOVE, moveTotal, moveAt };
 
 // the first moment the closed device is fully in the window with room below it, so the unfold starts right then
 export const foldStartTime = (start, rest) => {

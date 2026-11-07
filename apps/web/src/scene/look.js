@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { state } from "./state.js";
+import { LOOK_SLOP, AVOID_GAIN, AVOID_MAX } from "./shared/motion.js";
 import { backdrop } from "./renderer.js";
 import { gesture, phoneEdges, blockNextClick } from "./fold.js";
 import { signal, guard } from "./lifetime.js";
@@ -7,7 +8,6 @@ import { signal, guard } from "./lifetime.js";
 // with the phone closed, dragging anywhere but the phone's border looks around the desk. the desk moves with the
 // pointer, like grabbing it, and a press that doesn't move still taps through to the cover's icons
 let lookDrag = null;
-const LOOK_SLOP = 6;
 const onPhone = (x, y) => {
     const { outer } = phoneEdges();
     return x >= outer.left && x <= outer.right && y >= outer.top && y <= outer.bottom;
@@ -26,8 +26,6 @@ const endLook = guard((event) => {
 // with the phone closed, the hands move it out of the way of the mouse, since where the cursor is over the desk is
 // likely where the visitor is looking. the move grows with how far the cursor is from the phone's resting spot, so
 // it's nothing while the cursor is on the phone and it can't chase itself as the phone moves
-const AVOID_GAIN = 0.45;
-const AVOID_MAX = 0.16;      // of the window's smaller side
 export const avoid = { tx: 0, ty: 0, x: 0, y: 0 };
 
 export const installLook = () => {

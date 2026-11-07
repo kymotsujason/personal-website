@@ -3,6 +3,7 @@ import { snapshotSurfaces } from "./snapshotCards.js";
 import { cornerPin, facing } from "./pin.js";
 import { state, pose, TAP_FOLD, FOV } from "./state.js";
 import { runTweens } from "./tween.js";
+import { idleDrift } from "./shared/motion.js";
 import { renderer, scene, camera, backdrop, focusBlur } from "./renderer.js";
 import { frameTimes, stepQuality, reducedMotion, laterLevel } from "./quality.js";
 import { homeCache, refreshStatus } from "./home.js";
@@ -171,13 +172,8 @@ const fitInView = () => {
     return { x: shiftX * worldPerPx, y: -shiftY * worldPerPx, z: -(d * scale - d) };
 };
 
-// the idle drift only translates: any tilt at rest made the screen a true 3d layer, and the browser drew its text
-// with missing vertical strips along the layer's tile seams
-export const idleDrift = (t, idle) => ({
-    x: Math.sin(t * 0.6 + 1) * 0.05 * idle,
-    y: Math.sin(t * 0.9) * 0.06 * idle,
-    z: Math.sin(t * 0.5 + 2) * 0.08 * idle
-});
+// the idle drift lives in shared/motion.js, and fold.js reads it from here
+export { idleDrift };
 
 // ms after the page started when the scene shows even if the desk hasn't loaded, and ms after it shows when the full
 // desk images load if the intro hasn't asked for them first

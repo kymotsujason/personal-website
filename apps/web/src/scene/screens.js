@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { PRECIPITATION_GLSL } from "./precipitation.js";
+import { EXTRA_HOLES } from "./shared/motion.js";
+
+// snapshotCards.js reads EXTRA_HOLES from here
+export { EXTRA_HOLES };
 
 // position of an element inside `root`, from layout offsets, so css transforms on root don't matter
 const offsetIn = (el, root) => {
@@ -629,7 +633,6 @@ export const mapScreenUV = (mesh, rootInverse, surface) => {
 
 // punches an ios style app window (a rounded rect in the home screen's own px) through the screen, so the html app
 // behind the canvas shows there. tl, u, v map screen px to the mesh's local plane
-export const EXTRA_HOLES = 3;
 export const appWindowMaterial = () => new THREE.ShaderMaterial({
     uniforms: {
         tl: { value: new THREE.Vector2() },
