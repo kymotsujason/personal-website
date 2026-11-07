@@ -12,6 +12,7 @@ import {
 } from "../scene/shared/motion.js";
 import { place, screenLayout } from "../scene/shared/placement.js";
 import {
+  createAppFocus,
   createApps,
   lerpPose,
   mixColor,
@@ -121,4 +122,38 @@ test("the window's look and #page's clip follow the 3d window", () => {
       rectW: 700,
     }),
   ).toBe("inset(0px -60px 0px -60px round 40px)");
+});
+
+test("focus goes to the page at full zoom and back to the icon on close", () => {
+  const body = { name: "body" };
+  const doc = { body, activeElement: body };
+  const focusable = (name) => ({
+    name,
+    tabIndex: 0,
+    attrs: {},
+    hasAttribute(key) {
+      return key in this.attrs;
+    },
+    focus() {
+      doc.activeElement = this;
+    },
+  });
+  const h1 = focusable("h1");
+  const icon = focusable("icon");
+  const pageEl = {
+    querySelector: () => h1,
+    contains: (el) => el === h1,
+  };
+  const sync = createAppFocus({ pageEl, iconOf: () => icon, doc });
+  // the tapped icon lost its focus when the home screen went inert under the opening window
+  sync({ covered: true, pageFlat: false, app: ABOUT });
+  expect(doc.activeElement).toBe(body);
+  sync({ covered: true, pageFlat: true, app: ABOUT });
+  expect(doc.activeElement).toBe(h1);
+  expect(h1.tabIndex).toBe(-1);
+  // closing: the window still covers the home screen, then it's uncovered
+  sync({ covered: true, pageFlat: false, app: ABOUT });
+  expect(doc.activeElement).toBe(h1);
+  sync({ covered: false, pageFlat: false, app: ABOUT });
+  expect(doc.activeElement).toBe(icon);
 });

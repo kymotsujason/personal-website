@@ -189,3 +189,23 @@ test("the face quads are in the frames' own px", () => {
     bodyTl[1] + manifest.margin.top,
   ]);
 });
+
+test("the open app's icon hides while its window shows", () => {
+  const screens = createScreens({ host, siteData, music });
+  const glyph = (name) =>
+    screens.body.querySelector(`.app-icon[data-app="${name}"] .glyph`);
+  screens.setHiddenIcon("About");
+  expect(glyph("About").style.visibility).toBe("hidden");
+  expect(glyph("Music").style.visibility).toBe("");
+  screens.setHiddenIcon("Music");
+  expect(glyph("About").style.visibility).toBe("");
+  expect(glyph("Music").style.visibility).toBe("hidden");
+  screens.setHiddenIcon(null);
+  expect(glyph("Music").style.visibility).toBe("");
+  // the cover's icons are the cover's own, and stay
+  expect(
+    screens.cover.querySelector('.app-icon[data-app="Music"] .glyph').style
+      .visibility,
+  ).toBe("");
+  screens.destroy();
+});

@@ -277,6 +277,29 @@ export const createScreens = ({
     return glyph ? rectOf(glyph) : { x0: 0, y0: 0, x1: 0, y1: 0, radius: 0 };
   };
 
+  // the open app's own icon is left out of the home screen while its window shows, since a window let go mid swipe can
+  // fly in from below it and the icon would show past the window's top (scene/appWindow.js hideOpenIcon). null shows
+  // them all
+  let hiddenIcon = null;
+  const setHiddenIcon = (name) => {
+    if (name === hiddenIcon) {
+      return;
+    }
+    const glyphOf = (app) =>
+      body.querySelector(`.app-icon[data-app="${app}"] .glyph`);
+    if (hiddenIcon !== null) {
+      glyphOf(hiddenIcon)?.style.removeProperty("visibility");
+    }
+    hiddenIcon = name;
+    if (name !== null) {
+      glyphOf(name)?.style.setProperty("visibility", "hidden");
+    }
+  };
+
+  // the app's icon button on the body's half, which focus goes back to when the app closes
+  const iconButton = (name) =>
+    body.querySelector(`.app-icon[data-app="${name}"]`);
+
   // the home screen behind an app window zooms in around the icon and dims (scene/appWindow.js placeAppWindow), each
   // half around the same point of the open screen. null puts it back
   const dims = {};
@@ -628,6 +651,8 @@ export const createScreens = ({
     setInput,
     rectOf,
     iconRect,
+    iconButton,
+    setHiddenIcon,
     setHomeLook,
     place,
     faceStyles,

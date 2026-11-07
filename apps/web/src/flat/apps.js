@@ -102,6 +102,30 @@ export const homeLook = (home, icon) => ({
   dim: 0.3 * home,
 });
 
+// the home screen sits under #page in the tab order, so while an app covers it its faces are inert and the focus
+// they had is gone. focus goes to the page's heading once the app is up as the flat page, and back to the app's icon
+// once the home screen is uncovered again (scene/appWindow.js syncAppFocus). the draw calls it each frame
+export const createAppFocus = ({ pageEl, iconOf, doc = document }) => {
+  let wasFlat = false;
+  let wasCovered = false;
+  return ({ covered, pageFlat, app }) => {
+    const active = doc.activeElement;
+    const lost = !active || active === doc.body;
+    if (pageFlat && !wasFlat && lost) {
+      const target = pageEl.querySelector("h1") || pageEl;
+      if (!target.hasAttribute("tabindex")) {
+        target.tabIndex = -1;
+      }
+      target.focus({ preventScroll: true });
+    }
+    if (!covered && wasCovered && app && (lost || pageEl.contains(active))) {
+      iconOf(app.name)?.focus({ preventScroll: true });
+    }
+    wasFlat = pageFlat;
+    wasCovered = covered;
+  };
+};
+
 // scene holds the phone's state the loop draws (pose, fold, busy, zoomed, phone, appVisible, pageFade, win, openApp,
 // openIcon, openFromWidget) with placed, full ({ fullW, fullH, radius } of the open screen), reduced(), slowPath(),
 // iconRect(name), takeOver(), setPageFlat(flat), loadPlayer(app), and wake(). folds gives openPhone, and nav

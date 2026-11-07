@@ -244,8 +244,9 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     frames = layer;
   };
 
-  // a point in the frames' px to where the chain draws it in the window now
-  const toWindow = (p) => projectPoint(matrix, p);
+  // a point in the frames' px to where the chain draws it in the window now, or at another pose and fold
+  const toWindow = (p, at = null, atFold = 0) =>
+    projectPoint(at ? chainMatrix(geometry, at, atFold) : matrix, p);
 
   // a point on the open screen, as its share across and down, to the frames' px
   const screenPoint = (p) => mapPoint(fromScreen, p);

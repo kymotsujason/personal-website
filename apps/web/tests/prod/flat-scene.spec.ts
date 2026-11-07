@@ -170,3 +170,114 @@ test("one frame per paint during an unfold", async ({ page }) => {
   }
   expect(new Set(indexes).size).toBeGreaterThan(20);
 });
+
+test.describe("in a portrait window", () => {
+  test.use({ viewport: { width: 600, height: 900 } });
+
+  test("the closing set decodes with the opening one, before the first frame", async ({
+    page,
+  }) => {
+    // the frames in the layer at the moment the first frame shows
+    await page.addInitScript(() => {
+      const w = window as any;
+      const look = () => {
+        if (w.__flatShown && w.__framesAtShown === undefined) {
+          w.__framesAtShown =
+            document.querySelector(".flat-frames")?.children.length ?? 0;
+          return;
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    const counts = await page.evaluate(async () => {
+      const w = window as any;
+      const { lighting, size } = w.__flat.manifest;
+      const closing = await fetch(
+        `/flat/portrait-close-${lighting}-${size}/manifest.json`,
+      ).then((r) => r.json());
+      return {
+        shown: w.__framesAtShown,
+        both: w.__flat.manifest.frames.length + closing.frames.length,
+        opening: w.__flat.manifest.frames.length,
+      };
+    });
+    expect(counts.shown).toBe(counts.both);
+    // a close plays on the closing set's frames, which come after the opening set's in the layer
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false });
+    const on = await page.evaluate(() =>
+      [...document.querySelectorAll(".flat-frame")].findIndex((el) =>
+        el.classList.contains("on"),
+      ),
+    );
+    expect(on).toBeGreaterThanOrEqual(counts.opening);
+  });
+});
+
+test.describe("on the slow path", () => {
+  test.beforeEach(async ({ page }) => {
+    // the 3d scene sent this device here for being slow
+    await page.addInitScript(() =>
+      localStorage.setItem("2dAuto", String(Date.now())),
+    );
+  });
+
+  test("the screens show their picture while moving, and apps crossfade", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await expect(page.locator(".flat-face.pictured")).toHaveCount(0);
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__pictured = [];
+      const look = () => {
+        w.__pictured.push(
+          document.querySelectorAll(".flat-face.pictured").length,
+        );
+        const s = w.__flat.status();
+        if (w.__pictured.length < 200 && !(s.phone === "closed" && !s.busy)) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => flatStatus(page))
+      .toMatchObject({ phone: "closed", busy: false });
+    const pictured: number[] = await page.evaluate(
+      () => (window as any).__pictured,
+    );
+    expect(Math.max(...pictured), "pictured while folding").toBe(3);
+    await expect(page.locator(".flat-face.pictured")).toHaveCount(0);
+    await page.keyboard.press("Enter");
+    await settledOn(page, "/", null);
+    // the open fades #page in over the phone, in front with the apps' background, and never clips it
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__page = [];
+      const look = () => {
+        const el = document.getElementById("page")!;
+        w.__page.push({ z: el.style.zIndex, clip: el.style.clipPath });
+        const s = w.__flat.status();
+        if (w.__page.length < 200 && !(s.zoomed && !s.busy)) {
+          requestAnimationFrame(look);
+        }
+      };
+      requestAnimationFrame(look);
+    });
+    await page.locator('.flat-home .app-icon[data-app="About"]').click();
+    await settledOn(page, "/about", "About");
+    const shown: { z: string; clip: string }[] = await page.evaluate(
+      () => (window as any).__page,
+    );
+    expect(shown.some((p) => p.z === "1")).toBe(true);
+    expect(shown.filter((p) => p.clip !== "")).toEqual([]);
+  });
+});

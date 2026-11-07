@@ -6,6 +6,7 @@
 import { read, write } from "../lib/storage.js";
 import { screenLayout } from "../scene/shared/placement.js";
 import {
+  createAppFocus,
   createApps,
   homeLook,
   pageClip,
@@ -38,6 +39,30 @@ export const chooseSet = ({ width, height, dpr, hour }) => {
     size: sizeFor({
       phonePx: phoneHeightPx({ width, height, portrait }) * dpr,
     }),
+  };
+};
+
+// portrait's opening set and its closing one go together, the cable versions too
+export const closingSetFor = (set) =>
+  set.endsWith("portrait-open") ? set.replace(/open$/, "close") : null;
+
+// the slow path opens apps with the crossfade and shows the screens' canvas picture while the phone moves (rulings R9
+// and R9b): a device the 2d scene found slow (flat-slow) or one the 3d scene sent here for being slow (2dAuto). half
+// size frames follow the screen's pixels, which most phones get, so they don't count
+export const slowPathFor = ({ flatSlow = false, auto = null } = {}) =>
+  Boolean(flatSlow) || auto !== null;
+
+// where the phone is now: the state the loop draws, or while the intro's animations still play (between its unlock
+// and its end, say), where they have it
+export const phoneAt = ({ drawing, pose, fold, lead, intro, placed }) => {
+  if (drawing || !intro?.plan) {
+    return { pose, fold, lead };
+  }
+  const ms = Math.min(intro.elapsed(), intro.plan.total);
+  return {
+    pose: intro.plan.poseAt(ms, placed),
+    fold: intro.plan.foldAt(ms),
+    lead: intro.plan.lead ? 1 : 0,
   };
 };
 
@@ -94,8 +119,7 @@ export const startFlatScene = ({
     portrait: false,
     full: null,
     frosted: false,
-    // the slow path opens apps with the crossfade instead of a clip on #page (ruling R9): the half size frames, or a
-    // device the 3d scene sent here for being slow
+    // the slow path (slowPathFor), read once at start
     slow: false,
   };
 
@@ -181,14 +205,16 @@ export const startFlatScene = ({
       ? scene.closeFrames
       : scene.openFrames;
 
-  // the phone's outer bounds and its screen's in window px, from the frame showing (scene/fold.js phoneEdges)
+  // the phone's outer bounds and its screen's in window px, from the frame showing (scene/fold.js phoneEdges). while
+  // the intro still plays, that's where its animations have the phone, not the state the loop last drew
   const edges = () => {
+    const now = phoneAt(scene);
     const { manifest, layer } = activeFrames();
-    const frame = manifest.frames[layer.frameFor(scene.fold, scene.lead)];
+    const frame = manifest.frames[layer.frameFor(now.fold, now.lead)];
     const { x, top } = manifest.margin;
     const bounds = (points) => {
       const shownAt = points.map(([px, py]) =>
-        scene.stage.toWindow([px + x, py + top]),
+        scene.stage.toWindow([px + x, py + top], now.pose, now.fold),
       );
       const xs = shownAt.map((p) => p[0]);
       const ys = shownAt.map((p) => p[1]);
@@ -365,6 +391,10 @@ export const startFlatScene = ({
     }
     drawWindow();
     drawPage();
+    screens.setHiddenIcon(
+      scene.win && !scene.openFromWidget ? scene.win.app.name : null,
+    );
+    const fading = scene.pageFade !== null;
     screens.setInput(
       faceInput({
         fold: scene.fold,
@@ -372,9 +402,24 @@ export const startFlatScene = ({
         busy: scene.busy,
         appVisible: scene.appVisible,
         pageFlat: scene.pageFlat,
-        fading: scene.pageFade !== null,
+        fading,
       }),
     );
+    syncAppFocus({
+      covered: scene.appVisible || scene.pageFlat || fading,
+      pageFlat: scene.pageFlat,
+      app: scene.openApp,
+    });
+    // on the slow path the screens show their canvas picture while the phone or an app moves, drawn from the live
+    // screens as the motion starts, and the live html again once it's at rest
+    const pictured = scene.slow && scene.busy;
+    if (pictured !== shownPicture) {
+      shownPicture = pictured;
+      if (pictured) {
+        screens.picture();
+      }
+      screens.showPicture(pictured);
+    }
     // frosted glass only at rest, and the plain glass while anything moves
     const frosted = scene.frosted && !scene.busy;
     if (frosted !== shownFrosted) {
@@ -383,6 +428,11 @@ export const startFlatScene = ({
     }
   };
   let shownFrosted = false;
+  let shownPicture = false;
+  const syncAppFocus = createAppFocus({
+    pageEl,
+    iconOf: (name) => scene.screens.iconButton(name),
+  });
   loop.onDraw(draw);
 
   // the intro still playing its last stretch stops where it is, and the loop draws from there, in the same task so no
@@ -392,13 +442,8 @@ export const startFlatScene = ({
     if (!intro || scene.drawing) {
       return;
     }
-    if (intro.plan) {
-      const ms = Math.min(intro.elapsed(), intro.plan.total);
-      scene.pose = intro.plan.poseAt(ms, scene.stage.placed);
-      scene.fold = intro.plan.foldAt(ms);
-      scene.lastFold = scene.fold;
-      scene.lead = intro.plan.lead ? 1 : 0;
-    }
+    Object.assign(scene, phoneAt(scene));
+    scene.lastFold = scene.fold;
     intro.cancel();
     afterIntro();
   };
@@ -418,32 +463,6 @@ export const startFlatScene = ({
     );
   };
 
-  // the portrait closing path's frames load once the intro is over, since decoding them mid unfold would stall it. a
-  // close before they're ready, or with them failed, plays on the opening path's frames
-  const loadClosePath = async () => {
-    const { manifest, stage } = scene;
-    if (!scene.portrait || scene.closeFrames || !manifest) {
-      return;
-    }
-    try {
-      const closing = await loadManifest(
-        "portrait-close",
-        manifest.lighting,
-        manifest.size,
-      );
-      if (failed || scene.stage !== stage) {
-        return;
-      }
-      const layer = stage.addFrames(closing);
-      await layer.decode();
-      if (!failed && scene.stage === stage) {
-        scene.closeFrames = { manifest: closing, layer };
-      }
-    } catch (error) {
-      console.warn("the 2d scene's closing frames didn't load", error);
-    }
-  };
-
   // the intro is over (ended, or taken over by a motion), so the loop draws from here on
   const afterIntro = () => {
     if (scene.drawing) {
@@ -453,7 +472,6 @@ export const startFlatScene = ({
     scene.moving = false;
     scene.frosted = scene.manifest.size === "full";
     draw();
-    loadClosePath();
   };
 
   const status = () => ({
@@ -549,15 +567,22 @@ export const startFlatScene = ({
     });
   };
 
-  // the set's frames and the desk decode before any of it joins the page
+  // the set's frames and the desk decode before any of it joins the page. portrait's opening set comes with its
+  // closing one, since the hands take the closing path for every close, and both load up front so a close never plays
+  // on the opening grip and no set lands partway through a fold
   const mount = async ({ set, lighting, size }) => {
     unmount();
-    const manifest = await loadManifest(set, lighting, size);
+    const closingSet = closingSetFor(set);
+    const [manifest, closing] = await Promise.all([
+      loadManifest(set, lighting, size),
+      closingSet ? loadManifest(closingSet, lighting, size) : null,
+    ]);
     if (failed) {
       throw new Error("the 2d scene stopped while loading");
     }
     const portrait = manifest.orientation === "portrait";
     const stage = createStage({ stageEl, pageEl, manifest });
+    const closeLayer = closing ? stage.addFrames(closing) : null;
     const screens = createScreens({
       host: stage.layers.screens,
       siteData,
@@ -575,11 +600,15 @@ export const startFlatScene = ({
       desk,
       portrait,
       openFrames: { manifest, layer: stage.frameLayer },
-      closeFrames: null,
+      closeFrames: closing ? { manifest: closing, layer: closeLayer } : null,
       full: { fullW: l.fullW, fullH: l.fullH, radius: l.radius },
       pose: { ...stage.placed.rest },
     });
-    await Promise.all([stage.frameLayer.decode(), desk.decode()]);
+    await Promise.all([
+      stage.frameLayer.decode(),
+      closeLayer?.decode(),
+      desk.decode(),
+    ]);
     return manifest;
   };
 
@@ -608,10 +637,10 @@ export const startFlatScene = ({
       fail("watchdog");
       return;
     }
-    scene.slow =
-      root.classList.contains("flat-slow") ||
-      scene.manifest.size === "half" ||
-      read("local", "2dAuto") !== null;
+    scene.slow = slowPathFor({
+      flatSlow: root.classList.contains("flat-slow"),
+      auto: read("local", "2dAuto"),
+    });
     folds.install({
       signal,
       guard,
