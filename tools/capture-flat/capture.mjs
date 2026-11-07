@@ -112,8 +112,9 @@ export const foldList = () => {
 };
 
 const LANDSCAPE = { width: 1280, height: 800 };
-// an ipad held upright (768 by 1024) at the landscape set's 800 px height. the phone fits that window's height as it
-// does in landscape's, so both orientations draw the phone at the same px per cm
+// an ipad held upright (768 by 1024) at the landscape set's 800 px height. both windows fit the open phone's height
+// to the same 688 px, but that height is 16.46 cm in portrait and 11.78 cm in landscape, so portrait draws the phone
+// at about 0.72 of landscape's px per cm
 const PORTRAIT = { width: 600, height: 800 };
 // the charger's plug run is stepped at one 60 hz refresh at a time
 export const CHARGER_STEP = 1 / 60;

@@ -26,7 +26,7 @@ The sets are these:
 - `volume-landscape` and `volume-portrait`, each button pressed all the way in with the phone at rest, open and then closed.
 - `desk`, the desk's cube faces alone, which every set at that lighting shares.
 
-Landscape is captured at a 1280 by 800 window and portrait at 600 by 800 (an iPad held upright), so both draw the phone at the same px per cm. The charger's sets pin the battery just after it starts charging, which loads the charger with the cable in, and the others hold it full.
+Landscape is captured at a 1280 by 800 window and portrait at 600 by 800 (an iPad held upright). Both windows fit the open phone's height to the same 688 px, but that height is the phone's 16.46 cm side in portrait and its 11.78 cm side in landscape, so portrait draws the phone at about 0.72 of landscape's px per cm (the body's long edge is 492.4 px at fold 0, against 688 px). The charger's sets pin the battery just after it starts charging, which loads the charger with the cable in, and the others hold it full.
 
 The raw output lands in `.media/flat/<SET>-<LIGHTING>/`, which git ignores, and a run starts by deleting that folder. A landscape set is 120 frames and took about a minute on the dev PC.
 
