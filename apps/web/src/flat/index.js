@@ -1,13 +1,28 @@
 // the 2d scene, shown under html.has-flat-scene: captured frames of the hands and phone, the live home and cover
 // screens warped onto them, and the desk behind, played from the address the way the 3d scene arrives (intro.js).
-// from (the 3d scene's handoff) isn't read yet
+// the intro runs as web animations, and every motion after it (the folds, the apps) from one animation frame loop
+// (loop.js) that draws the frame, the wrappers, the screens, and #page together. from (the 3d scene's handoff) isn't
+// read yet
 import { read, write } from "../lib/storage.js";
+import { screenLayout } from "../scene/shared/placement.js";
+import {
+  createApps,
+  homeLook,
+  pageClip,
+  pageOpacity,
+  smoothstep,
+  windowLook,
+} from "./apps.js";
 import { createDesk } from "./desk.js";
+import { createFolds, pathAfter } from "./fold.js";
 import { chooseLighting, phoneHeightPx, sizeFor } from "./frames.js";
 import { arrivalKind, playIntro } from "./intro.js";
+import { createLoop } from "./loop.js";
 import { loadManifest } from "./manifest.js";
+import { createNavigation } from "./navigation.js";
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
+import { quadToQuad } from "./warp.js";
 
 const nextFrame = () =>
   new Promise((resolve) => requestAnimationFrame(resolve));
@@ -26,11 +41,15 @@ export const chooseSet = ({ width, height, dpr, hour }) => {
   };
 };
 
+// the app window's px across its whole width, as the 3d scene's window is laid out (scene/appWindow.js)
+const SPLASH_PX = 26;
+
 export const startFlatScene = ({
   stageEl,
   pageEl,
   siteData,
   music,
+  links,
   onShown,
   onFailed,
   onPageFlat,
@@ -38,20 +57,85 @@ export const startFlatScene = ({
   from,
 }) => {
   const root = document.documentElement;
+  const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
+  const controller = new AbortController();
+  const { signal } = controller;
   let failed = false;
   let shown = false;
-  // what's mounted and where the phone is. later steps (folds, apps, the loop) read and drive these
+  // what's mounted and where the phone is. the folds and the apps drive the phone's state, and the loop draws it
   const scene = {
     manifest: null,
     stage: null,
     screens: null,
     desk: null,
     intro: null,
-    phone: "closed",
+    // the frames for each portrait path, { manifest, layer }, the closing one once it has loaded
+    openFrames: null,
+    closeFrames: null,
+    // the intro's web animations are playing, and the loop draws nothing until it's over or taken over
     moving: true,
+    drawing: false,
     unlocked: false,
+    phone: "closed",
+    busy: false,
+    zoomed: false,
     pageFlat: false,
+    appVisible: false,
+    pageFade: null,
+    win: null,
+    openApp: null,
+    openIcon: null,
+    openFromWidget: false,
+    pose: null,
+    fold: 1,
+    lead: 0,
+    path: "open",
+    lastFold: 1,
+    portrait: false,
+    full: null,
+    frosted: false,
+    // the slow path opens apps with the crossfade instead of a clip on #page (ruling R9): the half size frames, or a
+    // device the 3d scene sent here for being slow
+    slow: false,
   };
+
+  const fail = (reason) => {
+    if (failed) {
+      return;
+    }
+    failed = true;
+    controller.abort();
+    loop.stop();
+    unmount();
+    dropBlack();
+    root.classList.remove("has-flat-scene", "flat-ready");
+    pageEl.getAnimations?.().forEach((animation) => animation.cancel());
+    pageEl.classList.remove("hint-home");
+    pageEl.removeAttribute("style");
+    console.warn("the 2d scene stopped", reason);
+    onFailed(reason);
+  };
+
+  // every entry point from an event or a navigation fails the scene if it throws, and does nothing once it has
+  const guard =
+    (fn) =>
+    (...args) => {
+      if (failed) {
+        return undefined;
+      }
+      try {
+        const result = fn(...args);
+        if (result && typeof result.then === "function") {
+          return result.catch((error) => fail(error));
+        }
+        return result;
+      } catch (error) {
+        fail(error);
+        return undefined;
+      }
+    };
+
+  const loop = createLoop({ onError: (error) => fail(error) });
 
   // the black the scene fades in from, over everything in the stage until the first frame shows
   const black = document.createElement("div");
@@ -60,21 +144,263 @@ export const startFlatScene = ({
   const dropBlack = () => black.remove();
   black.addEventListener("transitionend", dropBlack);
 
-  const appForPage = () =>
-    siteData.apps.find((app) => app.name === pageEl.dataset.app) || null;
-
-  // the scene opens the music app's player itself, the way the 3d scene does when the app opens
-  const loadMusicPage = () => {
-    if (!failed && pageEl.dataset.app === "Music") {
-      music.loadPlayer();
-    }
-  };
+  const appNamed = (name) =>
+    siteData.apps.find((app) => app.name === name) || null;
 
   const setPageFlat = (flat) => {
     if (scene.pageFlat !== flat) {
       scene.pageFlat = flat;
       onPageFlat(flat);
     }
+  };
+
+  // the music app shows the player, so it loads once the app opens, but only once the address names the music page,
+  // since the player's chunk recovery reloads the address
+  const loadPlayer = (app) => {
+    if (app.name !== "Music") {
+      return;
+    }
+    const load = () => {
+      if (!failed && pageEl.dataset.app === "Music") {
+        music.loadPlayer();
+      }
+    };
+    if (location.pathname.startsWith(app.path)) {
+      load();
+      return;
+    }
+    document.addEventListener("astro:after-swap", load, {
+      once: true,
+      signal,
+    });
+  };
+
+  // the frames now showing: the closing path's in portrait once it has loaded and the fold is on it
+  const activeFrames = () =>
+    scene.path === "close" && scene.closeFrames
+      ? scene.closeFrames
+      : scene.openFrames;
+
+  // the phone's outer bounds and its screen's in window px, from the frame showing (scene/fold.js phoneEdges)
+  const edges = () => {
+    const { manifest, layer } = activeFrames();
+    const frame = manifest.frames[layer.frameFor(scene.fold, scene.lead)];
+    const { x, top } = manifest.margin;
+    const bounds = (points) => {
+      const shownAt = points.map(([px, py]) =>
+        scene.stage.toWindow([px + x, py + top]),
+      );
+      const xs = shownAt.map((p) => p[0]);
+      const ys = shownAt.map((p) => p[1]);
+      return {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+      };
+    };
+    const { screens, body, flap } = frame.corners;
+    if (scene.phone === "open") {
+      return {
+        outer: bounds([...flap, ...body]),
+        inner: bounds([...screens[1], ...screens[2]]),
+      };
+    }
+    return { outer: bounds(body), inner: bounds(screens[0]) };
+  };
+
+  // the app window over the open screen, behind #page: its color, rounding, and the icon's letter while it's small.
+  // it's laid out at the zoomed window's px (appW by appH) and warped onto its rect through the open screen's corners
+  const windowEl = document.createElement("div");
+  windowEl.className = "flat-window";
+  windowEl.setAttribute("aria-hidden", "true");
+  const splashEl = document.createElement("span");
+  splashEl.className = "flat-splash";
+  windowEl.append(splashEl);
+  let windowShown = false;
+
+  const drawWindow = () => {
+    const { win, stage, screens } = scene;
+    if (!win) {
+      if (windowShown) {
+        windowShown = false;
+        windowEl.style.visibility = "hidden";
+      }
+      screens.setHomeLook(null);
+      return;
+    }
+    const { fullW, fullH } = scene.full;
+    const { appW, appH } = stage.placed;
+    const { rect } = win;
+    const quad = [
+      [rect.x0, rect.y0],
+      [rect.x1, rect.y0],
+      [rect.x1, rect.y1],
+      [rect.x0, rect.y1],
+    ].map(([px, py]) => stage.screenPoint([px / fullW, py / fullH]));
+    const perScreenPx = appW / Math.max(rect.x1 - rect.x0, 1e-6);
+    const look = windowLook(win.look, win.app, scene.openFromWidget);
+    Object.assign(windowEl.style, {
+      width: `${appW}px`,
+      height: `${appH}px`,
+      transform: quadToQuad(
+        [
+          [0, 0],
+          [appW, 0],
+          [appW, appH],
+          [0, appH],
+        ],
+        quad,
+      ),
+      borderRadius: `${win.radius * perScreenPx}px`,
+      background: look.background,
+      opacity: String(look.opacity),
+    });
+    splashEl.textContent = win.app.glyph;
+    splashEl.style.fontSize = `${SPLASH_PX * perScreenPx}px`;
+    splashEl.style.opacity = scene.openFromWidget
+      ? "0"
+      : String(1 - smoothstep(win.look, 0.08, 0.35));
+    if (!windowShown) {
+      windowShown = true;
+      windowEl.style.visibility = "visible";
+    }
+    screens.setHomeLook(homeLook(win.home, win.icon));
+  };
+
+  let shownClip = "";
+  const setClip = (clip) => {
+    if (clip !== shownClip) {
+      shownClip = clip;
+      pageEl.style.clipPath = clip;
+    }
+  };
+
+  // #page as scene/loop.js placePage has it: fading over the phone on the apps' background, the flat page at full
+  // zoom, pinned onto the window while it opens or closes (clipped to its rounded cutout), or hidden. it takes pointer
+  // input only while an app is open and still
+  const drawPage = () => {
+    const { stage, win } = scene;
+    const live = scene.zoomed && !scene.busy;
+    if (scene.pageFade !== null) {
+      stage.placePage("fading", { opacity: scene.pageFade, live });
+      setClip("");
+      return;
+    }
+    if (scene.pageFlat) {
+      stage.placePage("flat", { live });
+      setClip("");
+      return;
+    }
+    if (scene.appVisible && win) {
+      const { fullW, fullH } = scene.full;
+      const box = {
+        x0: win.rect.x0 / fullW,
+        y0: win.rect.y0 / fullH,
+        x1: win.rect.x1 / fullW,
+        y1: win.rect.y1 / fullH,
+      };
+      stage.placePage("pinned", {
+        box,
+        opacity: pageOpacity(win.look),
+        live,
+      });
+      const { appW, appH } = stage.placed;
+      setClip(
+        scene.slow
+          ? ""
+          : pageClip({
+              appW,
+              appH,
+              width: stage.geometry.width,
+              height: stage.geometry.height,
+              radius: win.radius,
+              rectW: win.rect.x1 - win.rect.x0,
+            }),
+      );
+      return;
+    }
+    stage.placePage("hidden", { live: false });
+    setClip("");
+  };
+
+  let placedFace = { layer: null, index: -1 };
+  let shownBlur = -1;
+
+  // one frame of the phone: the portrait path, the frame and the wrappers, the screens on that frame, the desk's blur,
+  // the window, #page, and which faces take input, all in the same frame
+  const draw = () => {
+    if (!scene.drawing || !scene.stage || failed) {
+      return;
+    }
+    const { stage, screens, desk } = scene;
+    if (scene.portrait) {
+      const path = pathAfter({
+        path: scene.path,
+        lastFold: scene.lastFold,
+        fold: scene.fold,
+      });
+      if (path !== scene.path) {
+        scene.path = path;
+        if (path === "close") {
+          scene.lead = 0;
+        }
+      }
+    }
+    scene.lastFold = scene.fold;
+    const frames = activeFrames();
+    stage.useFrames(frames.layer);
+    stage.setPose(scene.pose);
+    stage.setFold(scene.fold, scene.lead);
+    const index = frames.layer.frameFor(scene.fold, scene.lead);
+    if (placedFace.layer !== frames.layer || placedFace.index !== index) {
+      placedFace = { layer: frames.layer, index };
+      screens.place(frames.manifest.frames[index], frames.manifest);
+    }
+    // the 3d desk blurs with the open share eased by smoothstep (scene/loop.js)
+    const blur = smoothstep(1 - scene.fold, 0, 1);
+    if (blur !== shownBlur) {
+      shownBlur = blur;
+      desk.setBlur(blur);
+    }
+    drawWindow();
+    drawPage();
+    screens.setInput(
+      faceInput({
+        fold: scene.fold,
+        phone: scene.phone,
+        busy: scene.busy,
+        appVisible: scene.appVisible,
+        pageFlat: scene.pageFlat,
+        fading: scene.pageFade !== null,
+      }),
+    );
+    // frosted glass only at rest, and the plain glass while anything moves
+    const frosted = scene.frosted && !scene.busy;
+    if (frosted !== shownFrosted) {
+      shownFrosted = frosted;
+      screens.setFrosted(frosted);
+    }
+  };
+  let shownFrosted = false;
+  loop.onDraw(draw);
+
+  // the intro still playing its last stretch stops where it is, and the loop draws from there, in the same task so no
+  // frame shows between them
+  const takeOver = () => {
+    const { intro } = scene;
+    if (!intro || scene.drawing) {
+      return;
+    }
+    if (intro.plan) {
+      const ms = Math.min(intro.elapsed(), intro.plan.total);
+      scene.pose = intro.plan.poseAt(ms, scene.stage.placed);
+      scene.fold = intro.plan.foldAt(ms);
+      scene.lastFold = scene.fold;
+      scene.lead = intro.plan.lead ? 1 : 0;
+    }
+    intro.cancel();
+    afterIntro();
   };
 
   const applyInput = () => {
@@ -92,34 +418,134 @@ export const startFlatScene = ({
     );
   };
 
-  // the page the address names over the open phone: an app's page as the flat page at full zoom, or the home screen.
-  // until the app window can open one (it grows from its icon in 3d), an app's page shows flat at once
-  const showAddress = () => {
-    const { stage } = scene;
-    if (appForPage()) {
-      stage.setPose(stage.placed.zoom);
-      stage.placePage("flat");
-      setPageFlat(true);
-      loadMusicPage();
-    } else {
-      stage.setPose(stage.placed.rest);
-      stage.placePage("hidden");
-      setPageFlat(false);
+  // the portrait closing path's frames load once the intro is over, since decoding them mid unfold would stall it. a
+  // close before they're ready, or with them failed, plays on the opening path's frames
+  const loadClosePath = async () => {
+    const { manifest, stage } = scene;
+    if (!scene.portrait || scene.closeFrames || !manifest) {
+      return;
     }
-    applyInput();
+    try {
+      const closing = await loadManifest(
+        "portrait-close",
+        manifest.lighting,
+        manifest.size,
+      );
+      if (failed || scene.stage !== stage) {
+        return;
+      }
+      const layer = stage.addFrames(closing);
+      await layer.decode();
+      if (!failed && scene.stage === stage) {
+        scene.closeFrames = { manifest: closing, layer };
+      }
+    } catch (error) {
+      console.warn("the 2d scene's closing frames didn't load", error);
+    }
   };
+
+  // the intro is over (ended, or taken over by a motion), so the loop draws from here on
+  const afterIntro = () => {
+    if (scene.drawing) {
+      return;
+    }
+    scene.drawing = true;
+    scene.moving = false;
+    scene.frosted = scene.manifest.size === "full";
+    draw();
+    loadClosePath();
+  };
+
+  const status = () => ({
+    phone: scene.unlocked ? scene.phone : null,
+    busy: scene.busy,
+    zoomed: scene.zoomed,
+    app: scene.zoomed && scene.openApp ? scene.openApp.name : null,
+    shown: scene.appVisible || scene.pageFlat || scene.pageFade !== null,
+    switchingTo: null,
+    switcher: false,
+    swapOpen: false,
+    fold: scene.fold,
+  });
+
+  const navScene = {
+    status,
+    hasApp: (name) => Boolean(appNamed(name)),
+    // with the phone closed, an app opens the phone first
+    openApp: guard((name, opts) => {
+      const app = appNamed(name);
+      if (!app) {
+        return Promise.resolve();
+      }
+      return scene.phone === "closed"
+        ? apps.openFromCover(app, opts)
+        : apps.openApp(app, opts);
+    }),
+    closeApp: guard(() => apps.closeApp()),
+    fadeTo: guard((name) => {
+      const app = appNamed(name);
+      return app ? apps.fadeTo(app) : Promise.resolve();
+    }),
+    leaveSwitcher: () => {},
+    showUrl: guard(() => apps.showUrl(appForPage())),
+    rebuildPending: () => false,
+    fail: (error) => fail(error),
+    failed: () => failed || root.classList.contains("scene-failed"),
+  };
+  const nav = createNavigation(navScene, links ?? null);
+
+  // the app for the page: the one a navigation in flight is going to once its page is known, or else the one #page's
+  // data-app names. null on the home screen
+  const appForPage = () => appNamed(nav.pendingPage() ?? pageEl.dataset.app);
+
+  Object.assign(scene, {
+    reduced: () => reducedQuery.matches,
+    slowPath: () => scene.slow,
+    takeOver,
+    edges,
+    dragScale: () => scene.stage.scaleAt(scene.stage.placed.rest, 0),
+    iconRect: (name) => scene.screens.iconRect(name),
+    setPageFlat,
+    loadPlayer,
+    wake: () => loop.wake(),
+  });
+  // read when a motion starts, from the set and the window of the moment
+  Object.defineProperties(scene, {
+    placed: { get: () => scene.stage.placed },
+    drag: { get: () => activeFrames().manifest.dragTable },
+  });
+  const folds = createFolds({ scene, loop });
+  const apps = createApps({ scene, loop, folds, nav, pageEl });
+
+  // a tap on an icon or a widget, or on the cover's icons
+  const onOpen = guard(({ app, face, el, path }) => {
+    if (!app) {
+      return undefined;
+    }
+    if (face === "cover") {
+      return apps.tapFromCover(app);
+    }
+    const widget = el.classList.contains("widget");
+    return apps.tapApp(app, {
+      from: widget ? scene.screens.rectOf(el) : null,
+      path,
+    });
+  });
 
   const unmount = () => {
     scene.intro?.cancel();
     scene.screens?.destroy();
     scene.desk?.destroy();
     scene.stage?.destroy();
+    windowEl.remove();
     Object.assign(scene, {
       manifest: null,
       stage: null,
       screens: null,
       desk: null,
       intro: null,
+      openFrames: null,
+      closeFrames: null,
     });
   };
 
@@ -130,34 +556,35 @@ export const startFlatScene = ({
     if (failed) {
       throw new Error("the 2d scene stopped while loading");
     }
+    const portrait = manifest.orientation === "portrait";
     const stage = createStage({ stageEl, pageEl, manifest });
     const screens = createScreens({
       host: stage.layers.screens,
       siteData,
       music,
-      portrait: manifest.orientation === "portrait",
+      portrait,
+      onOpen,
     });
+    stage.layers.screens.append(windowEl);
     const desk = createDesk({ host: stageEl, manifest });
-    Object.assign(scene, { manifest, stage, screens, desk });
+    const l = screenLayout(portrait);
+    Object.assign(scene, {
+      manifest,
+      stage,
+      screens,
+      desk,
+      portrait,
+      openFrames: { manifest, layer: stage.frameLayer },
+      closeFrames: null,
+      full: { fullW: l.fullW, fullH: l.fullH, radius: l.radius },
+      pose: { ...stage.placed.rest },
+    });
     await Promise.all([stage.frameLayer.decode(), desk.decode()]);
     return manifest;
   };
 
-  const fail = (reason) => {
-    if (failed) {
-      return;
-    }
-    failed = true;
-    unmount();
-    dropBlack();
-    root.classList.remove("has-flat-scene", "flat-ready");
-    pageEl.removeAttribute("style");
-    console.warn("the 2d scene stopped", reason);
-    onFailed(reason);
-  };
-
   // the music player waits while the phone moves before it loads under has-flat-scene
-  music.waitWhile(() => scene.moving);
+  music.waitWhile(() => scene.moving || scene.busy);
 
   const showFirstFrame = () => {
     shown = true;
@@ -181,20 +608,32 @@ export const startFlatScene = ({
       fail("watchdog");
       return;
     }
+    scene.slow =
+      root.classList.contains("flat-slow") ||
+      scene.manifest.size === "half" ||
+      read("local", "2dAuto") !== null;
+    folds.install({
+      signal,
+      guard,
+      onEscapeApp: () => apps.goHome(),
+    });
+    apps.install({ signal, guard });
     const seen = read("local", "introSeen") === "1";
     const kind = arrivalKind({
       arrival,
-      reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      reduced: reducedQuery.matches,
       hasApp: Boolean(appForPage()),
       seen,
     });
     const intro = playIntro(kind, scene);
     scene.intro = intro;
     if (!intro.plan) {
-      scene.phone = "open";
-      scene.moving = false;
+      // a page arrival, or reduced motion: the phone open at once, on the address's app or the home screen
       scene.unlocked = true;
-      showAddress();
+      scene.fold = 0;
+      scene.lastFold = 0;
+      afterIntro();
+      await apps.showUrl(appForPage());
       if (scene.pageFlat) {
         dropBlack();
       }
@@ -211,26 +650,33 @@ export const startFlatScene = ({
     }
     // the fade and the intro start on the same frame
     showFirstFrame();
+    if (!intro.plan) {
+      return;
+    }
     intro.start();
-    intro.unlocked.then(() => {
-      if (failed || scene.intro !== intro) {
-        return;
-      }
-      // written once the unfold reads as open, so a first visit cut off partway still gets the full intro next time
-      if (intro.plan) {
+    intro.unlocked.then(
+      guard(() => {
+        if (scene.intro !== intro || scene.unlocked) {
+          return;
+        }
+        // written once the unfold reads as open, so a first visit cut off partway still gets the full intro next time
         write("local", "introSeen", "1");
-      }
-      scene.phone = "open";
-      scene.unlocked = true;
-      applyInput();
-    });
+        scene.phone = "open";
+        scene.unlocked = true;
+        applyInput();
+        // the address's app opens now, taking over the last of the unfold, as the 3d intro does at its unlock
+        nav.kick();
+      }),
+    );
     const result = await intro.finished;
     if (failed || scene.intro !== intro || result === "cancelled") {
       return;
     }
-    scene.moving = false;
-    scene.screens.setFrosted(scene.manifest.size === "full");
-    showAddress();
+    scene.pose = { ...scene.stage.placed.rest };
+    scene.fold = 0;
+    scene.lastFold = 0;
+    afterIntro();
+    nav.kick();
   };
 
   const started = start();
@@ -241,6 +687,7 @@ export const startFlatScene = ({
   if (__CAPTURE__) {
     const probe = {
       scene,
+      status,
       mount: async ({ set, lighting, size } = {}) => {
         await started;
         scene.intro?.finish();
@@ -271,24 +718,5 @@ export const startFlatScene = ({
     );
   }
 
-  const navigation = async ({ swapped }) => {
-    swapped.then((done) => {
-      if (done && shown && !failed && scene.stage && !scene.moving) {
-        showAddress();
-      }
-    });
-  };
-
-  const status = () => ({
-    phone: scene.phone,
-    busy: scene.moving,
-    zoomed: scene.pageFlat,
-    app: scene.pageFlat ? (appForPage()?.name ?? null) : null,
-    shown,
-    switchingTo: null,
-    switcher: false,
-    swapOpen: false,
-  });
-
-  return { fail, status, navigation };
+  return { fail, status, navigation: nav.handler };
 };

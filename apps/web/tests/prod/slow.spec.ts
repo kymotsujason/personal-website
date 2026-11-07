@@ -7,7 +7,7 @@ const savedChoice = (page: import("@playwright/test").Page) =>
     auto: localStorage.getItem("2dAuto"),
   }));
 
-test("webgl drawn in software gets the flat site, and ?3d still shows the scene", async ({
+test("webgl drawn in software gets the 2d scene, and ?3d still shows the 3d one", async ({
   playwright,
 }, testInfo) => {
   // the runner adds the project's gpu flags to this launch too, so swiftshader is asked for by name
@@ -32,7 +32,9 @@ test("webgl drawn in software gets the flat site, and ?3d still shows the scene"
       /swiftshader/i,
     );
     await expect(page.locator("html")).not.toHaveClass(/has-3d/);
-    await expect(page.locator("#page h1")).toBeVisible();
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+    await expect(page.locator(".flat-home h1")).toHaveText("Jason Yue");
+    await expect(page.locator(".flat-home .flat-body")).toBeVisible();
 
     await page.goto("/?3d");
     await expect(page.locator("html")).toHaveClass(/has-3d/);
@@ -44,7 +46,7 @@ test("webgl drawn in software gets the flat site, and ?3d still shows the scene"
   }
 });
 
-test("a device still too slow at the last step switches to the flat site and stays there", async ({
+test("a device still too slow at the last step switches to the 2d scene and stays there", async ({
   page,
 }) => {
   test.setTimeout(180000);
@@ -74,12 +76,17 @@ test("a device still too slow at the last step switches to the flat site and sta
   expect(age).toBeGreaterThanOrEqual(0);
   expect(age).toBeLessThan(180000);
 
+  // the reload lands in the 2d scene, whose home screen has the 3d link in its credits row
   await page.reload();
   await expect(page.locator("html")).not.toHaveClass(/has-3d/);
-  await expect(page.locator("#page h1")).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+  const home = page.locator(".flat-home");
+  await expect(home.locator("h1")).toHaveText("Jason Yue");
+  await expect(home.locator(".flat-body")).toBeVisible();
+  await expect(home).not.toHaveAttribute("inert", { timeout: 15000 });
 
-  // the flat site's 3d link takes the visitor back to 3d, and that choice outlasts the switch
-  await page.locator('a[data-version="3d"]').first().click();
+  // the 2d home screen's 3d link takes the visitor back to 3d, and that choice outlasts the switch
+  await home.locator('a[data-version="3d"]').click();
   await expect(page.locator("html")).toHaveClass(/has-3d/);
   expect(await savedChoice(page)).toEqual({ choice: "0", auto: null });
 });

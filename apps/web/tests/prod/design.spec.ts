@@ -9,6 +9,15 @@ const flatSite = async (page: import("@playwright/test").Page) => {
   await page.addInitScript(() => localStorage.setItem("2d", "1"));
 };
 
+// 2d=1 is the 2d scene, whose intro hides #page and pins it, so a test of the page itself waits for the app to be open
+// as the flat page
+const pageShown = async (page: import("@playwright/test").Page) => {
+  await expect(page.locator("html")).not.toHaveClass(/page-pinned/, {
+    timeout: 15000,
+  });
+  await expect(page.locator("#page h1")).toBeVisible();
+};
+
 test.describe("the flat site", () => {
   for (const path of [
     "/about",
@@ -35,6 +44,7 @@ test.describe("the flat site", () => {
   test("glass shows a focus ring", async ({ page }) => {
     await flatSite(page);
     await page.goto("/projects/jasonyue-ca");
+    await pageShown(page);
     const first = page.locator("#page a").first();
     await expect(first).toHaveClass(/glass/);
     for (let i = 0; i < 4; i++) {
@@ -64,6 +74,7 @@ test.describe("the flat site", () => {
   test("the sky drifts against the pointer", async ({ page }) => {
     await flatSite(page);
     await page.goto("/about");
+    await pageShown(page);
     await page.mouse.move(40, 40);
     await page.mouse.move(1000, 600);
     await expect
@@ -109,6 +120,7 @@ test.describe("the flat site", () => {
     await flatSite(page);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/about");
+    await pageShown(page);
     await page.mouse.move(40, 40);
     await page.mouse.move(1000, 600);
     await expect
@@ -157,6 +169,7 @@ test.describe("the flat site", () => {
   test("the glass highlight sits under the pointer", async ({ page }) => {
     await flatSite(page);
     await page.goto("/about");
+    await pageShown(page);
     const pane = page.locator("#page .glass").first();
     const box = await pane.boundingBox();
     if (!box) {

@@ -178,6 +178,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
   stageEl.insertBefore(screensEl, pageEl);
   pageEl.after(framesEl);
   const frameLayer = createFrameLayer(manifest, framesEl);
+  let frames = frameLayer;
 
   // #page is pinned on the open screen, so its corners come from the frame nearest flat
   const openFrame = manifest.frames[frameLayer.frameFor(0)];
@@ -224,8 +225,38 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
   // the phone's fold picks the frame, and moves the card's plane and portrait's hinge shift with it
   const setFold = (nextFold, lead = 0) => {
     fold = clampFold(nextFold);
-    frameLayer.show(frameLayer.frameFor(fold, lead));
+    frames.show(frames.frameFor(fold, lead));
     apply();
+  };
+
+  // another set's frames in the same layer (portrait's closing path), which shows once useFrames picks it
+  const extra = [];
+  const addFrames = (other) => {
+    const layer = createFrameLayer(other, framesEl);
+    extra.push(layer);
+    return layer;
+  };
+  const useFrames = (layer) => {
+    if (layer === frames) {
+      return;
+    }
+    frames.hide();
+    frames = layer;
+  };
+
+  // a point in the frames' px to where the chain draws it in the window now
+  const toWindow = (p) => projectPoint(matrix, p);
+
+  // a point on the open screen, as its share across and down, to the frames' px
+  const screenPoint = (p) => mapPoint(fromScreen, p);
+
+  // how many window px one frame px covers at a pose, at the phone's center
+  const scaleAt = (at, atFold = 0) => {
+    const m = chainMatrix(geometry, at, atFold);
+    const [cx, cy] = geometry.center;
+    const a = projectPoint(m, [cx, cy]);
+    const b = projectPoint(m, [cx + 1, cy]);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
   };
 
   const setPageShown = (shown) => {
@@ -342,6 +373,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
 
   const destroy = () => {
     frameLayer.release();
+    extra.forEach((layer) => layer.release());
     screensEl.remove();
     framesEl.remove();
     for (const name of [
@@ -352,6 +384,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
       "background",
       "visibility",
       "pointerEvents",
+      "clipPath",
     ]) {
       pageEl.style[name] = "";
     }
@@ -365,8 +398,16 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     placePage,
     fit,
     destroy,
+    addFrames,
+    useFrames,
+    toWindow,
+    screenPoint,
+    scaleAt,
     layers: { screens: screensEl, frames: framesEl },
     frameLayer,
+    get frames() {
+      return frames;
+    },
     get placed() {
       return geometry.placed;
     },

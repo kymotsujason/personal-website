@@ -199,6 +199,7 @@ export const playIntro = (kind, { stage, screens, desk, manifest }) => {
       start: () => stop("skipped"),
       finish: () => stop("skipped"),
       cancel: () => stop("cancelled"),
+      elapsed: () => 0,
       finished,
       unlocked,
     };
@@ -281,6 +282,8 @@ export const playIntro = (kind, { stage, screens, desk, manifest }) => {
     start,
     finish: () => stop("done"),
     cancel: () => stop("cancelled"),
+    // ms into the intro, for a motion that takes over from where it is
+    elapsed: () => Number(animations[0]?.currentTime ?? 0),
     finished,
     unlocked,
   };

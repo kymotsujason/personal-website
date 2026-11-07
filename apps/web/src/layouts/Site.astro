@@ -341,6 +341,7 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
                 pageEl: page,
                 siteData: JSON.parse(dataEl.textContent ?? "{}"),
                 music,
+                links: { navigate, goHome },
                 onShown: () => {
                   // the 2d scene covers the page now, so it is pinned on the phone unless it shows as the flat page
                   root.classList.remove("page-first");

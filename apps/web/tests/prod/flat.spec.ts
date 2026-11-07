@@ -68,7 +68,9 @@ test.describe("with javascript off", () => {
   });
 });
 
-test("without webgl every route is the flat site", async ({
+// a browser without webgl gets the 2d scene, whose home screen hides #page the way 3d does, with its heading in the
+// home screen's own region, and whose apps show their page as the flat page once open
+test("without webgl every route shows in the 2d scene", async ({
   playwright,
 }, testInfo) => {
   const browser = await playwright.chromium.launch({
@@ -87,9 +89,17 @@ test("without webgl every route is the flat site", async ({
       );
       expect(webgl2, "the flags turned webgl2 off").toBe(false);
       await expect(page.locator("html")).not.toHaveClass(/has-3d/);
-      await expect(page.locator("#page")).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
       await expect(page.locator("#page h1")).toHaveText(route.heading);
-      await expect(page.locator("#page h1")).toBeVisible();
+      if (route.path === "/") {
+        const home = page.locator(".flat-home");
+        await expect(home.locator("h1")).toHaveText(route.heading);
+        await expect(home.locator(".flat-body")).toBeVisible();
+        await expect(page.locator("#page")).toBeHidden();
+      } else {
+        await expect(page.locator("#page")).toBeVisible();
+        await expect(page.locator("#page h1")).toBeVisible();
+      }
       await expect(page.locator("#gl-layer")).toBeHidden();
     }
   } finally {
@@ -415,7 +425,10 @@ test("a page of another build with no reload left runs none of its scripts", asy
   await page.evaluate(() => {
     (window as unknown as { __sameLoad: boolean }).__sameLoad = true;
   });
-  await page.locator('#page .app-icon[href="/about"]').click();
+  // the 2d home screen's icon, once the intro has let the home screen take taps
+  const icon = page.locator('.flat-home .app-icon[data-app="About"]');
+  await expect(page.locator(".flat-home")).not.toHaveAttribute("inert");
+  await icon.click();
   await expect(page.locator("#page h1")).toHaveText("About");
   await expect(page.locator("html")).toHaveClass(/scene-failed/);
   // the swap's scripts run after it, so this waits past them

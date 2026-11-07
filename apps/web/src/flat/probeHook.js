@@ -23,6 +23,8 @@ export const installFlatHook = (probe) => {
       const index = scene.stage.frameLayer.frameFor(fold, lead);
       scene.screens.place(scene.manifest.frames[index], scene.manifest);
     },
+    // the phone's state as the navigation reads it, with its fold
+    status: () => probe.status(),
     mount: (options) => probe.mount(options),
     unmount: () => probe.unmount(),
   };

@@ -121,6 +121,7 @@ export const createScreens = ({
   const sizes = {};
   const shown = { cover: false, flap: false, body: false };
   const pictures = {};
+  let fitted = false;
 
   const appNamed = (name) => siteData.apps.find((app) => app.name === name);
 
@@ -176,7 +177,8 @@ export const createScreens = ({
       cover: l.cover,
     });
     // a face that isn't laid out yet has no width to fit to
-    if (flap.offsetWidth > 0) {
+    fitted = flap.offsetWidth > 0;
+    if (fitted) {
       fitLines(flap);
     }
   };
@@ -244,6 +246,71 @@ export const createScreens = ({
       Math.max((event.clientX - box.left) / (box.width || 1), 0),
       1,
     );
+  };
+
+  // a box in the open screen's px (both halves as one, the 3d screen's px), from an element's layout in its face. the
+  // window grows out of it, as scene/appWindow.js grows it out of glyphRect or a widget's elementRect
+  const rectOf = (el) => {
+    const name = el.closest("[data-face]")?.dataset.face;
+    const face = faces[name];
+    let x = 0;
+    let y = 0;
+    let node = el;
+    while (node && node !== face) {
+      x += node.offsetLeft;
+      y += node.offsetTop;
+      node = node.offsetParent;
+    }
+    const at = sizes[name] ?? { x: 0, y: 0 };
+    return {
+      x0: at.x + x,
+      y0: at.y + y,
+      x1: at.x + x + el.offsetWidth,
+      y1: at.y + y + el.offsetHeight,
+      radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0,
+    };
+  };
+
+  // the app's icon on the body's half, as its glyph's box
+  const iconRect = (name) => {
+    const glyph = body.querySelector(`.app-icon[data-app="${name}"] .glyph`);
+    return glyph ? rectOf(glyph) : { x0: 0, y0: 0, x1: 0, y1: 0, radius: 0 };
+  };
+
+  // the home screen behind an app window zooms in around the icon and dims (scene/appWindow.js placeAppWindow), each
+  // half around the same point of the open screen. null puts it back
+  const dims = {};
+  let shownLook = "";
+  const setHomeLook = (look) => {
+    const key = look ? `${look.zoom} ${look.cx} ${look.cy} ${look.dim}` : "";
+    if (key === shownLook) {
+      return;
+    }
+    shownLook = key;
+    ["flap", "body"].forEach((name) => {
+      const face = faces[name];
+      const at = sizes[name];
+      [...face.children].forEach((child) => {
+        if (child === dims[name] || child.classList.contains("flat-picture")) {
+          return;
+        }
+        if (!look) {
+          child.style.transform = "";
+          child.style.transformOrigin = "";
+          return;
+        }
+        const ox = look.cx - at.x - child.offsetLeft;
+        const oy = look.cy - at.y - child.offsetTop;
+        child.style.transformOrigin = `${ox}px ${oy}px`;
+        child.style.transform = `scale(${look.zoom})`;
+      });
+      if (!dims[name]) {
+        dims[name] = document.createElement("div");
+        dims[name].className = "flat-dim";
+        face.appendChild(dims[name]);
+      }
+      dims[name].style.opacity = look ? String(look.dim) : "0";
+    });
   };
 
   const listen = () => {
@@ -448,6 +515,11 @@ export const createScreens = ({
         if (!shown[name]) {
           el.style.visibility = "visible";
           shown[name] = true;
+          // a face laid out before the host had a layout skipped its fit, so the flap fits its lines once it shows
+          if (name === "flap" && !fitted && flap.offsetWidth > 0) {
+            fitted = true;
+            fitLines(flap);
+          }
         }
       },
     );
@@ -554,6 +626,9 @@ export const createScreens = ({
     credits: body.querySelector(".credits"),
     update,
     setInput,
+    rectOf,
+    iconRect,
+    setHomeLook,
     place,
     faceStyles,
     picture,

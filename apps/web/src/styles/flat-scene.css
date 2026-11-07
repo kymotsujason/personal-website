@@ -391,3 +391,35 @@ html.has-flat-scene .flat-face.pictured > .flat-picture {
 html.has-flat-scene .flat-face.pictured > :not(.flat-picture) {
   visibility: hidden;
 }
+
+/* the app window, which grows out of its icon over the home screen and sits behind #page (src/flat/index.js). it's
+   warped onto its rect through the open screen's corners, and shows the icon's letter while it's small */
+html.has-flat-scene .flat-window {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  transform-origin: 0 0;
+  visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+html.has-flat-scene .flat-splash {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* the home screen dims behind an open app window (src/flat/screens.js setHomeLook) */
+html.has-flat-scene .flat-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}

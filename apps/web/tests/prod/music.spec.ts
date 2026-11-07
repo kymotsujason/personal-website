@@ -122,6 +122,26 @@ const FLAT: Mode = {
   openAbout: (page) => page.locator('#page .app-icon[href="/about"]').click(),
 };
 
+// the 2d scene, which a browser without webgl gets: the home screen is its own region with #page hidden, an app's
+// page shows as the flat page once its window has opened, and the icons are on the 2d home screen
+const TWO_D: Mode = {
+  arrived: async (page, path) => {
+    await expect(page).toHaveURL((url) => url.pathname === path);
+    await expect(page.locator("#page h1")).toHaveText(HEADINGS[path]);
+    await expect(page.locator("html")).toHaveClass(/has-flat-scene/);
+    if (path === "/") {
+      await expect(page.locator("#page")).toBeHidden();
+      await expect(page.locator(".flat-home")).not.toHaveAttribute("inert");
+      return;
+    }
+    await expect(page.locator("html")).not.toHaveClass(/page-pinned/);
+    await expect(page.locator("#page h1")).toBeVisible();
+  },
+  goHome: (page) => page.locator("#page .home-bar").click(),
+  openAbout: (page) =>
+    page.locator('.flat-home .app-icon[data-app="About"]').click(),
+};
+
 // a track tapped before the player is ready, then seven navigations with the music playing on
 const checkMusic = async (page: Page, mode: Mode) => {
   const { errors, blocked } = watchErrors(page);
@@ -930,7 +950,7 @@ test("without webgl the music plays on through the navigations", async ({
     });
     const page = await context.newPage();
     await quiet(page);
-    const check = await checkMusic(page, FLAT);
+    const check = await checkMusic(page, TWO_D);
     await page.goto("/music");
     const webgl2 = await page.evaluate(() =>
       Boolean(document.createElement("canvas").getContext("webgl2")),
