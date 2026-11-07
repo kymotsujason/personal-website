@@ -8,6 +8,6 @@
     "check": "pnpm test:privacy && pnpm test:tools && pnpm -C apps/web check",
     "verify": "pnpm test:privacy && pnpm test:tools && pnpm -C apps/web verify",
     "test:privacy": "node --test \"tools/privacy/*.test.mjs\"",
-    "test:tools": "node --test \"tools/*.test.mjs\""
+    "test:tools": "node --test \"tools/*.test.mjs\" \"tools/capture-flat/*.test.mjs\""
   }
 }

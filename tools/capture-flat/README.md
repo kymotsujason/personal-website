@@ -1,0 +1,40 @@
+# The 2D scene's capture tool
+
+`capture.mjs` renders the 2D scene's frames out of the 3D scene: the hands and the phone with its three screens cut out, at each fold a set needs. It also saves where the screens' and the halves' corners land in each frame, the drag's tables, `foldStartTime`, and the desk's cube faces.
+
+## Running it
+
+The tool drives the dev server on port 4321 in headless Chromium on the GPU, so start that first from `site/`:
+
+```sh
+pnpm --dir apps/web dev
+```
+
+Then capture a set at a lighting:
+
+```sh
+node tools/capture-flat/capture.mjs --set <SET> --lighting <day|dusk|night>
+```
+
+Replace `<SET>` with a set name from `SETS` in `capture.mjs` (only `landscape` so far). Day is 13:00, dusk 19:00, and night 23:00, each with sunrise at 7 and sunset at 19.
+
+The raw output lands in `.media/flat/<SET>-<LIGHTING>/`, which git ignores, and a run starts by deleting that folder. A landscape set is 120 frames and took about a minute on the dev PC.
+
+## What it writes
+
+- `NN.png` frames in the order of `frames.json`, zero padded to at least two digits (three once a set has 100 frames or more), at the window's size plus the margins (320 px each side, 160 above, 200 below), straight alpha, with the screens cut out by the two key colors
+- `frames.json` with each frame's `fold`, `lead`, `hand` (the hands' fold), `t` (null outside a timeline), and its corners in the window's px (add the margin to place them on the frame): the screens as cover, flap, and body, their depths from the camera, and the body's and flap's outer corners, each in the order top left, top right, bottom right, bottom left of the part's own frame
+- `meta.json` with the set, the lighting, the window, the margin, `foldStartTime`, `dragTable` (for `close` and `open`: the axis, the sign, the 481 samples as `[fold, x, y]` of the flap's outer edge, and the built table of progress through the fold for each px of pointer travel, as `fold.js` builds it, which `foldPoseAt` turns into the fold and the move), the desk faces, and `inputsHash`
+- `desk-<FACE>-<sharp|blur>.png` for each cube face the desk photo reaches, rendered through a 90 degree camera
+
+## Checks
+
+The capture fails if the light isn't the pinned hour with the default sunrise and sunset, if the hands in the first pass aren't at the pose the scene reports for that step, or if a frame's screen corners, halves' corners, or hands land more than 2 px from where the first pass saw them. It also fails if the scene failed or the battery moved during the run.
+
+`inputs.json` lists the files a capture depends on, and `inputsHash` is a sha256 over them, so a set can be checked for going out of date.
+
+The pure parts have tests:
+
+```sh
+node --test tools/capture-flat/capture.test.mjs
+```
