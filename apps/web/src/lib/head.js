@@ -1,6 +1,7 @@
 // runs inline in the head before anything paints, so it can't import. it picks how the intro plays, adds has-3d
-// when the scene can run, and starts the watchdog that shows the flat page if the scene never does. a client side
-// navigation keeps the window, so the flag makes it run once per page load
+// when the scene can run (or has-flat-scene when the 2d scene can), and starts the watchdog that shows the flat
+// page if the scene never does. a client side navigation keeps the window, so the flag makes it run once per page
+// load
 (function () {
   if (window.__headDone) {
     return;
@@ -149,16 +150,31 @@
     }
   }
 
-  // the scene saves the time it switched a slow device to the flat site (see scene/quality.js). that holds for 30
-  // days, so a browser update or a new phone gets another try
+  // the scene saves the time it switched a slow device to the flat site (see scene/quality.js), and the 2d scene the
+  // time it switched to the plain flat page under the key flatAuto. each holds for 30 days, so a browser update or a
+  // new phone gets another try
   var AUTO_DAYS = 30;
-  function autoFlatRecent() {
-    var saved = Number(read("local", "2dAuto"));
+  function autoRecent(key) {
+    var saved = Number(read("local", key));
     if (!saved) {
       return false;
     }
     var age = new Date().getTime() - saved;
     return age >= 0 && age < AUTO_DAYS * 24 * 60 * 60 * 1000;
+  }
+
+  // the 2d scene needs inert, constructable stylesheets, and css sin(), so a browser without one gets the plain
+  // flat page
+  function meetsFlatFloor() {
+    try {
+      return (
+        "inert" in window.HTMLElement.prototype &&
+        "adoptedStyleSheets" in document &&
+        window.CSS.supports("width: calc(sin(1rad) * 1px)")
+      );
+    } catch (error) {
+      return false;
+    }
   }
 
   var path = window.location.pathname.replace(/(.)\/+$/, "$1");
@@ -282,24 +298,33 @@
   var version = versionFromQuery();
   if (version === "2d") {
     write("local", "2d", "1");
+    remove("local", "flatAuto");
   } else if (version === "3d") {
     write("local", "2d", "0");
     remove("local", "2dAuto");
+    remove("local", "flatAuto");
   }
   var saved = read("local", "2d");
   var choice = version || (saved === "1" ? "2d" : saved === "0" ? "3d" : "");
   // the scene only switches a slow device to the flat site when the visitor hasn't chosen 3d
   window.__chose3d = choice === "3d";
+  window.__flatChosen = choice === "2d";
   var show3d =
     !notFound &&
     (choice === "3d"
       ? hasWebgl2(false)
-      : choice === "" && !autoFlatRecent() && hasWebgl2(true));
+      : choice === "" && !autoRecent("2dAuto") && hasWebgl2(true));
 
+  var flatSlow = autoRecent("flatAuto");
+  if (flatSlow) {
+    root.classList.add("flat-slow");
+  }
   if (show3d) {
     root.classList.add("has-3d");
     preload();
     startWatchdog();
+  } else if (!notFound && !flatSlow && meetsFlatFloor()) {
+    root.classList.add("has-flat-scene");
   }
   if (arrival === "page") {
     root.classList.add("page-first");

@@ -47,7 +47,10 @@ const makePage = ({
   storageAccessThrows = false,
   hidden = false,
   hour = null,
+  // what the 2d scene needs: inert, adoptedStyleSheets, and css sin()
+  features = {},
 } = {}) => {
+  const { inert = true, adopted = true, sin = true } = features;
   const classes = new Set();
   const styles = {};
   const root = {
@@ -72,6 +75,7 @@ const makePage = ({
       (documentListeners[type] ??= []).push(fn);
     },
     documentElement: root,
+    ...(adopted ? { adoptedStyleSheets: [] } : {}),
     head: {
       appendChild: (el) => {
         links.push(el);
@@ -129,6 +133,8 @@ const makePage = ({
   const window = {
     document,
     location: { pathname: path, search, hash },
+    HTMLElement: { prototype: inert ? { inert: false } : {} },
+    CSS: { supports: (rule) => sin || !/sin\(/.test(rule) },
     URLSearchParams,
     history: {
       state: { index: 0 },
@@ -732,5 +738,115 @@ describe("the first sky", () => {
     ]) {
       expect(sky(12, extra)["--sky-top"]).toBe("rgb(43, 107, 204)");
     }
+  });
+});
+
+describe("the 2d scene", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const noFloor = [{ inert: false }, { adopted: false }, { sin: false }];
+
+  test("no webgl2 and the floor met gives has-flat-scene", () => {
+    const page = makePage({ webgl2: false });
+    page.run();
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.classes.has("flat-slow")).toBe(false);
+    expect(page.window.__flatChosen).toBe(false);
+  });
+
+  test("a scene that can run in 3d doesn't get has-flat-scene", () => {
+    const page = makePage();
+    page.run();
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+  });
+
+  test("below the floor gives the plain flat page", () => {
+    for (const features of noFloor) {
+      const page = makePage({ webgl2: false, features });
+      page.run();
+      expect(page.classes.has("has-flat-scene"), JSON.stringify(features)).toBe(
+        false,
+      );
+      expect(page.classes.has("has-3d")).toBe(false);
+    }
+  });
+
+  test("a saved 2d choice gives has-flat-scene and __flatChosen", () => {
+    const page = makePage({ local: { "2d": "1" } });
+    page.run();
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.window.__flatChosen).toBe(true);
+  });
+
+  test("a recent flatAuto gives the plain flat page and flat-slow", () => {
+    const page = makePage({
+      webgl2: false,
+      local: { flatAuto: String(Date.now() - 29 * DAY) },
+    });
+    page.run();
+    expect(page.classes.has("flat-slow")).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+    expect(page.classes.has("has-3d")).toBe(false);
+  });
+
+  test("a flatAuto older than 30 days, in the future, or junk doesn't hold", () => {
+    for (const value of [
+      String(Date.now() - 31 * DAY),
+      String(Date.now() + DAY),
+      "junk",
+    ]) {
+      const page = makePage({ webgl2: false, local: { flatAuto: value } });
+      page.run();
+      expect(page.classes.has("flat-slow"), value).toBe(false);
+      expect(page.classes.has("has-flat-scene"), value).toBe(true);
+    }
+  });
+
+  test("flatAuto wins over a saved 2d choice", () => {
+    const page = makePage({
+      local: { "2d": "1", flatAuto: String(Date.now()) },
+    });
+    page.run();
+    expect(page.classes.has("flat-slow")).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+    expect(page.window.__flatChosen).toBe(true);
+  });
+
+  test("?3d clears flatAuto and 2dAuto", () => {
+    const local = {
+      flatAuto: String(Date.now()),
+      "2dAuto": String(Date.now()),
+    };
+    const page = makePage({ search: "?3d", local });
+    page.run();
+    expect("flatAuto" in local).toBe(false);
+    expect("2dAuto" in local).toBe(false);
+    expect(page.classes.has("has-3d")).toBe(true);
+    expect(page.classes.has("flat-slow")).toBe(false);
+  });
+
+  test("?2d clears flatAuto", () => {
+    const local = { flatAuto: String(Date.now()) };
+    const page = makePage({ search: "?2d", local });
+    page.run();
+    expect("flatAuto" in local).toBe(false);
+    expect(local["2d"]).toBe("1");
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.classes.has("flat-slow")).toBe(false);
+    expect(page.window.__flatChosen).toBe(true);
+  });
+
+  test("the not found page never gets has-flat-scene", () => {
+    const page = makePage({ path: "/nope", app: "not-found", webgl2: false });
+    page.run();
+    expect(page.classes.has("has-flat-scene")).toBe(false);
+  });
+
+  test("storage refused", () => {
+    const page = makePage({ webgl2: false, storage: refusing() });
+    expect(() => page.run()).not.toThrow();
+    expect(page.classes.has("has-flat-scene")).toBe(true);
+    expect(page.classes.has("flat-slow")).toBe(false);
   });
 });

@@ -169,9 +169,11 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
         // "0" is the 3d choice, which the head script keeps over its checks of the device, as ?3d does
         if (link.dataset.version === "2d") {
           write("local", "2d", "1");
+          remove("local", "flatAuto");
         } else {
           write("local", "2d", "0");
           remove("local", "2dAuto");
+          remove("local", "flatAuto");
         }
       });
 
@@ -345,6 +347,13 @@ const imageUrl = new URL("/og.jpg", Astro.site).href;
             )}
             <slot />
             <footer class="flat-footer">
+              <a
+                href={notFound ? "/" : path}
+                data-version="2d"
+                data-astro-reload
+              >
+                2D version
+              </a>
               <a
                 href={notFound ? "/" : path}
                 data-version="3d"
