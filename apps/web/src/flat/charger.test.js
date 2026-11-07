@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import { FOLD_TIME } from "../scene/shared/motion.js";
 import { place } from "../scene/shared/placement.js";
 import {
+  FALLBACK_CAP,
   SWAP_CAP,
   UNPLUG_SOON,
   chargerSetFor,
@@ -41,7 +42,9 @@ const fakeSets = ({
   const released = [];
   const forgotten = [];
   const waiting = [];
-  const fetch = async (name) => {
+  const signals = [];
+  const fetch = async (name, signal) => {
+    signals.push(signal);
     if (stallFetch(name)) {
       return new Promise(() => {});
     }
@@ -83,6 +86,7 @@ const fakeSets = ({
       opened.filter((o) => o.name === name).every((o) => o.ahead),
     released,
     forgotten,
+    signals,
     finishDecodes: () => waiting.splice(0).forEach((resolve) => resolve()),
   };
 };
@@ -143,7 +147,14 @@ const charging = async ({
   scene.wake = () => loop.wake();
   const folds = createFolds({ scene, loop });
   const warn = vi.fn();
-  const charger = createCharger({ scene, loop, sets: sets.sets, warn });
+  const onStuck = vi.fn();
+  const charger = createCharger({
+    scene,
+    loop,
+    sets: sets.sets,
+    warn,
+    onStuck,
+  });
   scene.charger = charger;
   charger.mounted({ plugged });
   if (!plugged) {
@@ -152,7 +163,7 @@ const charging = async ({
   for (let ms = 0; ms < 5; ms++) {
     await at(ms);
   }
-  return { scene, loop, at, now, folds, charger, sets, warn };
+  return { scene, loop, at, now, folds, charger, sets, warn, onStuck };
 };
 
 // steps the loop each 20 ms from `from` to `to`, giving what the charger showed on each frame
@@ -374,6 +385,65 @@ test("a cable decode that takes too long gives the cable up and lets the folds g
   expect(charger.bolt({ level: 30, charging: true })).toBe(true);
   folds.closePhone();
   expect(scene.busy).toBe(true);
+});
+
+test("a fallback that's only slow brings the folds back", async () => {
+  // the cable never decodes, and the cable free set it falls back to takes 5 s
+  const sets = fakeSets({
+    held: (name) => name === "cable-landscape" || name === "landscape",
+  });
+  const { scene, at, folds, charger, onStuck } = await charging({ sets });
+  charger.battery({ level: 1, charging: true });
+  await play(at, charger, 1000, 1000 + SWAP_CAP + 5000);
+  expect(charger.busy()).toBe(true);
+  expect(charger.state().failed).toBe(true);
+  sets.finishDecodes();
+  await play(at, charger, 1000 + SWAP_CAP + 5020, 1000 + SWAP_CAP + 5100);
+  expect(onStuck).not.toHaveBeenCalled();
+  expect(charger.state()).toMatchObject({ plugged: false, busy: false });
+  expect(scene.openFrames.manifest.set).toBe("landscape");
+  folds.closePhone();
+  expect(scene.busy).toBe(true);
+});
+
+test("a fallback that doesn't come drops the visit", async () => {
+  // both decodes fail
+  {
+    const sets = fakeSets({
+      failOpen: (name) => name === "cable-landscape" || name === "landscape",
+    });
+    const { at, charger, onStuck } = await charging({ sets });
+    charger.battery({ level: 1, charging: true });
+    await play(at, charger, 1000, 1100);
+    expect(onStuck).toHaveBeenCalledTimes(1);
+  }
+  // the fallback passes 10 s of visible time
+  {
+    const sets = fakeSets({
+      held: (name) => name === "cable-landscape" || name === "landscape",
+    });
+    const { at, charger, onStuck } = await charging({ sets });
+    charger.battery({ level: 1, charging: true });
+    const fellBack = 1000 + SWAP_CAP;
+    await play(at, charger, 1000, fellBack + FALLBACK_CAP - 100);
+    expect(onStuck).not.toHaveBeenCalled();
+    await play(
+      at,
+      charger,
+      fellBack + FALLBACK_CAP - 80,
+      fellBack + FALLBACK_CAP + 60,
+    );
+    expect(onStuck).toHaveBeenCalledTimes(1);
+  }
+});
+
+test("a new mount stops the old one's downloads", async () => {
+  const sets = fakeSets({ stallFetch: (name) => name === "cable-landscape" });
+  const { charger } = await charging({ sets });
+  expect(sets.signals.length).toBeGreaterThan(0);
+  expect(sets.signals.every((signal) => !signal.aborted)).toBe(true);
+  charger.mounted({ plugged: false });
+  expect(sets.signals.every((signal) => signal.aborted)).toBe(true);
 });
 
 test("a cable that's still downloading at the plug starts no run", async () => {

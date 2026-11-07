@@ -14,9 +14,14 @@ import {
 } from "../scene/shared/charging.js";
 import { fitInView } from "../scene/shared/placement.js";
 
-// how long a run's fold set swap may take to decode before the run gives the cable up (ms from the run's start), so a
-// stalled decode can't hold the folds for long
+// how long a run's fold set swap may take to decode before the run gives the cable up (ms of visible time from the run's
+// start), so a stalled decode can't hold the folds for long
 export const SWAP_CAP = 3500;
+// and how long the sets it falls back to may take before the visit drops to the plain flat page, as a turn whose sets
+// aren't ready in 10 s of visible time does (spec "Resizing and turning")
+export const FALLBACK_CAP = 10000;
+// the most one frame adds to a swap's wait, so a hidden tab's time doesn't count
+const VISIBLE_STEP = 250;
 // the battery level from which a charging phone has its charger set decoded for the unplug at 100%. it charges a level
 // about every 1.2 s, so that's about 12 s ahead
 export const UNPLUG_SOON = 90;
@@ -46,14 +51,19 @@ export const runAt = ({ plugIn, elapsed, total }) => {
 // closeFrames, stage, edges(), reduced()), loop the scene's loop. sets.fetch(name) downloads a set's manifest and
 // images without decoding them, sets.forget(bytes) lets those go, sets.open(name, bytes) gives { manifest, layer } with
 // the layer in the stage and not yet decoded (from the bytes fetched, or from the network with none), and
-// sets.release(entry) lets a layer go. onCable hears the bolt's state change
+// sets.release(entry) lets a layer go. sets.fetch gets the mount's signal, which a new mount aborts. onCable hears the
+// bolt's state change, and onStuck fails the scene when the phone is left with no fold sets
 export const createCharger = ({
   scene,
   loop,
   sets,
   onCable = () => {},
+  onStuck = (error) => {
+    throw error;
+  },
   warn = (...args) => console.warn(...args),
   swapCap = SWAP_CAP,
+  fallbackCap = FALLBACK_CAP,
 }) => {
   // what the battery wants (the cable in while charging), and what the fold sets show
   let target = false;
@@ -74,7 +84,10 @@ export const createCharger = ({
   let removeStep = null;
   let waiters = [];
   let shownCable = null;
-  let lastNow = 0;
+  // the step's last frame, null until its first, so the time it was off doesn't count
+  let lastNow = null;
+  // the fetches for this mount, which a new mount stops
+  let fetching = new AbortController();
 
   const release = (entry) => {
     if (entry) {
@@ -185,12 +198,14 @@ export const createCharger = ({
 
   const ensureStep = () => {
     if (!removeStep) {
+      lastNow = null;
       removeStep = loop.add(step);
     }
   };
 
   // the cable free sets back with no run to cover the change (the charger's sets didn't come on a visit that started
-  // with the cable in). they decode beside the cable ones, and go in on a frame with no fold moving
+  // with the cable in). they go in on a frame with no fold moving
+  // only this failure path decodes the cable free sets beside the cable ones, holding two fold versions for a moment
   const dropCable = () => {
     const track = [];
     const next = { track, ready: false, open: null, close: null };
@@ -260,7 +275,7 @@ export const createCharger = ({
       ready: false,
       stuck: false,
       track: [],
-      started: lastNow,
+      waited: 0,
       fallback,
     };
     swap = next;
@@ -283,16 +298,14 @@ export const createCharger = ({
   };
 
   // a swap that failed or took too long ends the run on the side it came from, with those sets back and no more cable
-  // this visit. if they don't come back either, the run holds its end frame and the folds stay held, and the rest of the
-  // scene runs on
+  // this visit. if they don't come back either, the phone has no frames to fold on, so the visit drops to the plain
+  // flat page, as it does for an orientation whose sets failed (spec "Failure")
   const swapFailed = (failing, error) => {
     drop(failing.track);
     if (failing.fallback) {
       failing.stuck = true;
-      warn(
-        "the phone's fold frames didn't come back, so the folds stay held",
-        error,
-      );
+      stopStep();
+      onStuck(error);
       return;
     }
     failed = true;
@@ -354,6 +367,8 @@ export const createCharger = ({
   };
 
   const step = (now, dt) => {
+    const gap =
+      lastNow === null ? 0 : Math.min(Math.max(now - lastNow, 0), VISIBLE_STEP);
     lastNow = now;
     if (!scene.stage) {
       return;
@@ -399,8 +414,14 @@ export const createCharger = ({
       }
       run.done = run.elapsed >= run.total;
     }
-    if (swap && !swap.ready && now - swap.started >= swapCap) {
-      swapFailed(swap, new Error("the fold frames took too long to decode"));
+    if (swap && !swap.ready) {
+      swap.waited += gap;
+      if (swap.waited >= (swap.fallback ? fallbackCap : swapCap)) {
+        swapFailed(swap, new Error("the fold frames took too long to decode"));
+        if (!run) {
+          return;
+        }
+      }
     }
     reportCable();
     if (run.done && swap?.ready) {
@@ -415,7 +436,7 @@ export const createCharger = ({
     const record = { value: null, failed: false };
     const mine = fetched;
     mine.set(name, record);
-    sets.fetch(name).then(
+    sets.fetch(name, fetching.signal).then(
       (value) => {
         if (fetched !== mine) {
           sets.forget(value);
@@ -561,6 +582,8 @@ export const createCharger = ({
       dropping = null;
     }
     releaseChargerSet();
+    fetching.abort();
+    fetching = new AbortController();
     fetched.forEach((record) => {
       if (record.value != null) {
         sets.forget(record.value);

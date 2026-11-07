@@ -684,7 +684,8 @@ export const startFlatScene = ({
     scene,
     loop,
     sets: {
-      fetch: async (name) => {
+      // the mount's signal, so a remount (a turn) stops the old orientation's downloads, and so does a failure
+      fetch: async (name, mountSignal) => {
         const { lighting, size } = scene.manifest;
         const manifest = await loadManifest(name, lighting, size);
         const atlases = new Set();
@@ -701,7 +702,7 @@ export const startFlatScene = ({
         const results = await Promise.allSettled(
           [...atlases].map(async (atlas) => {
             const response = await fetch(`${manifest.base}${atlas}`, {
-              signal,
+              signal: mountSignal,
             });
             if (!response.ok) {
               throw new Error(
@@ -729,6 +730,8 @@ export const startFlatScene = ({
       release: (entry) => scene.stage?.dropFrames(entry.layer),
     },
     onCable: guard(() => flatStatus?.render()),
+    // the phone left with no fold sets drops the visit to the plain flat page
+    onStuck: (error) => fail(error),
   });
   scene.charger = charger;
   scene.effects = { look, drift };
