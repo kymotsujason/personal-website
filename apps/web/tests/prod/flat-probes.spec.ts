@@ -51,6 +51,7 @@ type Hook = {
   };
   setPose: (pose: object) => void;
   setFold: (fold: number, lead?: number) => void;
+  rebuildPending: () => boolean;
   mount: (options?: {
     set?: string;
     lighting?: string;
@@ -597,9 +598,15 @@ test("half against full frames by phone height", async ({
     const height = Math.round(phonePx / FILL);
     await page.setViewportSize({ width: Math.round(height * 1.7), height });
     // the scene fits itself to the new window once the resize has been quiet (resize.js RESIZE_WAIT_MS), and a mount
-    // that starts before that is cut off by it
+    // that starts before that is cut off by it. the resize event arrives a frame after the viewport changes
     await page.evaluate(
-      () => new Promise((resolve) => setTimeout(resolve, 500)),
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await page.waitForFunction(
+      () => !(window as unknown as { __flat: Hook }).__flat.rebuildPending(),
     );
     await page.evaluate(async (s) => {
       const hook = (window as unknown as { __flat: Hook }).__flat;

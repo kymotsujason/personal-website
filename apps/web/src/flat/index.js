@@ -1346,6 +1346,7 @@ export const startFlatScene = ({
       status,
       // the battery's test control (scene/status.js setBattery), ms into its cycle
       battery: (at, speed) => flatStatus?.bar.setBattery(at, speed),
+      rebuildPending: () => Boolean(resizing?.pending()) || turn !== null,
       mount: async ({ set, lighting, size } = {}) => {
         await started;
         scene.intro?.finish();

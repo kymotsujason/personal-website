@@ -575,13 +575,16 @@ const CROP_SIZES = [
   { width: 600, height: 900 },
 ];
 const CROP_FOLDS = [1, 0.75, 0.5, 0.25, 0];
-// a color change counts from this many levels, and a line is this many pixels in a row
-const CHANNEL_LEVELS = 80;
+// a color change counts from this many levels (the strong limit where the reference has a rim highlight or edge
+// nearby, the flat one elsewhere), and a line is this many pixels in a row
+const STRONG_LEVELS = 80;
+const FLAT_LEVELS = 24;
 const LINE_RUN = 24;
 
-const composeFrame = (page: Page, index: number, erase: number | null = null) =>
+type Seam = { row: number; kind: "alpha" | "color" };
+const composeFrame = (page: Page, index: number, seam: Seam | null = null) =>
   page.evaluate(
-    async ([index, erase]) => {
+    async ([index, seam]) => {
       const hook = (window as any).__flat as Hook;
       const frames = (hook as any).frames as { elements: HTMLElement[] };
       const el = frames.elements[index];
@@ -622,9 +625,20 @@ const composeFrame = (page: Page, index: number, erase: number | null = null) =>
           h,
         );
       }
-      // the control for the check: a 2 px line wiped across the image, as a seam between two pieces would be
-      if (erase !== null) {
-        ctx.clearRect(0, erase, width, 2);
+      // the control for the check: a 2 px band across the image that loses some coverage or gains some color, as a seam
+      // between two pieces would
+      if (seam !== null) {
+        const band = ctx.getImageData(0, seam.row, width, 2);
+        for (let i = 0; i < band.data.length; i += 4) {
+          if (seam.kind === "alpha") {
+            band.data[i + 3] = Math.max(0, band.data[i + 3] - 60);
+          } else {
+            for (let c = 0; c < 3; c++) {
+              band.data[i + c] = Math.min(255, band.data[i + c] + 50);
+            }
+          }
+        }
+        ctx.putImageData(band, 0, seam.row);
       }
       // shown as a background image, the way a piece is, so both are scaled by the same filter
       const blob = await new Promise<Blob>((resolve) =>
@@ -640,12 +654,12 @@ const composeFrame = (page: Page, index: number, erase: number | null = null) =>
       el.classList.add("composed");
       el.append(whole);
     },
-    [index, erase] as const,
+    [index, seam] as const,
   );
 
 const lines = (page: Page, a: Buffer, b: Buffer) =>
   page.evaluate(
-    async ([x, y, levels]) => {
+    async ([x, y, strongLevels, flatLevels]) => {
       const load = async (base64: string) => {
         const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
         const bitmap = await createImageBitmap(new Blob([bytes]));
@@ -691,6 +705,7 @@ const lines = (page: Page, a: Buffer, b: Buffer) =>
       const differs = new Uint8Array(width * height);
       let count = 0;
       let drawn = 0;
+      let flatWorst = 0;
       for (let i = 0; i < differs.length; i++) {
         const j = i * 4;
         if (first.data[j + 3] > 0 || second.data[j + 3] > 0) {
@@ -699,11 +714,26 @@ const lines = (page: Page, a: Buffer, b: Buffer) =>
         let off = false;
         if (inside[i]) {
           // a thin highlight along the rim is sampled a fraction of a px differently too, which moves its levels by up
-          // to about 60, so a color change counts from 80 levels and a loss of coverage from 24
+          // to about 60, so there (where the reference changes by over 24 levels between neighbors) a color change
+          // counts from the strong limit. everywhere else it counts from the flat one, which a seam's bleed of 30 to 60
+          // levels passes
+          const luma = (d: ImageData, k: number) =>
+            (d.data[k] + d.data[k + 1] + d.data[k + 2]) / 3;
+          const here = luma(second, j);
+          const edge = Math.max(
+            Math.abs(here - luma(second, j - 4)),
+            Math.abs(here - luma(second, j + 4)),
+            Math.abs(here - luma(second, j - width * 4)),
+            Math.abs(here - luma(second, j + width * 4)),
+          );
+          const limit =
+            edge > 24 ? (strongLevels as number) : (flatLevels as number);
           for (let c = 0; c < 3; c++) {
-            off ||=
-              Math.abs(first.data[j + c] - second.data[j + c]) >
-              (levels as number);
+            const diff = Math.abs(first.data[j + c] - second.data[j + c]);
+            if (edge <= 24) {
+              flatWorst = Math.max(flatWorst, diff);
+            }
+            off ||= diff > limit;
           }
           off ||= Math.abs(first.data[j + 3] - second.data[j + 3]) > 24;
         } else {
@@ -738,37 +768,59 @@ const lines = (page: Page, a: Buffer, b: Buffer) =>
           }
         }
       }
-      return { count, drawn, longestRow, rowAt, longestColumn, columnAt };
+      return {
+        count,
+        drawn,
+        flatWorst,
+        longestRow,
+        rowAt,
+        longestColumn,
+        columnAt,
+      };
     },
-    [a.toString("base64"), b.toString("base64"), CHANNEL_LEVELS] as const,
+    [
+      a.toString("base64"),
+      b.toString("base64"),
+      STRONG_LEVELS,
+      FLAT_LEVELS,
+    ] as const,
   );
 
 test.describe("the hand crops", () => {
   test.setTimeout(10 * 60 * 1000);
 
-  test("a line across a frame is found", async ({ browser }) => {
-    const flat = await open2d(browser, CROP_SIZES[1]);
-    const viewer = await flat.context.newPage();
-    try {
-      await flat.page.addStyleTag({
-        content: ".flat-frame.on.composed i { visibility: hidden !important; }",
-      });
-      const last = flat.manifest.frames.length - 1;
-      await show2d(flat.page, last);
-      const pieces = await flat.page.screenshot({ omitBackground: true });
-      // the open phone's middle, which is solid across its width
-      await composeFrame(flat.page, last, flat.manifest.margin.top + 400);
-      await show2d(flat.page, last);
-      const whole = await flat.page.screenshot({ omitBackground: true });
-      const found = await lines(viewer, pieces, whole);
-      console.log(
-        `CROP control, a wiped line gives a row run of ${found.longestRow}`,
-      );
-      expect(found.longestRow).toBeGreaterThanOrEqual(LINE_RUN);
-    } finally {
-      await flat.context.close();
-    }
-  });
+  // the control runs at a scaled size (1366 by 768), where the real frames differ from their whole image by a few levels,
+  // with a seam that loses 60 levels of coverage or gains 50 of color, which is about what a bleed between pieces does.
+  // the seam is in the whole image and the reference is the pieces, which the check reads its solid inside from
+  for (const kind of ["alpha", "color"] as const) {
+    test(`a ${kind} seam across a frame is found`, async ({ browser }) => {
+      const flat = await open2d(browser, CROP_SIZES[2]);
+      const viewer = await flat.context.newPage();
+      try {
+        await flat.page.addStyleTag({
+          content:
+            ".flat-frame.on.composed i { visibility: hidden !important; }",
+        });
+        const last = flat.manifest.frames.length - 1;
+        await show2d(flat.page, last);
+        const pieces = await flat.page.screenshot({ omitBackground: true });
+        // the open phone's middle, which is solid across its width
+        await composeFrame(flat.page, last, {
+          row: flat.manifest.margin.top + 400,
+          kind,
+        });
+        await show2d(flat.page, last);
+        const whole = await flat.page.screenshot({ omitBackground: true });
+        const found = await lines(viewer, whole, pieces);
+        console.log(
+          `CROP control, a ${kind} seam gives a row run of ${found.longestRow}`,
+        );
+        expect(found.longestRow).toBeGreaterThanOrEqual(LINE_RUN);
+      } finally {
+        await flat.context.close();
+      }
+    });
+  }
 
   for (const size of CROP_SIZES) {
     test(`${size.width} by ${size.height} shows no lines`, async ({
@@ -787,16 +839,25 @@ test.describe("the hand crops", () => {
           return CROP_FOLDS.some((t) => Math.abs(f.fold - t) < 0.12);
         })) {
           const frame = flat.manifest.frames[index];
+          // a big window can be shot before its frame has painted, so each shot is taken after two settled frames, and
+          // a pair that differs over most of the drawing (a shot that missed a paint, which no seam does) is taken again
+          const shoot = async () => {
+            await show2d(flat.page, index);
+            return flat.page.screenshot({ omitBackground: true });
+          };
           await show2d(flat.page, index);
-          const pieces = await flat.page.screenshot({ omitBackground: true });
+          const pieces = await shoot();
           await composeFrame(flat.page, index);
-          await show2d(flat.page, index);
-          const whole = await flat.page.screenshot({ omitBackground: true });
-          const found = await lines(viewer, pieces, whole);
+          let whole = await shoot();
+          let found = await lines(viewer, pieces, whole);
+          if (found.count > found.drawn / 2) {
+            whole = await shoot();
+            found = await lines(viewer, pieces, whole);
+          }
           expect(found.drawn, "something is drawn").toBeGreaterThan(1000);
           const label = `${flat.manifest.set} ${size.width}x${size.height} frame ${index} fold ${frame.fold.toFixed(3)}`;
           console.log(
-            `CROP ${label} different ${found.count} of ${found.drawn}, longest row run ${found.longestRow} (y ${found.rowAt}), column run ${found.longestColumn} (x ${found.columnAt})`,
+            `CROP ${label} different ${found.count} of ${found.drawn}, flat worst ${found.flatWorst}, longest row run ${found.longestRow} (y ${found.rowAt}), column run ${found.longestColumn} (x ${found.columnAt})`,
           );
           const run = Math.max(found.longestRow, found.longestColumn);
           if (run > worst.run) {

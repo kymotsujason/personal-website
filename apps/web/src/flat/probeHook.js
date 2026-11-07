@@ -50,6 +50,8 @@ export const installFlatHook = (probe) => {
     slowStep: () => scene.slowStep?.() ?? null,
     // the phone's state as the navigation reads it, with its fold
     status: () => probe.status(),
+    // a resize or a turn the scene hasn't finished fitting to (a mount started then is cut off by it)
+    rebuildPending: () => probe.rebuildPending(),
     mount: (options) => probe.mount(options),
     unmount: () => probe.unmount(),
   };

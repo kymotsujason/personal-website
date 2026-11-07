@@ -1535,46 +1535,62 @@ test.describe("with reduced motion", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
   });
 
-  // the folds the status reports on every animation frame from now, until the phone is at rest in `phone`
-  const watchFolds = (page: Page, phone: string) =>
-    page.evaluate((phone) => {
+  test("the phone is open at once and a fold snaps", async ({ page }) => {
+    // every animation frame from the page's start, so the close's snap is recorded as well as the open's
+    await page.addInitScript(() => {
       const w = window as any;
-      w.__folds = [];
-      w.__busy = false;
+      w.__trace = [];
       const look = () => {
-        const s = w.__flat.status();
-        w.__folds.push(s.fold);
-        w.__busy ||= s.busy;
-        if (!(s.phone === phone && !s.busy) || w.__folds.length < 3) {
-          if (w.__folds.length < 300) {
-            requestAnimationFrame(look);
-          }
+        const s = w.__flat?.status?.();
+        if (s) {
+          w.__trace.push({ fold: s.fold, busy: s.busy, phone: s.phone });
+        }
+        if (w.__trace.length < 5000) {
+          requestAnimationFrame(look);
         }
       };
       requestAnimationFrame(look);
-    }, phone);
-
-  test("the phone is open at once and a fold snaps", async ({ page }) => {
+    });
     await page.goto("/");
     await settledOn(page, "/", null);
-    await watchFolds(page, "closed");
     await page.keyboard.press("Escape");
     await expect
       .poll(() => flatStatus(page))
       .toMatchObject({ phone: "closed", busy: false, fold: 1 });
-    await watchFolds(page, "open");
+    // a few frames closed, so the trace has the close in it (a snap lasts less than one frame before the Enter)
+    await page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => requestAnimationFrame(done)),
+          ),
+        ),
+    );
     await page.keyboard.press("Enter");
     await expect
       .poll(() => flatStatus(page))
       .toMatchObject({ phone: "open", busy: false, fold: 0 });
-    const seen = await page.evaluate(() => ({
-      folds: (window as any).__folds as number[],
-      busy: (window as any).__busy as boolean,
-    }));
-    expect(seen.busy, "no fold in motion").toBe(false);
-    for (const fold of seen.folds) {
-      expect([0, 1], "only the ends of the fold").toContain(fold);
+    // one more frame after the last change
+    await page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
+    const trace: { fold: number; busy: boolean; phone: string }[] =
+      await page.evaluate(() => (window as any).__trace);
+    expect(
+      trace.some((t) => t.phone === "closed" && t.fold === 1),
+      "the close was seen",
+    ).toBe(true);
+    expect(
+      trace.filter((t) => t.busy),
+      "no fold in motion",
+    ).toEqual([]);
+    for (const t of trace) {
+      expect([0, 1], "only the ends of the fold").toContain(t.fold);
     }
+    expect(trace[trace.length - 1].fold).toBe(0);
   });
 
   test("an app crossfades with no clip or transform on the page", async ({
@@ -1801,7 +1817,7 @@ test.describe("with the cpu slowed 4x", () => {
     const kept = all.filter((g) => g.at > SKIP_MS).map((g) => g.gap);
     expect(kept.length, "enough frames to judge").toBeGreaterThan(least);
     const sorted = [...kept].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
+    const p95 = sorted[Math.ceil(0.95 * sorted.length) - 1];
     return { p95, worst: sorted[sorted.length - 1], count: kept.length };
   };
 
@@ -1848,11 +1864,42 @@ test.describe("with the cpu slowed 4x", () => {
     const kept = all.filter((g) => g.at > SKIP_MS).map((g) => g.gap);
     expect(kept.length, "enough frames to judge").toBeGreaterThan(30);
     const sorted = [...kept].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
+    const p95 = sorted[Math.ceil(0.95 * sorted.length) - 1];
     console.log(
       `SLOW4X intro frames ${kept.length}, p95 ${p95.toFixed(1)} ms, worst ${sorted[sorted.length - 1].toFixed(1)} ms`,
     );
     expect(p95, "95% of the intro's frames").toBeLessThanOrEqual(LIMIT_MS);
+  });
+
+  test("the check can fail: a 25 ms busy loop in every frame gives a p95 over 17 ms", async ({
+    page,
+  }) => {
+    await quiet(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("2d", "1");
+      localStorage.setItem("introSeen", "1");
+      const ask = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) =>
+        ask((time) => {
+          const end = performance.now() + 25;
+          while (performance.now() < end) {
+            // the slow frame
+          }
+          callback(time);
+        });
+    });
+    await slow(page);
+    await page.goto("/");
+    await settledOn(page, "/", null);
+    await startGaps(page);
+    await page
+      .locator('.flat-home .app-icon[data-app="About"]')
+      .click({ force: true });
+    const stats = await gapsAfterSkip(page, 3);
+    console.log(
+      `SLOW4X control p95 ${stats.p95.toFixed(1)} ms over ${stats.count} frames`,
+    );
+    expect(stats.p95).toBeGreaterThan(LIMIT_MS);
   });
 
   test("an app open's frames take at most 17 ms, with #page on the window", async ({
@@ -1884,18 +1931,12 @@ test.describe("with the cpu slowed 4x", () => {
           const a = win.getBoundingClientRect();
           const b = el.getBoundingClientRect();
           // the window is taller than the page it carries, which is clipped to the window's shape, so the page matches
-          // the window's sides and sits on its middle
+          // the window's sides and sits on its middle. the frames and the screens layer get one transform string from the
+          // stage, so only the window and the page are compared
           w.__aligned.push({
             left: b.left - a.left,
             right: b.right - a.right,
             middle: (b.top + b.bottom) / 2 - (a.top + a.bottom) / 2,
-            layers:
-              document.querySelector<HTMLElement>(".flat-frames")!.style
-                .transform ===
-              document.querySelector<HTMLElement>(".flat-screens")!.style
-                .transform
-                ? 0
-                : 100,
           });
         }
         if (!w.__stop) {

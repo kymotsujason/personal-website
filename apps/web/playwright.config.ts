@@ -47,6 +47,10 @@ function selectedProjects(): string[] {
 // COMPARE_CAPTURE=1 runs the compare project against the capture build's preview instead of the dev server
 const compareCapture = process.env.COMPARE_CAPTURE === "1";
 const selected = selectedProjects();
+// the workers load this file again without the command line's --project, so they read the selection from here
+if (selected.length > 0) {
+  process.env.PW_PROJECT ??= selected.join(",");
+}
 // the compare project's dev server is also a capture build, so the 2d scene's window.__flat is there next to
 // window.spike (src/flat/probeHook.js), which tests/compare/flat-compare.spec.ts reads
 const devServer = {
@@ -87,7 +91,8 @@ const gpuLaunch =
         },
       };
 
-// the compare project runs only when asked for (playwright test --project compare). it takes about a minute on the gpu
+// the compare project runs only when asked for (playwright test --project compare), against a dev server that is a
+// capture build. it takes about two minutes on the gpu
 const compareProject = {
   name: "compare",
   testMatch: "compare/**/*.spec.ts",
