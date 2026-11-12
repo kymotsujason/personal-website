@@ -1,7 +1,8 @@
 // the 2d scene's log for a real phone, only in a PERF=1 build with ?perf in the address (flat/index.js loads it). for
-// 40 s from load it keeps each frame's gap with the scene's state, every error and warning, and what the frames layer
-// looks like a few seconds after the first frame and at the end, then posts it all to the preview server, which saves it
-// in perf-logs/ as perf.js's logs are. it's how a phone's safari is read without a mac to inspect it
+// 40 s from load it keeps each frame's gap, the scene's state, and how long the frame's animation frame callbacks ran,
+// with every error and warning, each tap, each step of a page swap, the rest rule's state as it changes, and what the
+// frames layer looks like a few seconds after the first frame and at the end. then it posts it all to the preview
+// server, which saves it in perf-logs/ as perf.js's logs are. it's how a phone's safari is read without a mac
 const LOG_FOR = 40000;
 
 // the frames layer and the frame on show, as the page has them now
@@ -43,7 +44,7 @@ const atlasCheck = () =>
         image.src = match[1];
     });
 
-export const startFlatPerf = ({ status }) => {
+export const startFlatPerf = ({ status, effects = () => null }) => {
     const frames = [];
     const events = [];
     const snapshots = [];
@@ -59,13 +60,39 @@ export const startFlatPerf = ({ status }) => {
         };
     });
     new MutationObserver(() => note("classes", document.documentElement.className)).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    // the page swap's steps and the taps, to line up with the long frames
+    ["astro:before-preparation", "astro:after-preparation", "astro:before-swap", "astro:after-swap", "astro:page-load"].forEach((name) =>
+        document.addEventListener(name, () => note("nav", name.slice(6)), { capture: true })
+    );
+    ["pointerdown", "pointerup", "click"].forEach((name) => addEventListener(name, () => note("input", name), { capture: true }));
+
+    // how long each frame's animation frame callbacks ran, so a long frame shows whether script or the browser's own
+    // work (style, layout, paint, compositing) took the time
+    let scriptMs = 0;
+    const ask = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) =>
+        ask((time) => {
+            const start = performance.now();
+            try {
+                callback(time);
+            } finally {
+                scriptMs += performance.now() - start;
+            }
+        });
 
     let last = 0;
     let lastState = "";
+    let lastEffects = "";
     const tick = (now) => {
+        const shown = JSON.stringify(effects());
+        if (shown !== lastEffects) {
+            lastEffects = shown;
+            note("effects", shown);
+        }
         const s = status();
         const state = s ? `${s.phone}/${s.busy ? "busy" : "still"}/${s.app ?? "home"}` : "none";
-        frames.push([Math.round(now), last ? Math.round((now - last) * 10) / 10 : 0, state === lastState ? "" : state]);
+        frames.push([Math.round(now), last ? Math.round((now - last) * 10) / 10 : 0, state === lastState ? "" : state, Math.round(scriptMs * 10) / 10]);
+        scriptMs = 0;
         lastState = state;
         last = now;
         if (now < LOG_FOR) {

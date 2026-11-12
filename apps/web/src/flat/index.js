@@ -1397,7 +1397,16 @@ export const startFlatScene = ({
   // the phone log (dev/flatPerf.js), only in a PERF=1 build opened with ?perf
   if (__PERF__ && new URLSearchParams(location.search).has("perf")) {
     import("../dev/flatPerf.js").then(({ startFlatPerf }) =>
-      startFlatPerf({ status }),
+      startFlatPerf({
+        status,
+        effects: () => ({
+          calm: scene.calm,
+          frosted: scene.frosted,
+          verdict: scene.rest?.verdict ?? null,
+          slow: scene.slow,
+          size: scene.manifest?.size ?? null,
+        }),
+      }),
     );
   }
   const started = start();
