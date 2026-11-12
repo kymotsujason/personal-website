@@ -49,7 +49,6 @@ import {
 import { createScreens, faceInput } from "./screens.js";
 import { createStage } from "./stage.js";
 import { createFlatStatus } from "./status.js";
-import { createSwitcher } from "./switcher.js";
 import { homography, mapPoint, quadToQuad } from "./warp.js";
 
 const nextFrame = () =>
@@ -818,15 +817,51 @@ export const startFlatScene = ({
   scene.effects = { look, drift };
   const apps = createApps({ scene, loop, folds, nav, pageEl });
   const kept = createKept();
-  const switcher = createSwitcher({
-    scene,
-    loop,
-    apps,
-    nav,
-    pageEl,
-    kept,
-    siteApps: siteData.apps,
-  });
+  // the switcher's code (switcher.js) loads after the first frame, since nothing reaches it until an app is open, which
+  // keeps it out of the first download. until it's there, the scene's own state answers for it, a switch waits for it,
+  // and there's no swipe or switcher to drop. a load that fails is tried again by the next switch
+  let switcherReal = null;
+  let switcherInstall = null;
+  let switcherLoad = null;
+  const loadSwitcher = () => {
+    switcherLoad ??= import("./switcher.js").then(
+      ({ createSwitcher }) => {
+        switcherReal = createSwitcher({
+          scene,
+          loop,
+          apps,
+          nav,
+          pageEl,
+          kept,
+          siteApps: siteData.apps,
+        });
+        if (switcherInstall) {
+          switcherReal.install(switcherInstall);
+        }
+        return switcherReal;
+      },
+      (error) => {
+        switcherLoad = null;
+        throw error;
+      },
+    );
+    return switcherLoad;
+  };
+  const switcher = {
+    status: () => ({
+      switchingTo: scene.switching ? scene.switching.to : null,
+      switcher: Boolean(scene.switcher),
+      swapOpen: scene.swapOpen,
+    }),
+    switchTo: (app, opts) =>
+      loadSwitcher().then((real) => real.switchTo(app, opts)),
+    leave: () => switcherReal?.leave(),
+    dropHomeSwipe: () => switcherReal?.dropHomeSwipe(),
+    install: (options) => {
+      switcherInstall = options;
+      switcherReal?.install(options);
+    },
+  };
 
   // a tap on an icon or a widget, or on the cover's icons
   const onOpen = live(({ app, face, el, path }) => {
@@ -1004,6 +1039,8 @@ export const startFlatScene = ({
     root.classList.add("flat-ready");
     Object.assign(window, { __flatShown: true });
     onShown();
+    // a failed load here is left for the next switch to try again
+    loadSwitcher().catch(() => {});
     // in case the fade never ran (a hidden tab), the sheet goes once it would have ended
     setTimeout(dropBlack, 700);
   };

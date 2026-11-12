@@ -171,8 +171,8 @@ export const createFolds = ({ scene, loop }) => {
     return leadTo(1, delay, time);
   };
 
-  // a charger run holds a fold pressed during it until it ends, at most about 2.7 s (charger.js). with none going, the
-  // fold starts in the same task, as it always has
+  // a charger run holds a fold pressed during it until it ends, about 2.7 s, or up to 3.5 s (SWAP_CAP in charger.js)
+  // while a slow fold set decode lands the cable. with none going, the fold starts in the same task, as it always has
   const afterCharger = async () => {
     while (scene.charger?.busy()) {
       await scene.charger.idle();

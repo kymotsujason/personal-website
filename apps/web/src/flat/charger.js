@@ -1,10 +1,12 @@
 // the charging cable in the 2d scene, as scene/charger.js has it in 3d: at 1% the left hand fetches the cable and plugs
 // it into the flap's bottom edge, and at 100% it unplugs it. the hands and the cable are captured frame sets played by
-// time (charger-<orientation>-<open|closed>), with the unplug the plug played backwards, and the phone's own move is
-// worked out at run time with the 3d math (shared/charging.js chargeMove) and added to the pose the stage draws. while
-// the cable is in, the fold sets are the cable versions (cable-*), and only one version is decoded at a time, with one
-// charger set. folds wait for a run (fold.js), a run waits for a fold, and a run while an app is zoomed or with reduced
-// motion ends at once. nothing the charger loads can drop the scene: a set that doesn't come leaves it with no cable
+// time (charger-<orientation>-<open|closed>), with the unplug the plug played backwards (so over the unplug's last
+// PLAN.away the hand heads off empty, where 3d carries the plug, which Jason accepted on 2026-11-12), and the phone's
+// own move is worked out at run time with the 3d math (shared/charging.js chargeMove) and added to the pose the stage
+// draws. while the cable is in, the fold sets are the cable versions (cable-*), and only one version is decoded at a
+// time, with one charger set. folds wait for a run (fold.js), a run waits for a fold, and a run while an app is zoomed
+// or with reduced motion ends at once. nothing the charger loads can drop the scene: a set that doesn't come leaves it
+// with no cable
 import {
   CHARGE_TOTAL,
   PLUG_HOME,
