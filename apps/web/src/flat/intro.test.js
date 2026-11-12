@@ -131,7 +131,15 @@ const fakeParts = (manifest) => {
     finished: new Promise(() => {}),
     cancel: () => {},
   }));
-  const element = () => ({ animate, style: {} });
+  const classes = () => {
+    const set = new Set();
+    return {
+      add: (name) => set.add(name),
+      remove: (name) => set.delete(name),
+      contains: (name) => set.has(name),
+    };
+  };
+  const element = () => ({ animate, style: {}, classList: classes() });
   const calls = [];
   const rest = { x: 0, y: 0, z: -20, rx: 0, ry: 0, rz: 0 };
   const stage = {
@@ -268,11 +276,19 @@ test("a played intro's animations end on an explicit keyframe and share one star
     },
   );
   try {
-    const element = (name) => ({
-      name,
-      style: {},
-      animate: (keyframes, timing) => animation(name, keyframes, timing),
-    });
+    const element = (name) => {
+      const set = new Set();
+      return {
+        name,
+        style: {},
+        classList: {
+          add: (c) => set.add(c),
+          remove: (c) => set.delete(c),
+          contains: (c) => set.has(c),
+        },
+        animate: (keyframes, timing) => animation(name, keyframes, timing),
+      };
+    };
     const geometry = stageGeometry({
       width: 1280,
       height: 800,
@@ -312,10 +328,13 @@ test("a played intro's animations end on an explicit keyframe and share one star
       desk,
       manifest: landscape,
     });
+    stage.layers.frames.classList.add("lean");
     intro.start();
     const plan = intro.plan;
 
     expect(shown).toEqual(["hide"]);
+    // the frames stay in the layout while their visibility is animated
+    expect(stage.layers.frames.classList.contains("lean")).toBe(false);
     expect(made.length).toBeGreaterThan(plan.frames.length);
     made.forEach((a) => expect(a.startTime).toBe(1234.5));
 
@@ -358,6 +377,7 @@ test("a played intro's animations end on an explicit keyframe and share one star
     made.find((a) => a.target === "frames").finish();
     expect(await intro.finished).toBe("done");
     made.forEach((a) => expect(a.cancelled).toBe(true));
+    expect(stage.layers.frames.classList.contains("lean")).toBe(true);
   } finally {
     vi.unstubAllGlobals();
   }

@@ -35,6 +35,13 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   visibility: visible;
 }
 
+/* outside the intro, the frames not on show leave the layout as well, so a restyle of the whole document skips their
+   thousands of pieces (9 ms against 1.3 a restyle, and 35 against 6.5 with the cpu slowed 4x, on 2026-11-12). the
+   intro shows its frames by animating visibility (intro.js), so it takes the class off while it plays */
+.flat-frames.lean .flat-frame:not(.on) {
+  display: none;
+}
+
 /* the stage under the flat page while nothing moves, hidden since the page and the app window behind it cover it, so
    the compositor stops drawing it (src/flat/index.js sets page-over). the faces are shown inline, hence important */
 .page-over :is(.flat-desk, .flat-frames, .flat-frame.on, .flat-face) {

@@ -232,7 +232,7 @@ test("one frame per paint during an unfold", async ({ page }) => {
 test.describe("in a portrait window", () => {
   test.use({ viewport: { width: 600, height: 900 } });
 
-  test("the closing set decodes with the opening one, before the first frame", async ({
+  test("the closing set joins after the intro, and a close then plays on it", async ({
     page,
   }) => {
     // the frames in the layer at the moment the first frame shows
@@ -261,16 +261,26 @@ test.describe("in a portrait window", () => {
       ).then((r) => r.json());
       return {
         shown: w.__framesAtShown,
-        // the volume buttons' pressed pictures decode with the two sets too
-        both:
+        // the first frame has the opening set and the volume buttons' pressed pictures, and the closing set comes
+        // once the intro is over, so a phone's first download is the opening set alone
+        first: w.__flat.manifest.frames.length + volume.frames.length,
+        all:
           w.__flat.manifest.frames.length +
-          closing.frames.length +
-          volume.frames.length,
-        opening: w.__flat.manifest.frames.length,
+          volume.frames.length +
+          closing.frames.length,
       };
     });
-    expect(counts.shown).toBe(counts.both);
-    // a close plays on the closing set's frames, which come after the opening set's in the layer
+    expect(counts.shown).toBe(counts.first);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => document.querySelector(".flat-frames")!.children.length,
+          ),
+        { timeout: 20000 },
+      )
+      .toBe(counts.all);
+    // a close plays on the closing set's frames, which come after the opening set's and the buttons' in the layer
     await page.keyboard.press("Escape");
     await expect
       .poll(() => flatStatus(page))
@@ -280,7 +290,7 @@ test.describe("in a portrait window", () => {
         el.classList.contains("on"),
       ),
     );
-    expect(on).toBeGreaterThanOrEqual(counts.opening);
+    expect(on).toBeGreaterThanOrEqual(counts.first);
   });
 });
 

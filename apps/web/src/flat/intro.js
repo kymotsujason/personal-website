@@ -190,6 +190,7 @@ export const playIntro = (kind, { stage, screens, desk, manifest }) => {
     }
     animations.forEach((animation) => animation.cancel());
     animations = [];
+    stage.layers.frames.classList.add("lean");
     resolveUnlocked();
     resolveFinished(result);
   };
@@ -246,6 +247,8 @@ export const playIntro = (kind, { stage, screens, desk, manifest }) => {
       desk.blurLayer.animate(deskKeys, timing),
     );
     stage.frameLayer.hide();
+    // the intro shows each frame by animating its visibility, so they stay in the layout while it plays
+    stage.layers.frames.classList.remove("lean");
     const { elements } = stage.frameLayer;
     plan.frames.forEach(({ index, start: from, end }, i) => {
       const last = i === plan.frames.length - 1;

@@ -1,6 +1,12 @@
 import { expect, test } from "vitest";
 import { place } from "../scene/shared/placement.js";
-import { closingSetFor, phoneAt, slowPathFor } from "./index.js";
+import {
+  chooseSet,
+  closingSetFor,
+  lowEndFor,
+  phoneAt,
+  slowPathFor,
+} from "./index.js";
 
 test("the slow path is a device found slow, not half size frames", () => {
   expect(slowPathFor({})).toBe(false);
@@ -14,6 +20,30 @@ test("the slow path is a device found slow, not half size frames", () => {
   expect(slowPathFor({ flatSlow: false, auto: null, size: "half" })).toBe(
     false,
   );
+});
+
+test("a device known to be slow is low end, and an unknown one isn't", () => {
+  const plain = { deviceMemory: 8, connection: { saveData: false } };
+  expect(lowEndFor({ nav: plain })).toBe(false);
+  // safari reports neither memory nor a data saver
+  expect(lowEndFor({ nav: {} })).toBe(false);
+  expect(lowEndFor({ flatSlow: true, nav: plain })).toBe(true);
+  expect(lowEndFor({ auto: String(Date.now()), nav: plain })).toBe(true);
+  const day = 24 * 60 * 60 * 1000;
+  expect(lowEndFor({ auto: String(Date.now() - 31 * day), nav: plain })).toBe(
+    false,
+  );
+  expect(lowEndFor({ handoff: true, nav: plain })).toBe(true);
+  expect(lowEndFor({ nav: { deviceMemory: 4 } })).toBe(true);
+  expect(lowEndFor({ nav: { deviceMemory: 2 } })).toBe(true);
+  expect(lowEndFor({ nav: { connection: { saveData: true } } })).toBe(true);
+});
+
+test("a low end device takes the half size frames whatever its screen", () => {
+  const big = { width: 1440, height: 900, dpr: 2, hour: 12 };
+  expect(chooseSet(big).size).toBe("full");
+  expect(chooseSet({ ...big, lowEnd: true }).size).toBe("half");
+  expect(chooseSet({ ...big, lowEnd: true }).set).toBe(chooseSet(big).set);
 });
 
 test("portrait's opening set brings its closing one", () => {

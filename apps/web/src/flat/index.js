@@ -57,16 +57,34 @@ const nextFrame = () =>
 // the set, lighting, and size, chosen once per page load: the orientation's opening set (the intro and an arrival
 // both end on the open phone), the lighting for the visitor's hour, and the size for how many device px the open
 // phone covers
-export const chooseSet = ({ width, height, dpr, hour }) => {
+export const chooseSet = ({ width, height, dpr, hour, lowEnd = false }) => {
   const portrait = portraitFor({ width, height });
   return {
     set: turnSetFor({ portrait, charging: false }),
     lighting: chooseLighting(hour),
-    size: sizeFor({
-      phonePx: phoneHeightPx({ width, height, portrait }) * dpr,
-    }),
+    // a device known to be slow takes the half size frames, which decode to about half the memory
+    size: lowEnd
+      ? "half"
+      : sizeFor({
+          phonePx: phoneHeightPx({ width, height, portrait }) * dpr,
+        }),
   };
 };
+
+// a device known to be slow, for the frames' size: the 2d scene found it slow before (flat-slow), the 3d scene sent it
+// here for being slow lately (2dAuto) or just now (a handoff), or the browser says it has 4 GB of memory or less, or
+// asks to save data. safari says neither, so an iphone goes by the first three
+export const lowEndFor = ({
+  flatSlow = false,
+  auto = null,
+  handoff = false,
+  nav = globalThis.navigator,
+} = {}) =>
+  Boolean(flatSlow) ||
+  autoRecent(auto) ||
+  handoff ||
+  (Number.isFinite(nav?.deviceMemory) && nav.deviceMemory <= 4) ||
+  Boolean(nav?.connection?.saveData);
 
 // portrait's opening set and its closing one go together, the cable versions too
 export const closingSetFor = (set) =>
@@ -103,6 +121,8 @@ export const prefetchFlatScene = async () => {
     height: innerHeight,
     dpr: devicePixelRatio,
     hour: new Date().getHours(),
+    // only the 3d scene's last step prefetches, so the start that follows is a handoff, which takes the half size
+    lowEnd: true,
   });
   // start adds the cable when the battery is charging, so a charging device fetches the cable sets
   const set = chargingNow() ? `cable-${plain}` : plain;
@@ -513,6 +533,15 @@ export const startFlatScene = ({
     }
     scene.lastFold = scene.fold;
     // a charger run shows its own set's frames, picked by time, with the phone's move for it on the pose
+    if (pendingClose && scene.path !== "close") {
+      const { manifest, layer, openFrames } = pendingClose;
+      pendingClose = null;
+      if (scene.openFrames === openFrames && !scene.closeFrames) {
+        scene.closeFrames = { manifest, layer };
+      } else {
+        stage.dropFrames(layer);
+      }
+    }
     const run = charger.shown();
     const frames = run ?? activeFrames();
     stage.useFrames(frames.layer);
@@ -897,6 +926,8 @@ export const startFlatScene = ({
 
   const unmount = () => {
     scene.intro?.cancel();
+    // the stage lets a closing set still waiting to go in go with the rest
+    pendingClose = null;
     // the stage lets the charger's sets go with the rest, so a run or a swap in flight ends here
     scene.charger?.mounted({ plugged: false });
     scene.volume?.reset();
@@ -925,16 +956,13 @@ export const startFlatScene = ({
   // a mount started after another owns the scene, so the earlier one stops wherever it is (a turn and then another)
   let mountRun = 0;
 
-  // the set's frames and the desk decode before any of it joins the page. portrait's opening set comes with its
-  // closing one, since the hands take the closing path for every close, and both load up front so a close never plays
-  // on the opening grip and no set lands partway through a fold
+  // the set's frames and the desk decode before any of it joins the page. portrait's closing set comes later
+  // (loadClosing), so a phone's first download is the opening set alone
   const mount = async ({ set, lighting, size }) => {
     const run = ++mountRun;
     unmount();
-    const closingSet = closingSetFor(set);
-    const [manifest, closing, volumeManifest] = await Promise.all([
+    const [manifest, volumeManifest] = await Promise.all([
       loadManifest(set, lighting, size, { signal }),
-      closingSet ? loadManifest(closingSet, lighting, size, { signal }) : null,
       // the buttons are a few KB and can be left out, as 3d leaves them out when their chunk won't load
       loadManifest(volumeSetFor(!set.endsWith("landscape")), lighting, size, {
         signal,
@@ -951,7 +979,6 @@ export const startFlatScene = ({
     }
     const portrait = manifest.orientation === "portrait";
     const stage = createStage({ stageEl, pageEl, manifest });
-    const closeLayer = closing ? stage.addFrames(closing) : null;
     const screens = createScreens({
       host: stage.layers.screens,
       siteData,
@@ -982,7 +1009,7 @@ export const startFlatScene = ({
       rain,
       portrait,
       openFrames: { manifest, layer: stage.frameLayer },
-      closeFrames: closing ? { manifest: closing, layer: closeLayer } : null,
+      closeFrames: null,
       full,
       cardsView,
       pose: { ...stage.placed.rest },
@@ -991,7 +1018,6 @@ export const startFlatScene = ({
     const volumeLayer = volumeManifest ? stage.addFrames(volumeManifest) : null;
     await Promise.all([
       stage.frameLayer.decode(),
-      closeLayer?.decode(),
       desk.decode(),
       volumeLayer?.decode().then(
         () => {
@@ -1002,6 +1028,38 @@ export const startFlatScene = ({
     ]);
     return manifest;
   };
+
+  // portrait's closing set loads once the intro is over (or the turn is in), since the hands take the closing path
+  // for every close but the first frame doesn't need it, which takes about 45% off a phone's first download (2026-11-12).
+  // a close before it's in plays on the opening set, and it goes in only off the closing path (draw), so it never lands
+  // partway through a fold. a charger swap meanwhile brings its own sets, so it's let go
+  let pendingClose = null;
+  const loadClosing = async () => {
+    const run = mountRun;
+    const { stage, manifest, openFrames } = scene;
+    const name = manifest ? closingSetFor(manifest.set) : null;
+    if (!name || scene.closeFrames || !chosen) {
+      return;
+    }
+    const closing = await loadManifest(name, chosen.lighting, chosen.size, {
+      signal,
+    });
+    if (failed || run !== mountRun) {
+      return;
+    }
+    const layer = stage.addFrames(closing);
+    await layer.decode();
+    if (failed || run !== mountRun || scene.openFrames !== openFrames) {
+      stage.dropFrames(layer);
+      return;
+    }
+    pendingClose = { manifest: closing, layer, openFrames };
+    loop.wake();
+  };
+  const closingLater = () =>
+    loadClosing().catch((error) =>
+      console.warn("the closing frames didn't load", error),
+    );
 
   // the music player waits while the phone moves (or turns) before it loads under has-flat-scene
   music.waitWhile(() => scene.moving || scene.busy || turn !== null);
@@ -1074,6 +1132,11 @@ export const startFlatScene = ({
       height: innerHeight,
       dpr: devicePixelRatio,
       hour: new Date().getHours(),
+      lowEnd: lowEndFor({
+        flatSlow: root.classList.contains("flat-slow"),
+        auto: read("local", "2dAuto"),
+        handoff: from === "3d",
+      }),
     });
     if (flatStatus.status.charging) {
       choice.set = `cable-${choice.set}`;
@@ -1292,6 +1355,7 @@ export const startFlatScene = ({
       await nextFrame();
       if (!failed && !turn) {
         turnCover.lift();
+        closingLater();
       }
     };
     const rebuild = () => {
@@ -1360,9 +1424,11 @@ export const startFlatScene = ({
     // the fade and the intro start on the same frame
     showFirstFrame();
     if (!intro.plan) {
+      closingLater();
       return;
     }
     intro.start();
+    intro.finished.then(closingLater);
     watchIntro();
     if (!rest.judged) {
       // only the frames while the phone unfolds count, and the verdict comes when the unfold ends

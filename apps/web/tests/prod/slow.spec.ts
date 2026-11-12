@@ -139,7 +139,8 @@ const flatSettledOn = (page: Page, path: string, app: string | null) =>
       pageApp: app ?? "home",
     });
 
-// the cover is up, the 2d scene hasn't shown, and nothing of the 3d scene is left
+// the moment the 2d scene took over, read from the handoff's log so a 2d scene that loads fast can't race the check:
+// the cover was up, the 2d scene hadn't shown, and nothing of the 3d scene was left
 const underCover = async (page: Page) => {
   const root = page.locator("html");
   // the ladder's step lands either way, and the plain flat page isn't waited out to the timeout
@@ -156,11 +157,16 @@ const underCover = async (page: Page) => {
       { timeout: 150000 },
     )
     .not.toBeNull();
-  await expect(root).toHaveClass(/has-flat-scene/);
-  await expect(root).not.toHaveClass(/has-3d/);
-  await expect(root).not.toHaveClass(/scene-failed/);
-  await expect(root).not.toHaveClass(/page-pinned/);
-  await expect(page.locator("#stage > .flat-blackout")).toHaveCount(1);
+  const log = await handoffLog(page);
+  const took = log.find(
+    (entry) => has(entry, "has-flat-scene") || has(entry, "scene-failed"),
+  );
+  expect(took, "the 2d scene took over").toBeDefined();
+  expect(has(took!, "has-flat-scene"), took!.classes).toBe(true);
+  expect(has(took!, "has-3d"), took!.classes).toBe(false);
+  expect(has(took!, "scene-failed"), took!.classes).toBe(false);
+  expect(has(took!, "page-pinned"), took!.classes).toBe(false);
+  expect(took!.cover, "the cover was up").toBe(true);
 };
 
 test("the slow 3d scene hands off to the 2d scene without scene-failed", async ({

@@ -192,6 +192,8 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
   };
   const screensEl = makeLayer("flat-screens");
   const framesEl = makeLayer("flat-frames");
+  // the frames not on show leave the layout too (flat-scene.css), except while the intro animates them (intro.js)
+  framesEl.classList.add("lean");
   // the switcher's cards go over #page and under the hands, the way the 3d cards are drawn over the window's hole. the
   // layer is hidden while there are none (src/flat/cards.js)
   const cardsEl = makeLayer("flat-cards");
