@@ -6,7 +6,13 @@
 // which every set at that lighting shares. every odd step below fixed a real bug in the
 // spike (spikes/flat-intro/capture.mjs in the workshop repo), so read the spec's lessons before changing one
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -914,7 +920,20 @@ const frameFrom = (read, magenta, green) =>
 // how far around a press's changed pixels its picture reaches, so it covers their soft edges
 const PRESS_GROW = 2;
 
+// a set is captured into a folder beside it and swapped in only once the capture finishes, so a run that fails keeps
+// the last good set
 export const capture = async ({ setName, lighting }) => {
+  const out = path.join(SITE, ".media", "flat", `${setName}-${lighting}`);
+  const work = `${out}.partial`;
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+  const result = await captureInto({ setName, lighting, out: work });
+  rmSync(out, { recursive: true, force: true });
+  renameSync(work, out);
+  return { ...result, out };
+};
+
+const captureInto = async ({ setName, lighting, out }) => {
   const set = SETS[setName];
   const hour = LIGHTING[lighting];
   const { width, height } = set.window;
@@ -922,9 +941,6 @@ export const capture = async ({ setName, lighting }) => {
     width: width + 2 * MARGIN.x,
     height: height + MARGIN.top + MARGIN.bottom,
   };
-  const out = path.join(SITE, ".media", "flat", `${setName}-${lighting}`);
-  rmSync(out, { recursive: true, force: true });
-  mkdirSync(out, { recursive: true });
   const started = Date.now();
 
   const require = createRequire(path.join(SITE, "apps", "web", "package.json"));

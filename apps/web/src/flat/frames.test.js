@@ -101,6 +101,10 @@ test("frameTimes abut with no gap", () => {
   const set = foldSet([1, 0.75, 0.5, 0.25, 0]);
   // each frame starts at the midpoint between its fold and the previous one's, rounded once
   expect(frameTimes(set, linear, 100, 333)).toEqual([100, 142, 225, 308, 391]);
+  // a fractional start rounds with each time, where rounding it first would give 143 and 226
+  expect(frameTimes(set, linear, 100.6, 333)).toEqual([
+    101, 142, 225, 309, 392,
+  ]);
 
   const folds = [1, 0.97, 0.9, 0.81, 0.6, 0.33, 0.12, 0.04, 0];
   const times = frameTimes(foldSet(folds), inOutSine, 700, 1100);
@@ -180,6 +184,13 @@ test("phoneHeightPx follows the width in a narrow window", () => {
   const wide = phoneHeightPx({ width: 1600, height: 800, portrait: false });
   const narrow = phoneHeightPx({ width: 800, height: 800, portrait: false });
   expect(narrow).toBeLessThan(wide);
+});
+
+test("phoneHeightPx in portrait measures the two halves, about 469 px in a 390 by 844 window", () => {
+  const window = { width: 390, height: 844 };
+  const portrait = phoneHeightPx({ ...window, portrait: true });
+  expect(portrait).toBeCloseTo(468.65, 1);
+  expect(phoneHeightPx({ ...window, portrait: false })).toBeCloseTo(240.04, 1);
 });
 
 test("a layer released while it decodes says it was released", async () => {

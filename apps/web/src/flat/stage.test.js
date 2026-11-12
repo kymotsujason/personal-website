@@ -321,6 +321,21 @@ test("a pose facing the camera gets a 2d transform, a turned one the 3d chain", 
   stage.destroy();
 });
 
+test("fit places the stage again for a new window size", () => {
+  const { stageEl, pageEl } = setUp();
+  const stage = createStage({ stageEl, pageEl, manifest: landscape });
+  stage.setFold(0, 0);
+  stage.setPose(stage.placed.rest);
+  const before = stage.layers.frames.style.transform;
+  Object.assign(window, { innerWidth: 1600, innerHeight: 900 });
+  stage.fit();
+  expect(stage.placed).toEqual(
+    place({ width: 1600, height: 900, portrait: false }),
+  );
+  expect(stage.layers.frames.style.transform).not.toBe(before);
+  stage.destroy();
+});
+
 test("placePage follows the 3d scene's four modes", () => {
   const { stageEl, pageEl } = setUp();
   const stage = createStage({ stageEl, pageEl, manifest: landscape });

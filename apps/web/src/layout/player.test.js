@@ -165,6 +165,8 @@ test("loadOnMusicPage doesn't load under has-flat-scene", async () => {
   await settle();
   expect(core.load).not.toHaveBeenCalled();
   dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
+  await settle();
+  expect(core.load).not.toHaveBeenCalled();
   root.className = "scene-failed";
   dispatchEvent(new CustomEvent("scene-failed", { detail: "scene" }));
   await vi.waitFor(() => expect(core.load).toHaveBeenCalled());

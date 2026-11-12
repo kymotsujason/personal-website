@@ -2,6 +2,7 @@ import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { FADE_OUT, SHOW_FOR } from "../scene/shared/motion.js";
+import { screenLayout } from "../scene/shared/placement.js";
 import { faceQuads } from "./screens.js";
 import { handLoop } from "./handLoop.js";
 import { frameSize } from "./frames.js";
@@ -164,7 +165,6 @@ test("the bar lies over the buttons on the body open and the cover closed", () =
 });
 
 // the face's own px size, from the layout the screens use
-import { screenLayout } from "../scene/shared/placement.js";
 const faceBox = (face, turned) => {
   const l = screenLayout(turned);
   return face === "body" ? l.body : l.cover;

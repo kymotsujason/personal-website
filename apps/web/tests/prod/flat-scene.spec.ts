@@ -363,6 +363,7 @@ test.describe("continuous effects", () => {
     judged: boolean;
     verdict: "fast" | "slow" | null;
     frosted: boolean;
+    drawing: boolean;
   };
 
   const effects = (page: Page): Promise<Effects> =>
@@ -620,6 +621,27 @@ test.describe("continuous effects", () => {
       page,
     }) => {
       await page.addInitScript(() => localStorage.removeItem("introSeen"));
+      // each time the rain starts moving, whether the loop was drawing yet, since a verdict can land before the
+      // unfold ends and the rain waits for the loop as the frosted glass does
+      await page.addInitScript(() => {
+        const starts: boolean[] = [];
+        (window as any).__rainStarts = starts;
+        new MutationObserver((records) => {
+          for (const record of records) {
+            const el = record.target as Element;
+            if (
+              el.classList.contains("flat-fall") &&
+              !el.hasAttribute("data-still")
+            ) {
+              starts.push((window as any).__flat?.effects().drawing ?? false);
+            }
+          }
+        }).observe(document, {
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["data-still"],
+        });
+      });
       await stubHome(page, RAIN);
       await page.goto("/");
       await turnedOn(page);
@@ -630,6 +652,9 @@ test.describe("continuous effects", () => {
       await expect.poll(async () => (await effects(page)).idle).toBe(1);
       await expect(page.locator(".flat-fall[data-still]")).toHaveCount(0);
       await expect(page.locator(".flat-face.frosted")).toHaveCount(3);
+      const starts = await page.evaluate(() => (window as any).__rainStarts);
+      expect(starts.length).toBeGreaterThan(0);
+      expect(starts).not.toContain(false);
     });
 
     test("a page arrival stays calm until an opening fold is measured, and a close alone doesn't judge", async ({

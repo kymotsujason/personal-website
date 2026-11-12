@@ -5,6 +5,7 @@
 // the 3d scene handed a slow device over during the visit, and the scene then starts from the page the address names
 import { read, write } from "../lib/storage.js";
 import { screenLayout } from "../scene/shared/placement.js";
+import { chargingNow } from "../scene/status.js";
 import {
   createAppFocus,
   createApps,
@@ -94,12 +95,18 @@ const atlasesOf = (manifest) => {
 // the handoff from 3d fetches the sets the scene would start with (and the desk) once the 3d ladder reaches its last
 // step, so they're in the cache, not decoded, if the device turns out too slow. one at a time, at low priority
 export const prefetchFlatScene = async () => {
-  const { set, lighting, size } = chooseSet({
+  const {
+    set: plain,
+    lighting,
+    size,
+  } = chooseSet({
     width: innerWidth,
     height: innerHeight,
     dpr: devicePixelRatio,
     hour: new Date().getHours(),
   });
+  // start adds the cable when the battery is charging, so a charging device fetches the cable sets
+  const set = chargingNow() ? `cable-${plain}` : plain;
   const names = [set, closingSetFor(set)].filter(Boolean);
   const manifests = [];
   for (const name of names) {
@@ -631,10 +638,11 @@ export const startFlatScene = ({
   };
 
   // the rest rule's state: frosted glass at rest, rain moving, and the drift (which reads scene.calm itself) all follow
-  // scene.calm and reduced motion. a change wakes the loop, so the drift starts or stops on the next frame
+  // scene.calm and reduced motion. a change wakes the loop, so the drift starts or stops on the next frame. a fast
+  // verdict can land before the unfold ends, so the rain also waits for the loop to draw, as the frosted glass does
   const applyRest = () => {
     scene.frosted = !scene.calm;
-    scene.rain?.setStill(scene.calm || reducedQuery.matches);
+    scene.rain?.setStill(scene.calm || reducedQuery.matches || !scene.drawing);
     loop.wake();
   };
 

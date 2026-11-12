@@ -7,6 +7,28 @@ test("a 1280 by 800 window places the phone where the spike measured it", () => 
     assert.ok(Math.abs(placed.rest.z - -23.8847) < 1e-3, `rest.z ${placed.rest.z}`);
     assert.ok(Math.abs(placed.stage.z - -26.2732) < 1e-3, `stage.z ${placed.stage.z}`);
     assert.equal(placed.homeDist, -placed.rest.z);
+    assert.ok(Math.abs(placed.zoom.z - -17.4821) < 1e-3, `zoom.z ${placed.zoom.z}`);
+    // the open app covers the window, filling its width exactly and running past its height
+    assert.ok(Math.abs(placed.appW - 1280) < 1e-6, `appW ${placed.appW}`);
+    assert.ok(Math.abs(placed.appH - 899.2405) < 1e-3, `appH ${placed.appH}`);
+    const near = (pose, want, name) => {
+        for (const key of Object.keys(want)) {
+            assert.ok(Math.abs(pose[key] - want[key]) < 1e-3, `${name}.${key} ${pose[key]}`);
+        }
+    };
+    near(placed.fullStart, { x: 1.646, y: -14.9853, z: -29.8559, rx: -1.15, ry: 0.28, rz: -0.12 }, "fullStart");
+    near(placed.fastStart, { x: 0, y: -2.1204, z: -25.3178, rx: -0.28, ry: 0.05, rz: -0.03 }, "fastStart");
+});
+
+test("a 390 by 844 portrait window stages the phone low and farther back, and the app fills its height", () => {
+    const placed = place({ width: 390, height: 844, portrait: true });
+    assert.ok(Math.abs(placed.homeDist - 51.689) < 1e-3, `homeDist ${placed.homeDist}`);
+    assert.deepEqual(
+        { ...placed.stage, z: Math.round(placed.stage.z * 1e4) / 1e4 },
+        { x: 0, y: -0.9, z: -57.8917, rx: 0.05, ry: 0, rz: 0 },
+    );
+    assert.ok(Math.abs(placed.appH - 844) < 1e-6, `appH ${placed.appH}`);
+    assert.ok(Math.abs(placed.appW - 592.9367) < 1e-3, `appW ${placed.appW}`);
 });
 
 test("a narrow portrait window is width limited, so the phone sits farther back", () => {

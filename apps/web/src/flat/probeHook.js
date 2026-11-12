@@ -38,6 +38,7 @@ export const installFlatHook = (probe) => {
         judged: scene.rest?.judged ?? false,
         verdict: scene.rest?.verdict ?? null,
         frosted: scene.frosted,
+        drawing: scene.drawing,
         dragging: look.dragging(),
       };
     },

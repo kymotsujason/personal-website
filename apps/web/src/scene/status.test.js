@@ -1,6 +1,25 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { nextCheck, createStatus } from "./status.js";
+import { BATTERY_DRAIN, chargingNow, nextCheck, createStatus } from "./status.js";
+
+test("chargingNow reads the saved cycle and doesn't start one", () => {
+    const saved = new Map();
+    globalThis.localStorage = {
+        getItem: (key) => saved.get(key) ?? null,
+        setItem: (key, value) => saved.set(key, value),
+    };
+    try {
+        assert.equal(chargingNow(1e12), false);
+        assert.equal(saved.size, 0);
+        saved.set("duo-battery-start", String(1e12));
+        assert.equal(chargingNow(1e12 + BATTERY_DRAIN - 1), false);
+        assert.equal(chargingNow(1e12 + BATTERY_DRAIN + 1), true);
+        // a start in the future is a clock that moved back, so it isn't trusted
+        assert.equal(chargingNow(1e12 - 1), false);
+    } finally {
+        delete globalThis.localStorage;
+    }
+});
 
 test("a draining battery is checked each second while its phase has more than that left", () => {
     assert.equal(nextCheck({ charging: false, phaseLeft: 5000 }, 1), 1000);

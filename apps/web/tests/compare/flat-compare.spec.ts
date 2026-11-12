@@ -850,12 +850,15 @@ test.describe("the hand crops", () => {
           await composeFrame(flat.page, index);
           let whole = await shoot();
           let found = await lines(viewer, pieces, whole);
+          const label = `${flat.manifest.set} ${size.width}x${size.height} frame ${index} fold ${frame.fold.toFixed(3)}`;
           if (found.count > found.drawn / 2) {
+            console.log(
+              `CROP ${label} retaken, ${found.count} of ${found.drawn} differed`,
+            );
             whole = await shoot();
             found = await lines(viewer, pieces, whole);
           }
           expect(found.drawn, "something is drawn").toBeGreaterThan(1000);
-          const label = `${flat.manifest.set} ${size.width}x${size.height} frame ${index} fold ${frame.fold.toFixed(3)}`;
           console.log(
             `CROP ${label} different ${found.count} of ${found.drawn}, flat worst ${found.flatWorst}, longest row run ${found.longestRow} (y ${found.rowAt}), column run ${found.longestColumn} (x ${found.columnAt})`,
           );

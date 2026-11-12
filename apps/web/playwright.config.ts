@@ -47,9 +47,10 @@ function selectedProjects(): string[] {
 // COMPARE_CAPTURE=1 runs the compare project against the capture build's preview instead of the dev server
 const compareCapture = process.env.COMPARE_CAPTURE === "1";
 const selected = selectedProjects();
-// the workers load this file again without the command line's --project, so they read the selection from here
+// the workers load this file again without the command line's --project, so they read the selection from here. it's
+// set even when the shell already has one, so a stale value can't win over --project
 if (selected.length > 0) {
-  process.env.PW_PROJECT ??= selected.join(",");
+  process.env.PW_PROJECT = selected.join(",");
 }
 // the compare project's dev server is also a capture build, so the 2d scene's window.__flat is there next to
 // window.spike (src/flat/probeHook.js), which tests/compare/flat-compare.spec.ts reads

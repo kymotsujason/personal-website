@@ -639,6 +639,7 @@ describe("slow devices", () => {
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.links).toHaveLength(0);
     expect(page.contexts[0].lost).toBe(true);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
   });
 
   test("firefox's llvmpipe is read from RENDERER without the debug extension", () => {
@@ -646,6 +647,7 @@ describe("slow devices", () => {
     page.run();
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.contexts[0].asked).not.toContain("WEBGL_debug_renderer_info");
+    expect(page.classes.has("has-flat-scene")).toBe(true);
   });
 
   test("windows' basic render driver leaves the flat site", () => {
@@ -654,6 +656,7 @@ describe("slow devices", () => {
     });
     page.run();
     expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
   });
 
   test("a real gpu named by RENDERER shows the scene", () => {
@@ -675,6 +678,7 @@ describe("slow devices", () => {
     const page = makePage({ local: { "2d": "0" }, webgl2: false });
     page.run();
     expect(page.classes.has("has-3d")).toBe(false);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
   });
 
   test("a switch to the flat site in the last 30 days holds without asking for webgl", () => {
@@ -685,6 +689,7 @@ describe("slow devices", () => {
     expect(page.classes.has("has-3d")).toBe(false);
     expect(page.contexts).toHaveLength(0);
     expect(page.window.__chose3d).toBe(false);
+    expect(page.classes.has("has-flat-scene")).toBe(true);
   });
 
   test("a switch older than 30 days tries 3d again", () => {

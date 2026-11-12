@@ -52,6 +52,13 @@ export const batteryAt = (start, now) => {
     return { level: Math.min(100, Math.round(1 + (99 * c) / CHARGE_TIME)), charging: true, phaseLeft: CHARGE_TIME - c };
 };
 
+// whether the saved cycle is charging right now, without starting a cycle when none is saved, for a caller that only
+// wants to guess which set the scene will want
+export const chargingNow = (now = Date.now()) => {
+    const stored = Number(read("local", BATTERY_KEY));
+    return stored > 0 && stored <= now ? batteryAt(stored, now).charging : false;
+};
+
 // how long until the battery is checked again, in real ms: each second draining and every 300 ms charging, which is
 // often enough for the level to show each step (it moves about every 6 s draining and 1.2 s charging). a phase that
 // ends before the next check gets its own check just after it ends, so the cable goes in or out at the same moment
