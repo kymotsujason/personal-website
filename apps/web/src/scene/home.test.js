@@ -21,7 +21,7 @@ if (typeof mock.module !== "function") {
         onStatus = fn;
         return { status: {}, pingNow: () => Promise.reject(pingBroken), stop: () => {} };
     } } });
-    mock.module("./screens.js", { namedExports: { drawHome: () => {}, redrawStatus: () => {}, elementRect: () => ({}) } });
+    mock.module("./screens.js", { namedExports: { drawHome: () => {}, inkWords: () => [], redrawStatus: () => {}, elementRect: () => ({}) } });
     mock.module("./appWindow.js", { namedExports: { tapApp: () => {} } });
 
     const { JSDOM } = await import("jsdom");

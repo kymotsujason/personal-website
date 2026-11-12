@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { unpin } from "./pin.js";
-import { drawHome, redrawStatus, elementRect } from "./screens.js";
+import { drawHome, inkWords, redrawStatus, elementRect } from "./screens.js";
 import { listenForPress, clock, seekFor, musicCard, githubTotal, fitLines } from "./shared/homeParts.js";
 import { GITHUB_URL, fillGraph } from "./github.js";
 import { createStatus } from "./status.js";
@@ -290,6 +290,8 @@ export const refreshStatus = (full = false) => {
             inkTexture.image = canvas;
         }
         inkTexture.needsUpdate = true;
+        // the clock's width changes with its digits, so the words are measured again with each redraw
+        composite.setWords(inkWords(el));
         composite.invalidate();
     });
 };

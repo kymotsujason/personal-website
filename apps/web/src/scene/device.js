@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { UNITS } from "./handsModel.js";
 import { bakePart, applyFinish, cameraSolid } from "./phoneModel.js";
-import { drawHome, iconTexture, mapScreenUV, appWindowMaterial, appCardMaterial, cardAtlas, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
+import { drawHome, inkWords, iconTexture, mapScreenUV, appWindowMaterial, appCardMaterial, cardAtlas, glassUniforms, glassMaterial, setGlassPlane } from "./screens.js";
 import { createComposite, skyRectFor } from "./composite.js";
 import { createBlur } from "./blur.js";
 import { createWallpaper } from "./wallpaper.js";
@@ -571,6 +571,7 @@ export const buildDevice = () => {
         size: { w: fullW, h: fullH },
         ...frosted
     });
+    homeComposite.setWords(inkWords(homeEl));
     screenMaterial.map = homeComposite.texture;
     // the cover is a home screen too, with its own invisible html on top for taps. tapping an app there unfolds the
     // phone straight into it. its wallpaper is the part of the inner one it lies over
@@ -592,6 +593,7 @@ export const buildDevice = () => {
         size: { w: coverW, h: coverH },
         ...frosted
     });
+    coverComposite.setWords(inkWords(coverEl));
     coverMaterial.map = coverComposite.texture;
 
     // the app window cutout, a rounded rect in home screen px mapped onto the body's screen plane

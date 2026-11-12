@@ -287,6 +287,20 @@ const drawWidgets = (ctx, ink, homeEl) => {
 };
 
 // the box of any element inside a home screen, in its px, for the app window to grow out of (an icon or a widget)
+// the boxes of the white ink that lies on the bare sky, in home screen px: the status bar's clock and its icons, each
+// app's label, the credits, and a keyboard focus ring last, so a label inside the ring keeps its own box
+export const inkWords = (homeEl) => {
+    const els = [...homeEl.querySelectorAll(".status .time, .status .indicators, .app-icon span:not(.glyph), .credit")];
+    const focused = document.activeElement;
+    if (focused && focused !== homeEl && homeEl.contains(focused) && focused.matches(":focus-visible")) {
+        els.push(focused);
+    }
+    return els
+        .map((el) => offsetIn(el, homeEl))
+        .filter((box) => box.w > 0 && box.h > 0)
+        .map((box) => ({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h }));
+};
+
 export const elementRect = (homeEl, el) => {
     const box = offsetIn(el, homeEl);
     return { x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h, radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) };

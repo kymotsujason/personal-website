@@ -10,12 +10,15 @@ import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 // takes its color from how bright the sky (or the glass) is right behind it: white over a normal sky, fading to dark
 // inside the sun's glare or a bright cloud, so only the letters the glare actually covers turn dark. white pixels on
 // that layer take the ink, black ones the opposite (the battery's number on its fill), and colored ones keep their
-// color but darken with the rest
+// color but darken with the rest. the ink on the bare sky (the status bar, the icons' labels, the credits) is judged a
+// word at a time instead, from the sky across the word's whole box, so a cloud edge can't leave half a word dark and
+// the rest white
 //
 // the widget cards are frosted glass between the sky and the icons: the blurred sky shows through them, bent a little near their
 // edges like a lens, and their rims catch light from the sky's own sun and moon (and lightning), from the direction
 // each one is in, turned a little by how the phone is tilted
 export const MAX_CARDS = 8;
+export const MAX_WORDS = 16;
 
 const vertexShader = `
     varying vec2 vUv;
@@ -35,6 +38,8 @@ const fragmentShader = `
     uniform vec2 size;
     uniform vec4 cards[${MAX_CARDS}];
     uniform int cardCount;
+    uniform vec4 words[${MAX_WORDS}];
+    uniform int wordCount;
     uniform float radius;
     uniform vec4 hidden;
     uniform float hiddenRadius;
@@ -53,6 +58,10 @@ const fragmentShader = `
     // the brightness at which white ink starts to turn dark, and where it's fully dark
     const float INK_FROM = 0.36;
     const float INK_TO = 0.46;
+    // the same for a whole word, narrower since a word's average changes slowly, so it's grey only briefly as a cloud
+    // passes
+    const float WORD_FROM = 0.39;
+    const float WORD_TO = 0.43;
     // the brightest a widget's glass gets (relative luminance), so white text keeps about 3 to 1 on it
     const float GLASS_CEILING = 0.3;
     const vec3 DARK = vec3(0.07);
@@ -83,6 +92,17 @@ const fragmentShader = `
 
     float card(vec2 p, vec4 r) {
         return boxDistance(p, r, radius);
+    }
+
+    // how bright the sky is across a word's box (screen px, y down), from five points along its middle
+    float wordLight(vec4 r) {
+        float sum = 0.0;
+        for (int k = 0; k < 5; k++) {
+            vec2 at = vec2(mix(r.x, r.z, (float(k) + 0.5) / 5.0), (r.y + r.w) * 0.5);
+            vec2 uv = skyUvOf(vec2(at.x / size.x, 1.0 - at.y / size.y));
+            sum += luma(frosted > 0.5 ? texture2D(frost, uv).rgb : texture2D(sky, uv).rgb);
+        }
+        return sum / 5.0;
     }
 
     // which way a light in the sky is from here, in screen px with y down, turned by the phone's tilt
@@ -164,6 +184,17 @@ const fragmentShader = `
         if (inkPx.a > 0.0) {
             vec3 c = inkPx.rgb / inkPx.a;
             float dark = smoothstep(INK_FROM, INK_TO, luma(behind));
+            for (int i = 0; i < ${MAX_WORDS}; i++) {
+                if (i >= wordCount) {
+                    break;
+                }
+                vec4 r = words[i];
+                if (p.x >= r.x && p.x <= r.z && p.y >= r.y && p.y <= r.w) {
+                    // only on the bare sky, since the glass under a widget's text already keeps white readable
+                    dark = mix(smoothstep(WORD_FROM, WORD_TO, wordLight(r)), dark, cardCover);
+                    break;
+                }
+            }
             float hi = max(c.r, max(c.g, c.b));
             float lo = min(c.r, min(c.g, c.b));
             float colored = smoothstep(0.08, 0.25, hi - lo);
@@ -205,6 +236,8 @@ export const createComposite = (renderer, { width, height, sky, frost, icons, in
             size: { value: new THREE.Vector2(size.w, size.h) },
             cards: { value: Array.from({ length: MAX_CARDS }, () => new THREE.Vector4()) },
             cardCount: { value: 0 },
+            words: { value: Array.from({ length: MAX_WORDS }, () => new THREE.Vector4()) },
+            wordCount: { value: 0 },
             radius: { value: 22 },
             hidden: { value: new THREE.Vector4() },
             hiddenRadius: { value: 0 },
@@ -241,6 +274,18 @@ export const createComposite = (renderer, { width, height, sky, frost, icons, in
             boxes.slice(0, MAX_CARDS).forEach((b, i) => uniforms.cards.value[i].set(b.x0, b.y0, b.x1, b.y1));
             uniforms.cardCount.value = Math.min(boxes.length, MAX_CARDS);
             uniforms.radius.value = radius;
+            dirty = true;
+        },
+        // the ink's words on the bare sky, as { x0, y0, x1, y1 } boxes in the screen's px (inkWords in homeDraw.js)
+        setWords: (boxes) => {
+            const shown = boxes.slice(0, MAX_WORDS);
+            const same = shown.length === uniforms.wordCount.value
+                && shown.every((b, i) => uniforms.words.value[i].equals(new THREE.Vector4(b.x0, b.y0, b.x1, b.y1)));
+            if (same) {
+                return;
+            }
+            shown.forEach((b, i) => uniforms.words.value[i].set(b.x0, b.y0, b.x1, b.y1));
+            uniforms.wordCount.value = shown.length;
             dirty = true;
         },
         hidden: () => {

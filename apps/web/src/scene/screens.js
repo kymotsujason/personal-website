@@ -6,7 +6,7 @@ import { roundedRect } from "./shared/homeDraw.js";
 // snapshotCards.js reads EXTRA_HOLES from here
 export { EXTRA_HOLES };
 
-export { glyphRect, elementRect, drawGradient, drawHome, redrawStatus } from "./shared/homeDraw.js";
+export { glyphRect, elementRect, drawGradient, drawHome, inkWords, redrawStatus } from "./shared/homeDraw.js";
 
 // the duo's unfold effect: the content stays put on a fixed plane (where the screen lies flat, or where the cover
 // lies closed), and the moving screen acts as frosted glass lifting off it. each pixel looks from the eye through the
