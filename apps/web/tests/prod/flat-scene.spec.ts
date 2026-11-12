@@ -1,4 +1,5 @@
 // the 2d scene's folds, apps, and navigations, against the capture build (window.__flat, src/flat/probeHook.js)
+import { loadavg } from "node:os";
 import { expect, test, type Page } from "@playwright/test";
 import { stubHome } from "../stubHome";
 import { quiet } from "./scene";
@@ -1840,7 +1841,14 @@ test.describe("with the cpu slowed 4x", () => {
       () => (window as any).__gaps,
     );
     const kept = all.filter((g) => g.at > SKIP_MS).map((g) => g.gap);
-    expect(kept.length, "enough frames to judge").toBeGreaterThan(least);
+    // the open lasts about 580 ms, so too few frames means long gaps or an open cut short. other work on the machine
+    // gives long gaps too (other jobs' load dropped this to 7 to 15 frames on 2026-11-12), so the message says which
+    const lasted = all.length > 0 ? Math.round(all[all.length - 1].at) : 0;
+    const gaps = kept.map((gap) => Math.round(gap)).join(" ");
+    expect(
+      kept.length,
+      `enough frames to judge (open ${lasted} ms, gaps ${gaps} ms, load ${loadavg()[0].toFixed(1)})`,
+    ).toBeGreaterThan(least);
     const sorted = [...kept].sort((a, b) => a - b);
     const p95 = sorted[Math.ceil(0.95 * sorted.length) - 1];
     return { p95, worst: sorted[sorted.length - 1], count: kept.length };
