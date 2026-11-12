@@ -51,6 +51,12 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   pointer-events: none;
 }
 
+/* the frames keep the raster stage.js prime gives them at the zoom's scale, so an app opening doesn't raster them again
+   at every scale on its way in */
+.flat-frames {
+  will-change: transform;
+}
+
 /* the desk behind everything in the stage, even the frames once they drop behind the flat page */
 .flat-desk {
   position: absolute;

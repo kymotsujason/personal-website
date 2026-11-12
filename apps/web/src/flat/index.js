@@ -1251,6 +1251,11 @@ export const startFlatScene = ({
       // the window may have changed size again while the frames decoded
       scene.stage.fit();
       scene.desk.fit();
+      await scene.stage.prime();
+      // a turn that started meanwhile has the scene now
+      if (turn || failed) {
+        return;
+      }
       flatStatus.render();
       home.restore();
       applyRest();
@@ -1319,7 +1324,9 @@ export const startFlatScene = ({
       scene.stage.placePage("hidden");
       applyInput();
     }
-    // the first frame is painted once under black, so laying out every frame doesn't eat into the intro's time
+    // the frames are rastered at the zoom's scale under black, then the first frame is painted once there too, so
+    // laying out every frame doesn't eat into the intro's time
+    await scene.stage.prime();
     await nextFrame();
     await nextFrame();
     await nextFrame();

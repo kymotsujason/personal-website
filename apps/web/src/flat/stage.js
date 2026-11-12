@@ -14,6 +14,13 @@ const TAN_HALF = Math.tan((FOV / 2) * (Math.PI / 180));
 // group goes back by this while the flap comes over in front)
 const CLOSED_FRONT = DUO.depth / 2 + DUO.gap / 2;
 const WHOLE = { x0: 0, y0: 0, x1: 1, y1: 1 };
+// how far off screen prime puts the frames, past any window
+const PRIME_AWAY = 200000;
+
+const nextPaint = () =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
 
 const clampFold = (fold) => Math.min(Math.max(fold, 0), 1);
 
@@ -218,6 +225,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
     live: null,
   };
 
+  let priming = false;
   const apply = () => {
     if (!geometry || !pose) {
       return;
@@ -228,8 +236,29 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
       shownTransform = transform;
       screensEl.style.transform = transform;
       cardsEl.style.transform = transform;
-      framesEl.style.transform = transform;
+      if (!priming) {
+        framesEl.style.transform = transform;
+      }
     }
+  };
+
+  // chrome rasters a will-change: transform layer at the scale it's shown at, and again each time a transform makes it
+  // larger, so an app opening zoomed the frames through about 30 scales and rastered them at each one (about 500 tile
+  // rasters in its first second on 2026-11-12, most of the gpu's time). prime shows the frames once at the zoom pose's
+  // scale, pushed far off screen so nothing is drawn, and every zoom after it reuses that raster. it's only for the
+  // frames, which are pictures, since a raster drawn smaller would soften the screens' text
+  const prime = async () => {
+    if (!geometry) {
+      return;
+    }
+    priming = true;
+    framesEl.style.transform = `translate(${PRIME_AWAY}px, 0) ${chainTransform(geometry, geometry.placed.zoom, 0)}`;
+    // two frames drawn away, so the compositor has taken the new scale whichever frame it lands on
+    await nextPaint();
+    await nextPaint();
+    await nextPaint();
+    priming = false;
+    framesEl.style.transform = shownTransform ?? "";
   };
 
   const setPose = (next) => {
@@ -419,6 +448,7 @@ export const createStage = ({ stageEl, pageEl, manifest }) => {
   fit();
 
   return {
+    prime,
     setPose,
     setFold,
     placePage,
