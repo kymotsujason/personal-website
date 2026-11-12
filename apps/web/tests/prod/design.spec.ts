@@ -99,8 +99,8 @@ test.describe("the flat site", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/about");
     await page.evaluate(() => {
-      document.documentElement.style.setProperty("--px", "1");
-      document.documentElement.style.setProperty("--py", "1");
+      document.getElementById("page")!.style.setProperty("--px", "1");
+      document.getElementById("page")!.style.setProperty("--py", "1");
     });
     const transforms = await page.evaluate(() =>
       [...document.querySelectorAll("#page .sky, #page .depth")].map(
@@ -127,7 +127,9 @@ test.describe("the flat site", () => {
       .poll(() =>
         page.evaluate(() =>
           ["--px", "--py"].map((name) =>
-            document.documentElement.style.getPropertyValue(name),
+            document
+              .querySelector<HTMLElement>("#page > .body")!
+              .style.getPropertyValue(name),
           ),
         ),
       )
@@ -151,7 +153,9 @@ test.describe("the flat site", () => {
     await page.waitForTimeout(500);
     const inputs = await page.evaluate(() =>
       ["--px", "--py"].map((name) =>
-        document.documentElement.style.getPropertyValue(name),
+        document
+          .querySelector<HTMLElement>("#page > .body")!
+          .style.getPropertyValue(name),
       ),
     );
     expect(inputs).toEqual(["", ""]);
@@ -213,7 +217,9 @@ test.describe("the flat site", () => {
       page.evaluate(
         (list) =>
           list.map((name) =>
-            document.documentElement.style.getPropertyValue(name),
+            document
+              .querySelector<HTMLElement>("#page > .body")!
+              .style.getPropertyValue(name),
           ),
         names,
       );

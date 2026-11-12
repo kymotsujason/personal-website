@@ -1,25 +1,31 @@
-// the page's depth inputs, written to the root since #page's style belongs to the scene and the root survives
-// navigation. --px and --py come from the pointer (-1 to 1) where there's a fine one, and --py from the scroll (0 to 1) otherwise.
-// --scroll and --read come from the page's own scroll, and only on a page with a ring or a hero. the pointer is read at
-// most once a frame, and a value is only written when it changed. the glass highlight is placed on each pane in its
-// own coordinates, since a fixed background inside a transformed pane is measured from the pane and not the window
+// the page's depth inputs, written on each of #page's children, since only the page's own content reads them. a
+// write on the root restyled the whole document, the 2d scene's thousands of frame pieces included, on every pointer
+// move and every scroll frame (about 225 ms a second of style in a 2026-11-12 trace against 114 for 3d). #page's own
+// style belongs to the scene, which leaves none behind once it stops, and its children are new after each swap, so the
+// frame after a swap writes them again. --px and --py come from the pointer (-1 to 1) where there's a fine one, and
+// --py from the scroll (0 to 1) otherwise. --scroll and --read come from the page's own scroll, and only on a page with
+// a ring or a hero. the pointer is read at most once a frame, and a value is only written where it differs. the glass
+// highlight is placed on each pane in its own coordinates, since a fixed background inside a transformed pane is
+// measured from the pane and not the window
 const root = document.documentElement;
 const fine = matchMedia("(hover: hover) and (pointer: fine)");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
 let pointer = null;
 let queued = false;
-const written = new Map();
 
+// read from each child itself, so a child a swap put in gets the values again
 const put = (name, value) => {
-  if (written.get(name) === value) {
-    return;
-  }
-  written.set(name, value);
-  if (value === null) {
-    root.style.removeProperty(name);
-  } else {
-    root.style.setProperty(name, value);
+  const children = document.getElementById("page")?.children ?? [];
+  for (const child of children) {
+    if (child.style.getPropertyValue(name) === (value ?? "")) {
+      continue;
+    }
+    if (value === null) {
+      child.style.removeProperty(name);
+    } else {
+      child.style.setProperty(name, value);
+    }
   }
 };
 
@@ -57,7 +63,7 @@ const frame = () => {
   const body = document.querySelector("#page > .body");
   const top = body ? body.scrollTop : 0;
   const range = body ? body.scrollHeight - body.clientHeight : 0;
-  // only the post's ring and the hero read these, and a root property write restyles the whole document
+  // only the post's ring and the hero read these
   if (document.querySelector("#page .ring, #page .hero")) {
     put("--read", round(range > 0 ? clamp(top / range) : 0));
     put("--scroll", reduced.matches ? "0" : round(top));
