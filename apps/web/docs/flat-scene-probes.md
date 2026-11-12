@@ -90,6 +90,8 @@ These were taken on 2026-11-07, at the end of the build.
 
 The 2D module (`flat.*.js`) is 91.6 kB minified and 35.0 kB gzip, over the 30 kB gzip target by 5 kB. The charger, volume, and music chunks it loads later are 5.2, 1.7, and 1.5 kB gzip. The scripts before the first frame total 250.3 kB gzip.
 
+On 2026-11-12 the switcher (`switcher.js`) moved out of the 2D module, loaded once the first frame shows, which brought the module to 79.5 kB minified and 30.5 kB gzip, 0.5 kB over the target. The switcher's own chunk is 5.4 kB gzip. `cards.js` is the next piece that could move, but each mount draws with it.
+
 The charger now decodes only the set for the phone's current half, and only near a plug, during a run, or from 90% while charging. So a visit's peak at full size, day lighting, is about 563 MB in landscape and 719 MB in portrait (the larger fold version, one charger set, and 44 MB of desk), down from the 695.1 and 880.8 MB in the table above. Every visit still misses the 160 MB and 60 MB decoded budgets and the 1.2 MB and 0.6 MB download budgets, as Jason chose to build on and report.
 
 A fresh capture of the landscape set at day matched the committed one. Its corners and drag tables were identical (34,703 numbers, largest difference 0), and 119 of its 120 atlases were identical. The other differed in 137 pixels by more than 8 levels (largest 27), which is GPU render noise. So the sets weren't captured again, and each manifest's `inputsHash` was brought up to date, with every shared scene module now listed in `tools/capture-flat/inputs.json`.
