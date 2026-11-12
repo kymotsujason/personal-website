@@ -35,6 +35,12 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
   visibility: visible;
 }
 
+/* the stage under the flat page while nothing moves, hidden since the page and the app window behind it cover it, so
+   the compositor stops drawing it (src/flat/index.js sets page-over). the faces are shown inline, hence important */
+.page-over :is(.flat-desk, .flat-frames, .flat-frame.on, .flat-face) {
+  visibility: hidden !important;
+}
+
 .flat-frame i {
   position: absolute;
   background-repeat: no-repeat;

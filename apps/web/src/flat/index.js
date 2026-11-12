@@ -550,6 +550,20 @@ export const startFlatScene = ({
     drawWindow();
     scene.cardsView.draw(scene.cards);
     drawPage();
+    // the flat page at rest covers the stage, with the app window behind it for the page's background, so the desk,
+    // the frames, and the faces are hidden and the compositor stops drawing them each frame (about 40 to 50 ms a second
+    // in a 2026-11-12 trace). any motion shows them again on its first frame
+    const covered =
+      scene.pageFlat &&
+      !scene.busy &&
+      !scene.switcher &&
+      !scene.switching &&
+      scene.pageFade === null &&
+      !charger.moving();
+    if (covered !== stageCovered) {
+      stageCovered = covered;
+      stageEl.classList.toggle("page-over", covered);
+    }
     // the open app's icon, which stays the same while the switcher's window carries another app's page
     screens.setHiddenIcon(
       scene.win && !scene.openFromWidget && scene.openApp
@@ -592,6 +606,7 @@ export const startFlatScene = ({
   };
   let shownFrosted = false;
   let shownPicture = false;
+  let stageCovered = false;
   // what the draw last wrote, which a new mount's parts don't have yet
   const forgetDrawn = () => {
     placedFace = { layer: null, index: -1 };
@@ -601,6 +616,8 @@ export const startFlatScene = ({
     shownClip = "";
     windowShown = false;
     windowEl.style.visibility = "hidden";
+    stageCovered = false;
+    stageEl.classList.remove("page-over");
   };
   const syncAppFocus = createAppFocus({
     pageEl,
