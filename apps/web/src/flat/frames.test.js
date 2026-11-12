@@ -254,7 +254,7 @@ test("a set fetched ahead decodes and draws from its blob urls", async () => {
     const layer = createFrameLayer(manifest, host);
     await layer.decode();
     expect(sources).toEqual(["blob:fetched-a"]);
-    expect(host.firstElementChild.style.getPropertyValue("--atlas")).toBe(
+    expect(host.querySelector("i").style.backgroundImage).toBe(
       'url("blob:fetched-a")',
     );
   } finally {

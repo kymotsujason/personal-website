@@ -159,9 +159,10 @@ export const frameTimes = (manifest, curve, startMs, durationMs) => {
   });
 };
 
-// each frame is a .flat-frame of <i> pieces cut from its atlas through var(--atlas). the atlases decode up front
-// through images kept for the visit, so the browser has a reason to keep them decoded, and the frames join hostEl
-// once they all have
+// each frame is a .flat-frame of <i> pieces cut from its atlas, each piece with the atlas as its own background, since
+// safari on the iphone (27.3, 2026-11-12) drew a url passed down through a custom property as none, though chrome on
+// the same phone drew it. the atlases decode up front through images kept for the visit, so the browser has a reason
+// to keep them decoded, and the frames join hostEl once they all have
 export const createFrameLayer = (manifest, hostEl) => {
   const { frameFor, indexAt } = createFrameIndex(manifest);
   const base =
@@ -178,18 +179,16 @@ export const createFrameLayer = (manifest, hostEl) => {
   };
 
   // a piece reaches overlap px into its neighbors, so scaling never leaves a seam where two meet
-  const pieceEl = ([x, y, w, h, atlasX, atlasY], atlas = null) => {
+  const pieceEl = ([x, y, w, h, atlasX, atlasY], atlas) => {
     const el = document.createElement("i");
     Object.assign(el.style, {
       left: `${x - overlap}px`,
       top: `${y - overlap}px`,
       width: `${w + 2 * overlap}px`,
       height: `${h + 2 * overlap}px`,
+      backgroundImage: atlasUrl(atlas),
       backgroundPosition: `${overlap - atlasX}px ${overlap - atlasY}px`,
     });
-    if (atlas !== null) {
-      el.style.setProperty("--atlas", atlasUrl(atlas));
-    }
     return el;
   };
 
@@ -200,10 +199,7 @@ export const createFrameLayer = (manifest, hostEl) => {
     el.dataset.set = manifest.set;
     el.style.width = `${width}px`;
     el.style.height = `${height}px`;
-    if (frame.pieces.length > 0) {
-      el.style.setProperty("--atlas", atlasUrl(frame.atlas));
-    }
-    frame.pieces.forEach((piece) => el.append(pieceEl(piece)));
+    frame.pieces.forEach((piece) => el.append(pieceEl(piece, frame.atlas)));
     frame.shared.forEach((k) => {
       const { atlas, piece } = manifest.shared[k];
       el.append(pieceEl(piece, atlas));

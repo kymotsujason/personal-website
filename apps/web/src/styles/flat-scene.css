@@ -37,7 +37,6 @@ html.flat-slow:not(.has-3d) #page .flat-footer a[data-version="2d"] {
 
 .flat-frame i {
   position: absolute;
-  background-image: var(--atlas);
   background-repeat: no-repeat;
 }
 

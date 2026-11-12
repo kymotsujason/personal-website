@@ -1061,6 +1061,13 @@ export const startFlatScene = ({
     if (flatStatus.status.charging) {
       choice.set = `cable-${choice.set}`;
     }
+    // a PERF=1 build can pin the size from the address (?flatsize=half or full), to try a phone at either
+    if (__PERF__) {
+      const size = new URLSearchParams(location.search).get("flatsize");
+      if (size === "half" || size === "full") {
+        choice.size = size;
+      }
+    }
     chosen = { lighting: choice.lighting, size: choice.size };
     await mount(choice);
     flatStatus.render();
@@ -1387,6 +1394,12 @@ export const startFlatScene = ({
     nav.kick();
   };
 
+  // the phone log (dev/flatPerf.js), only in a PERF=1 build opened with ?perf
+  if (__PERF__ && new URLSearchParams(location.search).has("perf")) {
+    import("../dev/flatPerf.js").then(({ startFlatPerf }) =>
+      startFlatPerf({ status }),
+    );
+  }
   const started = start();
   started.catch((error) => fail(error));
 
